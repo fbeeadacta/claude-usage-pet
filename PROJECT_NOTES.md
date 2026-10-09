@@ -2,7 +2,7 @@
 
 A small Claude mascot that walks along the top of the Windows taskbar. A bubble above its head shows Claude plan usage. If any file here gets lost or corrupted, this note has enough detail to rebuild it. You can give this file to Claude and ask it to rebuild the project.
 
-Last updated: 2026-10-10 (version 5.9)
+Last updated: 2026-10-10 (version 5.12)
 
 ## Files in this folder
 
@@ -38,9 +38,10 @@ Last updated: 2026-10-10 (version 5.9)
 7. **Settings** opens a window in the same style as the details panel, with five tabs. Every option has a switch, buttons or a slider, plus a one-line description underneath. Changes apply straight away. Drag the title to move the window, and close it with × or Esc.
    - **Behaviour:** Walk around, Jump now and then, Take naps, Wizard when Claude works, Stand on windows, Animations
    - **Look:** Size (slider, 0.5x–4x), Bubble shows (both limits / 5-hour only / on hover), Bubble style (numbers / bars), Keep details open
-   - **Sound:** Chatter (off / sometimes / a lot), Sound effects, Volume (slider, 0–100%; plays a sample when you let go), Desktop notifications
+   - **Sound:** Sound effects (master switch), Volume (slider, 0–100%; plays a sample when you let go), Which sounds (every sound as an on/off chip, in groups: Reactions = Poke, Bounce, Scream, Wall splat; Adventures = Parachute, Eagle cry, Hay landing; Moods = Wizard magic, Dance music, Milestones), Chatter (off / sometimes / a lot). Desktop notifications moved to System.
    - **Usage:** Refresh every (2, 3, 4 or 5 minutes), Warn when nearly full, Yellow ring from (70–85%), Red ring from (85–95%), Count tokens like the Claude app
-   - **System:** Hide during full screen, Stay on one monitor, Start with Windows, Keyboard shortcuts (Ctrl + Alt + P hides or shows the pet, Ctrl + Alt + D pins or closes the details panel)
+   - **Shortcuts:** Keyboard shortcuts (on/off; off lets go of the keys so other apps can use them), then each shortcut with what it does and its keys as key caps (defaults: Ctrl + Alt + P shows or hides the mascot, Ctrl + Alt + D pins or closes the details panel). Click one and press the new keys; Esc cancels, Backspace clears it. Warnings appear if the keys have no Ctrl/Alt, are already used by the other shortcut, or another app already uses them. Reset to defaults.
+   - **System:** Desktop notifications, Hide during full screen, Stay on one monitor, Start with Windows
 8. **Ctrl + mouse wheel** over the mascot fine-tunes its size. This may only work after you've clicked the mascot once.
 
 ### Things it does on its own
@@ -89,7 +90,7 @@ Only one pet runs at a time. Starting it again while it's already running does n
 - **"Rate limited" / the bubble says "slow down":** the usage service answered "too many requests". This used to happen with the old 30-second and 1-minute refresh settings, and can still happen after restarting the pet several times in a row (each start checks straight away). Your last numbers stay on screen. It waits 3 minutes, then 6, 12 and so on (up to 30, or longer if the service asks), and goes back to normal after the next successful check.
 - **The bubble says "login expired":** open Claude Code once so it refreshes your login. The pet notices the renewed login file and checks again straight away.
 - **Something seems broken:** look in `pet_errors.log` in this folder, or send it to Claude. It never contains your login token.
-- **A keyboard shortcut does nothing:** another app may already use Ctrl + Alt + P or D. `pet_errors.log` will say so. Turn "Keyboard shortcuts" off, or change `HOTKEY_PET` / `HOTKEY_DETAILS` near the top of `claude_pet.py`.
+- **A keyboard shortcut does nothing:** another app may already use Ctrl + Alt + P or D. `pet_errors.log` will say so. Settings → Shortcuts shows "Another app already uses these keys" under it; click it and pick different keys.
 - **The bubble says "no login":** Claude Code isn't signed in on this computer. Run `claude` once and sign in.
 - **It hides when it shouldn't, or doesn't hide during full screen:** turn off "Hide during full screen" (Settings → System), then tell Claude which app caused it.
 - **The double-click shortcut stops working after a Python update:** the shortcut points to one specific Python version's `pythonw.exe`. Rebuild it using the settings in `LOCAL_NOTES.md`, or ask Claude to fix it.
@@ -503,6 +504,29 @@ There's also 30 px of side space for z's and sparks.
 - Dim the bubble when the data is stale.
 
 ## Change log
+
+- **2026-10-10 (version 5.12):**
+  - New Settings tab, Shortcuts:
+    - the on/off switch (moved from System)
+    - each shortcut with what it does and its keys drawn as key caps
+    - click a shortcut, press new keys (Esc cancels, Backspace clears)
+    - clear warnings for keys without Ctrl/Alt, keys the other shortcut uses, and keys another app has taken
+    - Reset to defaults
+  - Saved as `keys` in `pet_settings.json` (`[modifiers, key code]` per shortcut, or null).
+  - The shortcut thread now re-registers whenever they change, lets go of them while you're typing a new one, and lets go completely when shortcuts are switched off.
+  - Tested: recording, all three warnings (another app, here the already-running pet holding Ctrl + Alt + P / D), changing to Ctrl + Alt + F9 and a real key press of it hiding the pet, Backspace clearing, saving, reset, and screenshots.
+
+- **2026-10-10 (version 5.11):**
+  - Every sound can be switched on or off on its own (Settings → Sound → Which sounds).
+    - Each sound is a chip: warm with a filled orange dot when on, plain with an empty ring when off.
+    - Switching one on plays it, so you know which it is.
+    - While the main Sound effects switch is off, the chips dim and the line above them says none of them will play.
+  - Saved as `muted` in `pet_settings.json`: the list of sounds switched off, so any sound added later starts switched on.
+  - Desktop notifications moved from the Sound tab to System.
+  - Tested: toggling chips, the sample on switching on, saving, a muted sound not playing, and screenshots of all on, some off, and the main switch off.
+
+- **2026-10-10 (version 5.10):**
+  - The parachute sound is now a deep "floom", like a big sheet of cloth catching the air: a low rumble that swells in, flutters, and settles, with a low tone under it (it was a plain hiss). `SOUND_VERSION` is now 3.
 
 - **2026-10-10 (version 5.9):**
   - Sound effects are on by default. A settings file saved earlier with them off keeps them off until switched on in Settings → Sound.

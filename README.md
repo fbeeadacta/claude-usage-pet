@@ -22,7 +22,7 @@ What it does:
 - Falls asleep when you're away, rings its bubble yellow, then red, as you near a limit, and remembers its moods across restarts.
 - Hides while something is full-screen, and can land on top of your windows when it falls.
 - Optional sound effects (with a volume slider) and desktop notifications.
-- Keyboard shortcuts: Ctrl + Alt + P hides or shows it, and Ctrl + Alt + D pins the details panel.
+- Keyboard shortcuts: Ctrl + Alt + P hides or shows it, and Ctrl + Alt + D pins the details panel. You can change them in Settings → Shortcuts.
 - Right-click it for Refresh now, Settings and Quit. The settings window has every option and what it does, and everything can be switched off, including all animations.
 
 ## Requirements

@@ -110,7 +110,35 @@ CHUTE_SPEED = 110          # falling speed with the parachute open, pixels per s
 DANCE_CHANCE = 0.05        # chance of a little dance whenever it stops walking
 STALE_MIN = 10             # numbers older than this (and 3 checks) look faded in the bubble
 ERROR_LOG_KB = 200         # pet_errors.log is trimmed to stay about this small
-HOTKEY_PET, HOTKEY_DETAILS = "P", "D"   # ctrl + alt + this letter: show/hide the pet, pin the details
+# keyboard shortcuts: (modifiers, key) with windows' codes. modifiers: 1 alt, 2 ctrl, 4 shift, 8 win.
+SHORTCUTS = (("pet", "Show / hide the mascot", "Hides it completely (it keeps checking your usage), or brings it back."),
+             ("details", "Open the details panel", "Pins the Plan / Claude Code panel open, or closes it."))
+DEFAULT_KEYS = {"pet": [3, ord("P")], "details": [3, ord("D")]}   # ctrl + alt + P, ctrl + alt + D
+KEY_NAMES = {0x20: "Space", 0x21: "Page Up", 0x22: "Page Down", 0x23: "End", 0x24: "Home", 0x25: "Left",
+             0x26: "Up", 0x27: "Right", 0x28: "Down", 0x2D: "Insert", 0x2E: "Delete"}
+
+
+def key_name(vk):
+    # a key's name for the screen, or None if it can't be used in a shortcut
+    if 0x41 <= vk <= 0x5A or 0x30 <= vk <= 0x39:
+        return chr(vk)
+    if 0x70 <= vk <= 0x87:
+        return f"F{vk - 0x6F}"
+    if 0x60 <= vk <= 0x69:
+        return f"Num {vk - 0x60}"
+    return KEY_NAMES.get(vk)
+
+
+def combo_parts(combo):
+    # [mods, key] -> ["Ctrl", "Alt", "P"]
+    mods, vk = combo
+    return [n for bit, n in ((2, "Ctrl"), (1, "Alt"), (4, "Shift"), (8, "Win")) if mods & bit] + [key_name(vk)]
+
+
+def combo_ok(combo):
+    # a usable shortcut: a known key plus ctrl, alt or win (shift alone would get in the way of typing)
+    return (isinstance(combo, list) and len(combo) == 2 and all(isinstance(v, int) and not isinstance(v, bool)
+            for v in combo) and 0 < combo[0] < 16 and combo[0] & 0xB and key_name(combo[1]) is not None)
 POLL_CHOICES = (120, 180, 240, 300)   # menu: refresh every (faster ones got "slow down" answers)
 # pace messages (details panel)
 AHEAD_BY = 10          # used% this far above the clock = "ahead of pace"
@@ -312,17 +340,18 @@ TIPS = {
                "rides along if you move the window, and falls off when it closes. Windows in front push it "
                "aside, and if it's cornered it drops down to the taskbar. On the taskbar, windows push it aside too."),
         ("Off", "It only ever stands on the taskbar.")]),
-    "Sound effects": ("Little sounds: a pop when poked, a scream when thrown, an eagle cry on a leap of faith, "
-                      "a splat into walls, magic while it works, music while it dances, a chime at milestones.", [
-        ("On", "Plays them (quietly, through Windows' normal sound output). This is the default."),
+    "Sound effects": ("Turns all of the mascot's sounds on or off. Pick which ones below.", [
+        ("On", "Plays the sounds you've picked (quietly, through Windows' normal sound output). This is the default."),
         ("Off", "Silent.")]),
+    "Which sounds": ("Tap a sound to switch it on or off. Switching one on plays it.", []),
     "Desktop notifications": ("Windows notifications for the important moments.", [
         ("On", "A notification at 90% and 100% of a limit, when a nearly-used limit resets, and when your login "
                "expires. Shows even while the mascot is hidden."),
         ("Off", "Only the mascot's own speech bubbles.")]),
-    "Keyboard shortcuts": ("Shortcuts that work anywhere in Windows.", [
-        ("On", "Ctrl + Alt + P hides or shows the mascot. Ctrl + Alt + D pins or closes the details panel."),
-        ("Off", "The shortcuts do nothing.")]),
+    "Keyboard shortcuts": ("Shortcuts that work anywhere in Windows, even when another app is in front.", [
+        ("On", "The shortcuts below work."),
+        ("Off", "They do nothing, and other apps can use those keys.")]),
+    "Shortcuts": ("Click a shortcut, then press the new keys. Esc cancels, Backspace clears it.", []),
     "Quit": ("Closes the mascot. Your settings and its memory are saved first.", []),
     "Volume": ("How loud the sound effects are. You'll hear a sample when you let go.", []),
     "Size": ("How big the mascot is. Ctrl + mouse wheel over it works too.", []),
@@ -779,7 +808,7 @@ def log_error(what, exc=None):
 
 DEFAULTS = {"scale": DEFAULT_SCALE, "energy": "normal", "walk": True, "jump": True, "naps": True, "anim": True,
             "bubble": "both", "bubble_style": "numbers", "chatter": "some", "wizard": True, "warn": True, "cc_app": True, "notify": True, "sounds": True, "hotkeys": True,
-            "platforms": True, "volume": 60,
+            "platforms": True, "volume": 60, "muted": [], "keys": None,
             "warn_at": WARN_AT, "panic_at": PANIC_AT, "poll": POLL_SECONDS,
             "hide_fs": True, "one_monitor": False, "panel_tab": "plan", "plan_chart": "5h", "cc_view": "overview",
             "cc_range": "all", "x": None, "y": None}
@@ -828,6 +857,12 @@ def load_settings():
     for k, ok in (("warn_at", WARN_CHOICES), ("panic_at", PANIC_CHOICES), ("poll", POLL_CHOICES)):
         if st[k] not in ok or isinstance(st[k], bool):
             st[k] = DEFAULTS[k]
+    keys = st["keys"] if isinstance(st["keys"], dict) else {}
+    st["keys"] = {name: (keys[name] if name in keys and (keys[name] is None or combo_ok(keys[name]))
+                         else list(DEFAULT_KEYS[name])) for name, _, _ in SHORTCUTS}
+    if not isinstance(st["muted"], list):
+        st["muted"] = []
+    st["muted"] = [k for k in st["muted"] if k in SOUNDS]
     for k in ("x", "y"):
         if isinstance(st[k], bool) or not isinstance(st[k], (int, float)):
             st[k] = None
@@ -1072,22 +1107,39 @@ def notify(title, body):
     threading.Thread(target=run, daemon=True).start()
 
 
-def hotkey_thread(inbox):
-    # listens for ctrl + alt + P / D anywhere in windows. needs its own thread with a message loop.
+def hotkey_thread(inbox, wanted):
+    # listens for the shortcuts anywhere in windows. needs its own thread with a message loop.
+    # wanted() gives the shortcuts to use right now; a WM_APP message means "they changed, register again".
     u = ctypes.WinDLL("user32", use_last_error=True)
-    mods = 0x0001 | 0x0002 | 0x4000   # alt, ctrl, no auto-repeat
-    got = [bool(u.RegisterHotKey(None, i, mods, ord(k))) for i, k in ((1, HOTKEY_PET), (2, HOTKEY_DETAILS))]
-    inbox.put(("registered", got))
     msg = wintypes.MSG()
+    u.PeekMessageW(ctypes.byref(msg), None, 0, 0, 0)   # makes this thread's message queue
+    inbox.put(("thread", k32.GetCurrentThreadId()))
+
+    def register():
+        got = {}
+        for i, (name, _, _) in enumerate(SHORTCUTS, 1):
+            u.UnregisterHotKey(None, i)
+            combo = wanted().get(name)
+            if combo:
+                got[name] = bool(u.RegisterHotKey(None, i, combo[0] | 0x4000, combo[1]))   # 0x4000: no repeats
+        inbox.put(("registered", got))
+
+    register()
     while u.GetMessageW(ctypes.byref(msg), None, 0, 0) > 0:
         if msg.message == 0x0312:   # WM_HOTKEY
             inbox.put(("hotkey", msg.wParam))
+        elif msg.message == 0x8001:   # WM_APP + 1: the shortcuts changed
+            register()
 
 
 SOUND_DIR = Path(tempfile.gettempdir()) / "claude_pet_sounds"
 
 
-SOUND_VERSION = 2   # bump this when a sound changes, so old saved copies aren't used
+SOUND_VERSION = 3   # bump this when a sound changes, so old saved copies aren't used
+# how the sounds are grouped and named in settings, where each one can be switched off
+SOUND_GROUPS = (("Reactions", (("pop", "Poke"), ("boing", "Bounce"), ("scream", "Scream"), ("splat", "Wall splat"))),
+                ("Adventures", (("whoosh", "Parachute"), ("eagle", "Eagle cry"), ("hay", "Hay landing"))),
+                ("Moods", (("spell", "Wizard magic"), ("dance", "Dance music"), ("chime", "Milestones"))))
 SOUNDS = ("pop", "boing", "scream", "chime", "whoosh", "eagle", "splat", "spell", "hay", "dance")
 
 
@@ -1197,8 +1249,17 @@ def make_sound(kind, volume=100):
                 mix(i * step, soft(wav(0.04, 0, 0, 0.1, shape="noise", attack=0.001, decay=2.0), 0.9))
         loop = int(16 * step * rate)
         buf[:] = (buf + [0.0] * loop)[:loop]   # exactly two bars, so the loop doesn't stumble
-    else:   # whoosh: the parachute opening
-        tone(0.4, 0, 0, vol=0.25, shape="noise")
+    else:   # whoosh: the parachute opening. a deep "floom", like a big sheet of cloth catching the air
+        n = int(0.7 * rate)
+        air = soft(soft(wav(0.7, 0, 0, 1.0, shape="noise", attack=0.001, decay=0.0), 0.06), 0.12)   # deep rumble
+        body = []
+        for i, v in enumerate(air):
+            k = i / n
+            swell = min(1.0, k / 0.12) * (1 - k) ** 1.8          # fills up fast, then settles
+            flap = 1 + 0.35 * math.sin(i / rate * 2 * math.pi * 13) * (1 - k)   # the cloth fluttering
+            body.append(v * swell * flap)
+        mix(0.0, body)
+        mix(0.02, wav(0.5, 85, 50, 0.3, attack=0.06, decay=1.8))   # the low "oom" as it fills
     frames = [int(max(-1.0, min(1.0, v)) * volume / 100 * 32767) for v in buf]
     SOUND_DIR.mkdir(exist_ok=True)
     tmp = path.with_name(f"{path.stem}_{threading.get_ident()}.tmp")
@@ -1421,9 +1482,10 @@ class Pet:
         self.creds_mtime = self.creds_changed_at()
         self.user_hidden = False         # hidden with ctrl + alt + P
         self.keys = queue.Queue()        # hotkey presses from the hotkey thread
-        self.hotkey_state = None
-        if self.hotkeys.get():
-            threading.Thread(target=hotkey_thread, args=(self.keys,), daemon=True).start()
+        self.binds = st["keys"]          # the shortcuts: {"pet": [mods, key] or None, ...}
+        self.hotkeys_on, self.keys_paused = self.hotkeys.get(), False   # (plain copies the thread can read)
+        self.hotkey_tid, self.bind_ok = None, {}
+        threading.Thread(target=hotkey_thread, args=(self.keys, self.wanted_keys), daemon=True).start()
         self.limited = 0                # "slow down" answers in a row
 
         # claude code's logs, read in the background
@@ -1464,6 +1526,7 @@ class Pet:
         self.leap_plan, self.leaping = None, None   # jumping over to another window
         self.diving, self.hay_t = False, 0.0          # leap of faith, then sitting in the hay
         self.music, self.next_spell = False, 0.0      # dance music playing / when the wizard next goes zing
+        self.muted = set(st["muted"])                 # sounds switched off in settings
         self.root.after(3000, self.warm_sounds)       # make the sound files early, in the background
         self.slapped = False                          # hit a window's side, on the way down
         self.near = []                                # windows near it while it's on the taskbar
@@ -1530,7 +1593,7 @@ class Pet:
             ("anim", self.anim), ("bubble", self.bubble_mode), ("bubble_style", self.bubble_style),
             ("chatter", self.chatter), ("wizard", self.wizard), ("warn", self.warn), ("cc_app", self.cc_app), ("warn_at", self.warn_at), ("panic_at", self.panic_at), ("poll", self.poll),
             ("notify", self.notify_on), ("sounds", self.sounds), ("hotkeys", self.hotkeys),
-            ("platforms", self.platforms), ("volume", self.volume), ("hide_fs", self.hide_fs),
+            ("platforms", self.platforms), ("volume", self.volume), ("muted", sorted(self.muted)), ("keys", self.binds), ("hide_fs", self.hide_fs),
             ("one_monitor", self.one_monitor), ("panel_tab", self.panel_tab), ("cc_view", self.cc_view),
             ("cc_range", self.cc_range), ("plan_chart", self.plan_chart), ("x", round(self.x)), ("y", round(self.y)))}
         write_json(SETTINGS_FILE, st)
@@ -1854,6 +1917,8 @@ class Pet:
 
     def play(self, kind, preview=False, loop=False):
         # windows plays one sound at a time, so a new one cuts off the last (music included)
+        if kind in self.muted and not preview:
+            return
         if (self.sounds.get() or preview) and not self.hidden and self.volume.get() > 0:
             try:
                 winsound.PlaySound(str(make_sound(kind, self.volume.get())),
@@ -1876,6 +1941,17 @@ class Pet:
         if self.sounds.get() and self.volume.get() > 0:
             vol = self.volume.get()
             threading.Thread(target=lambda: [make_sound(k, vol) for k in SOUNDS], daemon=True).start()
+
+    def toggle_sound(self, kind):
+        # one sound on or off (from settings). switching one on plays it, so you know which it is.
+        if kind in self.muted:
+            self.muted.discard(kind)
+            self.play(kind, preview=True)
+        else:
+            self.muted.add(kind)
+            if kind == "dance":
+                self.stop_music()
+        self.save()
 
     def sounds_changed(self):
         if not self.sounds.get():
@@ -2187,30 +2263,61 @@ class Pet:
                 kind, val = self.keys.get_nowait()
             except queue.Empty:
                 return
-            if kind == "registered":
-                self.hotkey_state = val
-                if not all(val):
-                    log_error("a keyboard shortcut is already used by another app")
-            elif self.hotkeys.get() and val == 1:   # ctrl + alt + P: show or hide the pet
+            if kind == "thread":
+                self.hotkey_tid = val
+            elif kind == "registered":
+                if not self.keys_paused:
+                    self.bind_ok = val
+                    if not all(val.values()):
+                        log_error("a keyboard shortcut is already used by another app")
+                    if self.settings.win is not None and self.settings.tab == "keys":
+                        self.settings.draw()   # shows "another app uses this" under that shortcut
+            elif self.hotkeys.get() and val == 1:   # show or hide the pet (ctrl + alt + P unless changed)
                 self.user_hidden = not self.user_hidden
                 self.check_fullscreen()
-            elif self.hotkeys.get() and val == 2:   # ctrl + alt + D: pin or close the details
+            elif self.hotkeys.get() and val == 2:   # pin or close the details (ctrl + alt + D unless changed)
                 if self.details.visible:
                     self.details.hide()
                 elif not self.hidden:
                     self.details.show(pinned=True)
 
+    def wanted_keys(self):
+        # what the shortcut thread should listen for right now (nothing while switched off or recording)
+        if not self.hotkeys_on or self.keys_paused:
+            return {}
+        return {k: v for k, v in self.binds.items() if v}
+
+    def reregister(self):
+        if self.hotkey_tid:
+            u32.PostThreadMessageW(self.hotkey_tid, 0x8001, 0, 0)
+
     def hotkeys_changed(self):
-        if self.hotkeys.get() and self.hotkey_state is None:
-            threading.Thread(target=hotkey_thread, args=(self.keys,), daemon=True).start()
+        # off really lets go of the keys, so other apps can use them
+        self.hotkeys_on = self.hotkeys.get()
+        self.reregister()
         self.changed()
+
+    def pause_keys(self, paused):
+        # while you're typing a new shortcut in settings, the old ones mustn't catch the keys
+        self.keys_paused = paused
+        self.reregister()
+
+    def set_key(self, name, combo):
+        self.binds[name] = combo
+        self.reregister()
+        self.save()
+
+    def reset_keys(self):
+        self.binds = {k: list(v) for k, v in DEFAULT_KEYS.items()}
+        self.reregister()
+        self.save()
 
     def ui_tick(self):
         # 10 times a second: hover, shortcuts. twice a second: full screen. every second: moods.
         now = time.time()
         self.check_keys()
         self.popup.watch()
-        if self.music and (self.state != "dance" or not self.sounds.get() or self.hidden):
+        if self.music and (self.state != "dance" or not self.sounds.get() or self.hidden or "dance" in self.muted):
             self.stop_music()
         self.check_hover(now)
         if now >= self.next_fs_check:
@@ -3696,13 +3803,16 @@ class PopupMenu:
 class SettingsWindow:
     # every option, in the same style as the details panel: tabs along the top, switches, pills, sliders.
     BG, FG, DIM, ON, KNOB = "#1c1c1e", "#f2f2f7", "#8e8e93", "#d77757", "#f2efe8"
+    CHIP_ON, CHIP_OFF, FAINT = "#3b2924", "#242426", "#5a5a5e"   # sound chips: warm when on, plain when off
+    CAP, CAP_EDGE, WARN = "#2c2c2e", "#3a3a3d", "#e8a33d"           # key caps, and the colour for warnings
     W = 390
     TABS = (("behaviour", "Behaviour"), ("look", "Look"), ("sound", "Sound"), ("usage", "Usage"),
-            ("system", "System"))
+            ("keys", "Shortcuts"), ("system", "System"))
 
     def __init__(self, pet):
         self.pet, self.win, self.tab, self.fonts = pet, None, "behaviour", {}
         self.hits, self.drag, self.move_from, self.s = [], None, None, 1.0
+        self.recording, self.key_note = None, None   # which shortcut is waiting for keys / a message under it
 
     def rows(self, tab):
         # (kind, label, variable, command, extra) for each option on a tab
@@ -3720,21 +3830,24 @@ class SettingsWindow:
                     ("choice", "Bubble style", p.bubble_style, p.changed, (("numbers", "Numbers"), ("bars", "Bars"))),
                     ("toggle", "Keep details open", p.pin_var, p.pin_changed, None)]
         if tab == "sound":
-            return [("choice", "Chatter", p.chatter, p.chatter_changed,
-                     (("off", "Off"), ("some", "Sometimes"), ("lots", "A lot"))),
-                    ("toggle", "Sound effects", p.sounds, p.sounds_changed, None),
+            return [("toggle", "Sound effects", p.sounds, p.sounds_changed, None),
                     ("slider", "Volume", p.volume, None, (0, 100, 5, "{:.0f}%")),
-                    ("toggle", "Desktop notifications", p.notify_on, p.changed, None)]
+                    ("sounds", "Which sounds", None, None, SOUND_GROUPS),
+                    ("choice", "Chatter", p.chatter, p.chatter_changed,
+                     (("off", "Off"), ("some", "Sometimes"), ("lots", "A lot")))]
         if tab == "usage":
             return [("choice", "Refresh every", p.poll, p.poll_changed, [(v, f"{v // 60} min") for v in POLL_CHOICES]),
                     ("toggle", "Warn when nearly full", p.warn, p.changed, None),
                     ("choice", "Yellow ring from", p.warn_at, p.changed, [(v, f"{v}%") for v in WARN_CHOICES]),
                     ("choice", "Red ring from", p.panic_at, p.changed, [(v, f"{v}%") for v in PANIC_CHOICES]),
                     ("toggle", "Count tokens like the Claude app", p.cc_app, p.cc_changed, None)]
-        return [("toggle", "Hide during full screen", p.hide_fs, p.hide_fs_changed, None),
+        if tab == "keys":
+            return [("toggle", "Keyboard shortcuts", p.hotkeys, p.hotkeys_changed, None),
+                    ("keys", "Shortcuts", None, None, SHORTCUTS)]
+        return [("toggle", "Desktop notifications", p.notify_on, p.changed, None),
+                ("toggle", "Hide during full screen", p.hide_fs, p.hide_fs_changed, None),
                 ("toggle", "Stay on one monitor", p.one_monitor, p.changed, None),
-                ("toggle", "Start with Windows", p.startup_var, p.startup_changed, None),
-                ("toggle", "Keyboard shortcuts", p.hotkeys, p.hotkeys_changed, None)]
+                ("toggle", "Start with Windows", p.startup_var, p.startup_changed, None)]
 
     def open(self):
         if self.win is not None and self.win.winfo_exists():
@@ -3750,7 +3863,9 @@ class SettingsWindow:
         self.canvas.bind("<ButtonPress-1>", self.press)
         self.canvas.bind("<B1-Motion>", self.motion)
         self.canvas.bind("<ButtonRelease-1>", self.release)
-        w.bind("<Escape>", lambda e: self.close())
+        w.bind("<Escape>", self.escape)
+        w.bind("<KeyPress>", self.key)
+        w.protocol("WM_DELETE_WINDOW", lambda: None if self.recording else self.close())   # alt + F4 while recording
         self.s = p.dpi
         self.draw()
         pw, ph = self.size
@@ -3761,7 +3876,17 @@ class SettingsWindow:
         round_corners(w)
         w.focus_force()
 
+    def escape(self, e):
+        if self.recording:   # esc cancels a shortcut you were typing, a second esc closes the window
+            self.stop_recording()
+            self.key_note = None
+            self.draw()
+        else:
+            self.close()
+
     def close(self):
+        self.stop_recording()
+        self.key_note = None
         if self.win is not None:
             self.win.destroy()
             self.win = None
@@ -3779,6 +3904,91 @@ class SettingsWindow:
         item = self.canvas.create_text(x * self.s, y * self.s, anchor=anchor, fill=fill, font=self.font(size, bold),
                                        text=text, **kw)
         return self.canvas.bbox(item)[3] / self.s
+
+    def keycaps(self, right, y, name, live):
+        # the keys of one shortcut, right-aligned: [Ctrl] [Alt] [P]. while recording: an orange "press keys" box.
+        s, c = self.s, self.canvas
+        f8 = self.font(8, True)
+        if self.recording == name:
+            label = "Press the new keys…"
+            w = f8.measure(label) / s + 24
+            round_rect(c, (right - w) * s, y * s, right * s, (y + 22) * s, 6 * s, self.ON, self.BG, True)
+            round_rect(c, (right - w + 1.5) * s, (y + 1.5) * s, (right - 1.5) * s, (y + 20.5) * s, 5 * s, self.BG,
+                       self.ON, True)
+            self.text(right - w / 2, y + 11, label, self.ON, 8, True, "center")
+            return
+        combo = self.pet.binds.get(name)
+        if not combo:
+            self.text(right - 4, y + 11, "Not set — click to add", self.FAINT, 8, True, "e")
+            return
+        x = right
+        for part in reversed(combo_parts(combo)):
+            w = f8.measure(part) / s + 16
+            x -= w
+            # a key cap: a slightly lighter base under the face, so it looks like it sticks up
+            round_rect(c, x * s, y * s, (x + w) * s, (y + 22) * s, 5 * s, self.CAP_EDGE, self.BG, True)
+            round_rect(c, x * s, y * s, (x + w) * s, (y + 19.5) * s, 5 * s, self.CAP, self.CAP_EDGE, True)
+            self.text(x + w / 2, y + 10, part, self.FG if live else self.DIM, 8, True, "center")
+            x -= 4
+
+    def record(self, name):
+        # start listening for the new keys for this shortcut
+        self.recording, self.key_note = name, None
+        self.pet.pause_keys(True)
+        self.win.focus_force()
+
+    def stop_recording(self):
+        if self.recording:
+            self.recording = None
+            self.pet.pause_keys(False)
+
+    def key(self, e):
+        # the keys pressed while recording a shortcut. tk on windows gives the key's windows code as keycode.
+        if not self.recording:
+            return
+        vk = e.keycode
+        if vk in (0x10, 0x11, 0x12, 0x5B, 0x5C, 0xA0, 0xA1, 0xA2, 0xA3, 0xA4, 0xA5, 0x14, 0x90):
+            return "break"   # just a modifier so far: wait for the real key
+        down = lambda k: u32.GetAsyncKeyState(k) & 0x8000
+        mods = ((2 if down(0x11) else 0) | (1 if down(0x12) else 0) | (4 if down(0x10) else 0)
+                | (8 if down(0x5B) or down(0x5C) else 0))
+        name = self.recording
+        if vk == 0x08 and not mods:   # backspace: no shortcut for this one
+            self.stop_recording()
+            self.pet.set_key(name, None)
+        elif key_name(vk) is None:
+            self.key_note = (name, "That key can't be used. Try a letter, a number or an F key.")
+        elif not mods & 0xB:
+            self.key_note = (name, "Add Ctrl or Alt, so it doesn't get in the way of your typing.")
+        else:
+            combo = [mods, vk]
+            other = next((title for n, title, _ in SHORTCUTS if n != name and self.pet.binds.get(n) == combo), None)
+            if other:
+                self.key_note = (name, f"Those keys already {other[0].lower() + other[1:]}. Pick different ones.")
+            else:
+                self.key_note = None
+                self.stop_recording()
+                self.pet.set_key(name, combo)
+        self.draw()
+        return "break"
+
+    def chip(self, x, y, label, on, live, hit):
+        # a sound you can switch on or off: warm with a filled dot when on, plain with an empty ring when off
+        s, c = self.s, self.canvas
+        w, h = self.font(8, True).measure(label) / s + 30, 22
+        lit = on and live
+        round_rect(c, x * s, y * s, (x + w) * s, (y + h) * s, h / 2 * s, self.CHIP_ON if lit else self.CHIP_OFF,
+                   self.BG, True)
+        cx, cy, rad = x + 12, y + h / 2, 3.5
+        if on:
+            c.create_oval((cx - rad) * s, (cy - rad) * s, (cx + rad) * s, (cy + rad) * s,
+                          fill=self.ON if live else self.FAINT, outline="")
+        else:
+            c.create_oval((cx - rad) * s, (cy - rad) * s, (cx + rad) * s, (cy + rad) * s,
+                          fill="", outline=self.FAINT, width=max(1, round(1.2 * s)))
+        self.text(x + 21, y + h / 2, label, self.FG if lit else self.DIM if live else self.FAINT, 8, True, "w")
+        self.hits.append((hit, x * s, y * s, (x + w) * s, (y + h) * s))
+        return w
 
     def pill(self, x, y, label, on, hit):
         s = self.s
@@ -3829,6 +4039,40 @@ class SettingsWindow:
                 for value, text in extra:
                     x += self.pill(x, y, text, var.get() == value, ("pick", var, value, cmd)) + 3
                 y += 19
+            elif kind == "keys":
+                # each shortcut: what it does on the left, its keys as little key caps on the right
+                live = bool(self.pet.hotkeys.get())
+                self.text(16, y, label, self.FG, 9, True)
+                y = self.text(16, y + 18, desc, self.DIM, 8, width=W - 32)
+                for name, title, what in extra:
+                    y += 12
+                    row = y
+                    self.text(16, y, title, self.FG if live else self.DIM, 8.5, True)
+                    y = self.text(16, y + 16, what, self.DIM, 7.5, width=W - 32 - 150)
+                    self.keycaps(W - 16, row - 2, name, live)
+                    note = self.key_note if self.key_note and self.key_note[0] == name else None
+                    if not note and live and self.recording != name and self.pet.binds.get(name) \
+                            and self.pet.bind_ok.get(name) is False:
+                        note = (name, "Another app already uses these keys. Pick different ones.")
+                    if note:
+                        y = self.text(16, y + 3, note[1], self.WARN, 7.5, width=W - 32)
+                    self.hits.append((("bind", name), 0, (row - 4) * s, W * s, (y + 4) * s))
+                y += 14
+                w_ = self.pill(12, y, "Reset to defaults", False, ("reset_keys",))
+                y += 19
+            elif kind == "sounds":
+                # every sound as a chip, in small labelled groups. all dimmed while sound effects are off.
+                live = bool(self.pet.sounds.get())
+                self.text(16, y, label, self.FG, 9, True)
+                y = self.text(16, y + 18, desc if live else "Sound effects are off, so none of these play.",
+                              self.DIM, 8, width=W - 32)
+                for group, items in extra:
+                    y += 8
+                    self.text(16, y, group.upper(), self.FAINT if not live else self.DIM, 7, True)
+                    x, y = 16, y + 15
+                    for k, name in items:
+                        x += self.chip(x, y, name, k not in self.pet.muted, live, ("sound", k)) + 6
+                    y += 22
             else:   # a slider
                 lo, hi, step, fmt = extra
                 self.text(16, y, label, self.FG, 9, True)
@@ -3861,12 +4105,26 @@ class SettingsWindow:
             self.move_from = (e.x_root - self.win.winfo_x(), e.y_root - self.win.winfo_y())
         elif kind == "tab":
             self.tab = hit[1]
+            self.stop_recording()
+            self.key_note = None
         elif kind == "toggle":
             hit[1].set(not hit[1].get())
             hit[2]()
         elif kind == "pick":
             hit[1].set(hit[2])
             hit[3]()
+        elif kind == "sound":
+            self.pet.toggle_sound(hit[1])
+        elif kind == "bind":
+            if self.recording == hit[1]:
+                self.stop_recording()   # clicked it again: never mind
+            else:
+                self.stop_recording()
+                self.record(hit[1])
+        elif kind == "reset_keys":
+            self.stop_recording()
+            self.key_note = None
+            self.pet.reset_keys()
         elif kind == "slide":
             self.drag = hit
             self.slide_to(e.x)
