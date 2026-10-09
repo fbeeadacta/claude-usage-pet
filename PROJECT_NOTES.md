@@ -2,7 +2,7 @@
 
 A small Claude mascot that walks along the top of the Windows taskbar. A bubble above its head shows Claude plan usage. If any file here gets lost or corrupted, this note has enough detail to rebuild it. You can give this file to Claude and ask it to rebuild the project.
 
-Last updated: 2026-10-10 (version 5.12)
+Last updated: 2026-10-10 (version 6.0)
 
 ## Files in this folder
 
@@ -504,6 +504,78 @@ There's also 30 px of side space for z's and sparks.
 - Dim the bubble when the data is stale.
 
 ## Change log
+
+- **2026-10-10 (version 6.0): the settings window, redesigned to look and work like the Claude desktop app's settings.**
+  - **Layout:**
+    - a darker sidebar on the left with icons (Windows' own Segoe MDL2 icon font) and the page names
+    - on the right, the page title, then each section as a small heading over a rounded card
+    - each setting has its label and description on the left and its control on the right
+    - warm greys and Claude's orange
+  - **Pages:**
+    - Mascot (movement, behaviour)
+    - Appearance (live preview, size, usage bubble, time and date)
+    - Sound & talking (sound effects and volume, which sounds, chatter)
+    - Usage & alerts (checking, warnings and notifications, Claude Code)
+    - Shortcuts
+    - System (startup, screens)
+    - About & stats (Claude login, performance, about)
+  - **Controls:** choices are segmented controls (the chosen option on a lighter tab inside a dark well), right beside the label when there's room, below it when there isn't.
+  - **Settings that only matter sometimes stay hidden until they do:**
+    - the ring levels only show while warnings are on
+    - volume and the sound chips only show while sound effects are on
+    - the shortcut list only shows while shortcuts are on
+  - **Live previews:**
+    - Appearance starts with a picture of the mascot and its bubble at the real chosen size and style, with your real numbers.
+    - Each sound chip has a ▶ to hear it without switching it.
+  - **Search:** a "Search settings" box at the top of the sidebar (Ctrl + F) shows every matching setting from every page, working right there, under "Page › Section" headings. Esc clears it.
+  - **Login status card** on About & stats:
+    - a status dot: connected, login expired, not logged in, or can't check
+    - when it last checked and when it will check next
+    - a "Check now" button
+    - the step-by-step login help when it's needed
+  - **Reset per section:** a small "Reset" beside each section heading puts just that section back to its defaults (`reset_section`).
+  - **Keyboard:**
+    - Tab / Shift + Tab or the arrow keys move through the pages and settings, with an orange focus ring; it scrolls into view.
+    - Space or Enter switches or presses the focused setting.
+    - Left / Right change choices and sliders, or play a sound chip.
+    - Ctrl + F jumps to search.
+  - **Saved note:** the always-there "Changes apply straight away" line is gone; a small ✓ Saved appears in the corner for a moment after each change.
+  - Still resizable (now 580–1100 wide, from 420 tall up to the screen's height) and scrolls. The size is remembered.
+  - Version 6.0 (`VERSION`), with a link to the project on GitHub (opens in your browser).
+  - Tested: screenshots of every page, the preview at 2x, search, keyboard focus and Space switching a setting, a section reset, the saved note, the login card with an expired login, and the smallest size.
+
+- **2026-10-10 (version 5.17):**
+  - Stats: CPU, Memory and Frame rate each have a small area graph of the last 3 minutes (`PERF_POINTS` = 90 samples, one every 2 s), right under their header. The scale grows to fit; the dotted line is the top of the scale.
+  - The settings window can be resized:
+    - drag the bottom-right grip, the right edge or the bottom edge (the cursor shows resize arrows)
+    - size limits: 370–760 wide, 400 tall up to the screen's height
+    - the size is remembered (`settings_size`)
+  - The title and tabs stay fixed at the top and the "Changes apply straight away" line at the bottom. The content scrolls between them with the mouse wheel, with a slim scrollbar. Tabs wrap onto a second line when the window is narrow. Every tab now uses the window's height instead of all tabs being as tall as the tallest one.
+
+- **2026-10-10 (version 5.16):**
+  - New Settings tab, Stats: live performance of the pet itself, updated every 2 seconds while open:
+    - CPU (of the whole processor, and of one core)
+    - memory
+    - frame rate
+    - usage checks ok / failed and the last check time
+    - how long reading new Claude Code log lines took
+    - windows watched
+    - sound files on disk
+    - how long it's been running
+  - CPU, memory and usage checks get a green / amber / red dot. CPU and memory come from Windows' own process counters (`own_usage`, using GetProcessTimes and K32GetProcessMemoryInfo).
+  - Measured in testing: about 0.1% CPU (2% of one core) and 48 MB while standing still.
+
+- **2026-10-10 (version 5.15):**
+  - Windows no longer push the mascot while it's on the taskbar (`TASKBAR_PUSH = False`): maximized and half-screen windows were shoving it about when they shouldn't. The code is still there; set it to True to bring it back. Windows still push it when it's standing on another window.
+
+- **2026-10-10 (version 5.14):**
+  - All sounds are half as loud as before at the same volume setting (`soft_all` in `make_sound`). `SOUND_VERSION` is now 4, so the quieter copies are made fresh.
+
+- **2026-10-10 (version 5.13):**
+  - Login expired / no login: the details panel now shows step-by-step help (`LOGIN_HELP`) for someone who has never used a terminal: open Command Prompt, type claude, log in through the browser, close it. The problem line is red; the steps are plain text. The speech line and notification point to the panel.
+  - Times show as 3:05 PM by default, with a 24-hour option (Settings → Look → Clock).
+  - Dates show as Fri 16/10 (day/month) by default, with a month/day option (Settings → Look → Dates). Used everywhere a reset time, chart label or run-out forecast is shown (`fmt_time`, `fmt_day`, `fmt_when`).
+  - Saved as `clock` ("12h" / "24h") and `dates` ("ddmm" / "mmdd").
 
 - **2026-10-10 (version 5.12):**
   - New Settings tab, Shortcuts:

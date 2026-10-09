@@ -34,6 +34,7 @@ import subprocess
 import urllib.request
 import urllib.error
 import traceback
+import webbrowser
 import tempfile
 import wave
 import struct
@@ -59,6 +60,8 @@ HOP_HEIGHT = 34            # pixels
 LEAP_EVERY = 25            # on average, looks for another window to jump to this often (seconds)
 LEAP_POWER = 300           # how high its legs can really take it (pixels). it sometimes thinks more.
 LEAP_REACH = 520           # how far sideways a window can be before it won't bother
+TASKBAR_PUSH = False       # windows pushing it while it's on the taskbar (off for now: maximized and
+                           # snapped windows shoved it about when they shouldn't)
 DIVE_MIN = 150             # the leap of faith needs at least this much drop below a window's edge
 HAY_TIME = 1.3             # seconds it sits in the hay pile before popping out
 # personalities (menu: personality). keep = chance it keeps walking when a walk ends, idle / walk_t = how
@@ -357,6 +360,8 @@ TIPS = {
     "Size": ("How big the mascot is. Ctrl + mouse wheel over it works too.", []),
     "Bubble shows": ("Which limits the bubble above its head shows, or only show it when you hover.", []),
     "Bubble style": ("Numbers, or two small bars.", []),
+    "Clock": ("How times are shown in the details panel, like when a limit resets.", []),
+    "Dates": ("Day first or month first, like Fri 16/10 or Fri 10/16.", []),
     "Yellow ring from": ("When the warning ring turns yellow.", []),
     "Red ring from": ("When the warning ring turns red. It turns black at 100%.", []),
 }
@@ -460,11 +465,37 @@ def read_token():
         return None
 
 
+LOGIN_HELP = ("To fix it, Claude Code needs to log you in again:\n"
+              "1. Press the Windows key, type cmd and press Enter. A black Command Prompt window opens.\n"
+              "2. Type claude and press Enter.\n"
+              "3. If it asks you to log in, follow the steps (type /login and press Enter if it doesn't ask). "
+              "Your browser opens: sign in to your Claude account and click Authorize.\n"
+              "4. When Claude Code shows its prompt, you're done. Close the window (type /exit or click X). "
+              "The mascot notices the new login within a few seconds.\n"
+              "If step 2 says 'claude' is not recognized, install Claude Code first from claude.com/claude-code.")
+CLOCK = {"24h": False, "mmdd": False}   # how times and dates are shown (settings: Clock, Dates)
+
+
+def fmt_time(dt):
+    # 3:05 PM, or 15:05 on the 24-hour clock
+    return f"{dt:%H:%M}" if CLOCK["24h"] else f"{dt:%I:%M %p}".lstrip("0")
+
+
+def fmt_day(dt):
+    # Fri 16/10, or Fri 10/16
+    return f"{dt:%a} {dt.month}/{dt.day}" if CLOCK["mmdd"] else f"{dt:%a} {dt.day}/{dt.month}"
+
+
+def fmt_when(dt, key):
+    # the 5-hour limit resets today, so just the time. the weekly one gets the day too.
+    return fmt_time(dt) if key == "five_hour" else f"{fmt_day(dt)} {fmt_time(dt)}"
+
+
 def fetch_usage():
     # returns (data, error). error is a short plain message, never the token.
     token = read_token()
     if not token:
-        return None, "no login found. run 'claude' once and sign in."
+        return None, "no login found. The mascot reads your login from Claude Code.\n\n" + LOGIN_HELP
     req = urllib.request.Request(URL, headers={
         "Authorization": f"Bearer {token}",
         "Content-Type": "application/json",
@@ -476,7 +507,7 @@ def fetch_usage():
             return json.loads(r.read()), None
     except urllib.error.HTTPError as e:
         if e.code == 401:
-            return None, "login expired. open claude code to refresh it."
+            return None, "login expired. The mascot can't see your usage until you log in again.\n\n" + LOGIN_HELP
         if e.code == 429:
             global RETRY_AFTER
             try:
@@ -683,7 +714,9 @@ class ClaudeCodeLog:
     def run(self):
         while True:
             try:
+                t0 = time.perf_counter()
                 self.scan()
+                self.scan_ms = (time.perf_counter() - t0) * 1000   # for the performance page
             except Exception:
                 log_error("reading claude code's logs")   # a weird log line must never stop the pet
             time.sleep(CC_SCAN_SECONDS)
@@ -807,12 +840,12 @@ def log_error(what, exc=None):
 # ---- settings and memory files ----
 
 DEFAULTS = {"scale": DEFAULT_SCALE, "energy": "normal", "walk": True, "jump": True, "naps": True, "anim": True,
-            "bubble": "both", "bubble_style": "numbers", "chatter": "some", "wizard": True, "warn": True, "cc_app": True, "notify": True, "sounds": True, "hotkeys": True,
-            "platforms": True, "volume": 60, "muted": [], "keys": None,
+            "bubble": "both", "bubble_style": "numbers", "clock": "12h", "dates": "ddmm", "chatter": "some", "wizard": True, "warn": True, "cc_app": True, "notify": True, "sounds": True, "hotkeys": True,
+            "platforms": True, "volume": 60, "muted": [], "keys": None, "settings_size": None,
             "warn_at": WARN_AT, "panic_at": PANIC_AT, "poll": POLL_SECONDS,
             "hide_fs": True, "one_monitor": False, "panel_tab": "plan", "plan_chart": "5h", "cc_view": "overview",
             "cc_range": "all", "x": None, "y": None}
-CHOICES = {"energy": tuple(PROFILES), "bubble": ("both", "5h", "hover"), "bubble_style": ("numbers", "bars"),
+CHOICES = {"energy": tuple(PROFILES), "bubble": ("both", "5h", "hover"), "bubble_style": ("numbers", "bars"), "clock": ("12h", "24h"), "dates": ("ddmm", "mmdd"),
            "chatter": tuple(CHATTER), "panel_tab": ("plan", "cc"), "plan_chart": ("5h", "7d"), "cc_view": ("overview", "models", "projects"),
            "cc_range": ("all", "30d", "7d"),
            }
@@ -860,6 +893,10 @@ def load_settings():
     keys = st["keys"] if isinstance(st["keys"], dict) else {}
     st["keys"] = {name: (keys[name] if name in keys and (keys[name] is None or combo_ok(keys[name]))
                          else list(DEFAULT_KEYS[name])) for name, _, _ in SHORTCUTS}
+    size = st["settings_size"]
+    if not (isinstance(size, list) and len(size) == 2 and all(isinstance(v, int) and not isinstance(v, bool)
+                                                               for v in size)):
+        st["settings_size"] = None
     if not isinstance(st["muted"], list):
         st["muted"] = []
     st["muted"] = [k for k in st["muted"] if k in SOUNDS]
@@ -902,6 +939,28 @@ def load_memory():
 
 u32 = ctypes.WinDLL("user32", use_last_error=True)
 k32 = ctypes.WinDLL("kernel32", use_last_error=True)
+
+
+class MEMINFO(ctypes.Structure):
+    _fields_ = [("cb", wintypes.DWORD), ("PageFaultCount", wintypes.DWORD), ("PeakWorkingSetSize", ctypes.c_size_t),
+                ("WorkingSetSize", ctypes.c_size_t), ("QuotaPeakPagedPoolUsage", ctypes.c_size_t),
+                ("QuotaPagedPoolUsage", ctypes.c_size_t), ("QuotaPeakNonPagedPoolUsage", ctypes.c_size_t),
+                ("QuotaNonPagedPoolUsage", ctypes.c_size_t), ("PagefileUsage", ctypes.c_size_t),
+                ("PeakPagefileUsage", ctypes.c_size_t)]
+
+
+def own_usage():
+    # (seconds of cpu time used so far, megabytes of memory in use) for this program
+    k32.GetCurrentProcess.restype = ctypes.c_void_p
+    me = ctypes.c_void_p(k32.GetCurrentProcess())   # (a full-size handle, not a 32-bit number)
+    times = [wintypes.FILETIME() for _ in range(4)]
+    cpu = 0.0
+    if k32.GetProcessTimes(me, *[ctypes.byref(x) for x in times]):
+        cpu = sum((x.dwHighDateTime << 32 | x.dwLowDateTime) for x in times[2:]) / 1e7   # kernel + user
+    mem = MEMINFO()
+    mem.cb = ctypes.sizeof(mem)
+    ok = k32.K32GetProcessMemoryInfo(me, ctypes.byref(mem), mem.cb)
+    return cpu, (mem.WorkingSetSize / 2 ** 20 if ok else 0.0)
 try:
     winmm = ctypes.WinDLL("winmm")   # for a finer timer while the mascot is moving
 except OSError:
@@ -1135,7 +1194,7 @@ def hotkey_thread(inbox, wanted):
 SOUND_DIR = Path(tempfile.gettempdir()) / "claude_pet_sounds"
 
 
-SOUND_VERSION = 3   # bump this when a sound changes, so old saved copies aren't used
+SOUND_VERSION = 4   # bump this when a sound changes, so old saved copies aren't used
 # how the sounds are grouped and named in settings, where each one can be switched off
 SOUND_GROUPS = (("Reactions", (("pop", "Poke"), ("boing", "Bounce"), ("scream", "Scream"), ("splat", "Wall splat"))),
                 ("Adventures", (("whoosh", "Parachute"), ("eagle", "Eagle cry"), ("hay", "Hay landing"))),
@@ -1260,7 +1319,8 @@ def make_sound(kind, volume=100):
             body.append(v * swell * flap)
         mix(0.0, body)
         mix(0.02, wav(0.5, 85, 50, 0.3, attack=0.06, decay=1.8))   # the low "oom" as it fills
-    frames = [int(max(-1.0, min(1.0, v)) * volume / 100 * 32767) for v in buf]
+    soft_all = 0.5   # every sound at half its old loudness, so even 100% stays gentle
+    frames = [int(max(-1.0, min(1.0, v)) * soft_all * volume / 100 * 32767) for v in buf]
     SOUND_DIR.mkdir(exist_ok=True)
     tmp = path.with_name(f"{path.stem}_{threading.get_ident()}.tmp")
     with wave.open(str(tmp), "wb") as w:
@@ -1365,15 +1425,15 @@ def move_window(win, x, y, w=None, h=None):
         u32.SetWindowPos(hwnd, None, x, y, w or 0, h or 0, flags)
 
 
-def round_rect(c, x1, y1, x2, y2, r, fill, bg=KEY, smooth=False):
+def round_rect(c, x1, y1, x2, y2, r, fill, bg=KEY, smooth=False, tag=""):
     # a rounded box: three rectangles plus four corner images, all on whole pixels so nothing steps
     x1, y1, x2, y2 = round(x1), round(y1), round(x2), round(y2)
     r = max(1, min(round(r), (x2 - x1) // 2, (y2 - y1) // 2))
-    c.create_rectangle(x1 + r, y1, x2 - r, y2, fill=fill, outline="")
-    c.create_rectangle(x1, y1 + r, x1 + r, y2 - r, fill=fill, outline="")
-    c.create_rectangle(x2 - r, y1 + r, x2, y2 - r, fill=fill, outline="")
+    c.create_rectangle(x1 + r, y1, x2 - r, y2, fill=fill, outline="", tags=tag)
+    c.create_rectangle(x1, y1 + r, x1 + r, y2 - r, fill=fill, outline="", tags=tag)
+    c.create_rectangle(x2 - r, y1 + r, x2, y2 - r, fill=fill, outline="", tags=tag)
     for q, (x, y) in enumerate(((x1, y1), (x2 - r, y1), (x1, y2 - r), (x2 - r, y2 - r))):
-        c.create_image(x, y, image=corner(c, r, fill, bg, smooth, q), anchor="nw")
+        c.create_image(x, y, image=corner(c, r, fill, bg, smooth, q), anchor="nw", tags=tag)
 
 
 def wrap(text, font, maxw):
@@ -1455,6 +1515,9 @@ class Pet:
         self.one_monitor = tk.BooleanVar(value=st["one_monitor"])
         self.bubble_mode = tk.StringVar(value=st["bubble"])
         self.bubble_style = tk.StringVar(value=st["bubble_style"])
+        self.clock_fmt = tk.StringVar(value=st["clock"])   # 12h (3:05 PM) or 24h (15:05)
+        self.dates = tk.StringVar(value=st["dates"])   # ddmm (Fri 16/10) or mmdd (Fri 10/16)
+        self.clock_changed(save=False)
         self.chatter = tk.StringVar(value=st["chatter"])
         self.panel_tab = tk.StringVar(value=st["panel_tab"])
         self.cc_view = tk.StringVar(value=st["cc_view"])
@@ -1490,6 +1553,14 @@ class Pet:
 
         # claude code's logs, read in the background
         self.cc = ClaudeCodeLog()
+        self.cc.scan_ms = 0.0
+        self.started, self.frames = time.time(), 0          # for the performance page
+        self.checks_ok = self.checks_failed = 0
+        self.perf = {"cpu": 0.0, "mem": 0.0, "fps": 0.0}
+        self.perf_hist = collections.deque(maxlen=PERF_POINTS)   # (cpu, mem, fps) every 2 s, for the graphs
+        self.settings_size = st["settings_size"]
+        self.perf_prev = (time.perf_counter(), own_usage()[0], 0)
+        self.root.after(2000, self.perf_tick)
         threading.Thread(target=self.cc.run, daemon=True).start()
         self.cc_growth_seen = 0.0
         self.working_until = 0.0
@@ -1590,10 +1661,10 @@ class Pet:
     def save(self):
         st = {k: (v.get() if isinstance(v, tk.Variable) else v) for k, v in (
             ("scale", self.scale), ("energy", self.energy), ("walk", self.walk), ("jump", self.jump), ("naps", self.naps),
-            ("anim", self.anim), ("bubble", self.bubble_mode), ("bubble_style", self.bubble_style),
+            ("anim", self.anim), ("bubble", self.bubble_mode), ("bubble_style", self.bubble_style), ("clock", self.clock_fmt), ("dates", self.dates),
             ("chatter", self.chatter), ("wizard", self.wizard), ("warn", self.warn), ("cc_app", self.cc_app), ("warn_at", self.warn_at), ("panic_at", self.panic_at), ("poll", self.poll),
             ("notify", self.notify_on), ("sounds", self.sounds), ("hotkeys", self.hotkeys),
-            ("platforms", self.platforms), ("volume", self.volume), ("muted", sorted(self.muted)), ("keys", self.binds), ("hide_fs", self.hide_fs),
+            ("platforms", self.platforms), ("volume", self.volume), ("muted", sorted(self.muted)), ("keys", self.binds), ("settings_size", self.settings_size), ("hide_fs", self.hide_fs),
             ("one_monitor", self.one_monitor), ("panel_tab", self.panel_tab), ("cc_view", self.cc_view),
             ("cc_range", self.cc_range), ("plan_chart", self.plan_chart), ("x", round(self.x)), ("y", round(self.y)))}
         write_json(SETTINGS_FILE, st)
@@ -1645,6 +1716,13 @@ class Pet:
     def poll_changed(self):
         self.next_at = min(self.next_at, time.time() + self.poll.get())
         self.changed()
+
+    def clock_changed(self, save=True):
+        CLOCK["24h"], CLOCK["mmdd"] = self.clock_fmt.get() == "24h", self.dates.get() == "mmdd"
+        if save:
+            if self.details.visible:
+                self.details.draw()
+            self.save()
 
     def prof(self):
         return PROFILES[self.energy.get()]
@@ -2166,6 +2244,7 @@ class Pet:
         self.busy = False
         if data is not None:
             self.data, self.error = data, None
+            self.checks_ok += 1
             self.updated = datetime.datetime.now()
             for r in parse_rows(data):
                 prev = self.seen.get(r["key"])
@@ -2189,19 +2268,20 @@ class Pet:
             self.remember(now, parse_rows(data))
         else:
             if err.startswith("login expired") and not (self.error or "").startswith("login expired"):
-                self.say("I can't see your usage anymore. open Claude Code to log back in?", force=True)
-                self.toast("Claude pet: login expired", "Open Claude Code once so it can renew your login.")
+                self.say("I can't see your usage anymore. hover me for how to log back in!", force=True)
+                self.toast("Claude pet: login expired", "Hover the mascot for step-by-step help logging back in.")
             if err.startswith("rate limited"):
                 # asked to slow down: wait 3, 6, 12... minutes (up to 30), or longer if the service says so
                 self.limited += 1
                 wait = max(RETRY_AFTER, min(1800, RATE_LIMITED_SECONDS * 2 ** (self.limited - 1)))
                 self.next_at = now + wait
                 at = datetime.datetime.fromtimestamp(self.next_at)
-                err = (f"rate limited: the usage service asked us to slow down, so it'll try again at {at:%H:%M}. "
+                err = (f"rate limited: the usage service asked us to slow down, so it'll try again at {fmt_time(at)}. "
                        "your last numbers are still shown. a slower 'refresh every' setting helps.")
             else:
                 self.next_at = now + self.poll.get()
             self.error = err
+            self.checks_failed += 1
 
     def remember(self, now, rows):
         # keeps a history of the 5-hour and weekly % for the plan tab's chart:
@@ -2270,7 +2350,7 @@ class Pet:
                     self.bind_ok = val
                     if not all(val.values()):
                         log_error("a keyboard shortcut is already used by another app")
-                    if self.settings.win is not None and self.settings.tab == "keys":
+                    if self.settings.win is not None and self.settings.tab == "shortcuts":
                         self.settings.draw()   # shows "another app uses this" under that shortcut
             elif self.hotkeys.get() and val == 1:   # show or hide the pet (ctrl + alt + P unless changed)
                 self.user_hidden = not self.user_hidden
@@ -2393,6 +2473,9 @@ class Pet:
         # refreshes the list of windows. if it's standing on one, it rides along when the window moves,
         # and falls when the window closes, minimizes, maximizes or slides out from under it.
         self.plats, self.plats_at = list_platforms(), time.time()
+        if self.plat is None and not TASKBAR_PUSH:
+            self.near = []
+            return
         if self.plat is None:
             # on the taskbar: the windows that reach down near it, which can push it about
             sc, reach = self.screens[self.si], self.half + 400 * self.s()
@@ -2687,7 +2770,21 @@ class Pet:
             self.last_t = time.perf_counter()
             self.anim_tick()
 
+    def perf_tick(self):
+        # every 2 seconds: how much cpu and memory this program uses, and how many frames it drew
+        now, (cpu, mem) = time.perf_counter(), own_usage()
+        t0, cpu0, f0 = self.perf_prev
+        span = max(0.001, now - t0)
+        self.perf = {"cpu": 100 * (cpu - cpu0) / span / (os.cpu_count() or 1), "mem": mem,
+                     "fps": (self.frames - f0) / span, "cpu_core": 100 * (cpu - cpu0) / span}
+        self.perf_prev = (now, cpu, self.frames)
+        self.perf_hist.append((self.perf["cpu"], mem, self.perf["fps"]))
+        if self.settings.win is not None and self.settings.tab == "about" and not self.settings.query and not self.settings.drag:
+            self.settings.draw()
+        self.root.after(2000, self.perf_tick)
+
     def anim_tick(self):
+        self.frames += 1
         now = time.perf_counter()
         dt, self.last_t = min(0.05, now - self.last_t), now
         self.physics(dt)
@@ -3482,7 +3579,7 @@ class Details:
         now_dt = datetime.datetime.now(datetime.timezone.utc)
         now = time.time()
         wait = "updating..." if p.busy else f"next update in {max(0, math.ceil(p.next_at - now))}s"
-        self.text(12, y, (f"updated {p.updated:%H:%M} · " if p.updated else "") + wait, self.DIM, 8)
+        self.text(12, y, (f"updated {fmt_time(p.updated)} · " if p.updated else "") + wait, self.DIM, 8)
         y += 22
         for r in rows:
             seen = p.seen.get(r["key"])
@@ -3496,15 +3593,18 @@ class Details:
                 tx = 12 + (W - 24) * el / 100
                 self.line(tx, y + 16, tx, y + 30, self.FG, 2)
             when = parse_time(r["resets"])
-            at = f" · at {when.astimezone():{'%H:%M' if r['key'] == 'five_hour' else '%a %H:%M'}}" if when else ""
+            at = f" · {fmt_when(when.astimezone(), r['key'])}" if when else ""
             self.text(12, y + 32, reset_text(r["resets"], now_dt) + at, self.DIM, 8)
             if msg:
                 y = self.text(12, y + 46, msg, self.FASTC if kind == "fast" else self.SLOWC, 8, True,
                               width=W - 24) + 8
             else:
                 y += 54
-        if p.error:
-            y = self.text(12, y, p.error, RED, 8, width=W - 24) + 10
+        if p.error:   # the problem in red; any how-to-fix steps after it in plain text, easier to read
+            head, _, steps = p.error.partition(chr(10) * 2)
+            y = self.text(12, y, head, RED, 8, True, width=W - 24) + 8
+            if steps:
+                y = self.text(12, y, steps, self.FG, 8, width=W - 24) + 10
         elif not rows:
             self.text(12, y, "loading...", self.DIM, 8)
             y += 20
@@ -3580,9 +3680,9 @@ class Details:
         if len(pts) < 2 and not est:
             self.text((ix0 + ix1) / 2, iy0 + 16, "the line fills in as I check your usage", self.DIM, 7.5,
                       anchor="n")
-        fmt = "%H:%M" if key == "five_hour" else "%a"
-        self.text(x0, y1 + 3, f"{datetime.datetime.fromtimestamp(start):{fmt}}", "#6e6e73", 7)
-        self.text(x1, y1 + 3, f"resets {reset.astimezone():{'%H:%M' if key == 'five_hour' else '%a %H:%M'}}",
+        st_dt = datetime.datetime.fromtimestamp(start)
+        self.text(x0, y1 + 3, fmt_time(st_dt) if key == "five_hour" else fmt_day(st_dt), "#6e6e73", 7)
+        self.text(x1, y1 + 3, f"resets {fmt_when(reset.astimezone(), key)}",
                   "#6e6e73", 7, anchor="ne")
         if est:
             self.text((x0 + x1) / 2, y1 + 3, "dotted = estimate", "#6e6e73", 7, anchor="n")
@@ -3596,9 +3696,8 @@ class Details:
             if proj >= 100 and r["pct"] < 100:
                 out = start + (now - start) * 100 / r["pct"]
                 left = reset.timestamp() - out
-                fmt = "%H:%M" if key == "five_hour" else "%a %H:%M"
                 gap = f"{left / 3600:.0f}h" if left >= 3600 else f"{left / 60:.0f}m"
-                msg, col = (f"At this pace you'll run out around {datetime.datetime.fromtimestamp(out):{fmt}}, "
+                msg, col = (f"At this pace you'll run out around {fmt_when(datetime.datetime.fromtimestamp(out), key)}, "
                             f"about {gap} before the reset."), self.FASTC
             elif r["pct"] >= 100:
                 msg, col = "All used up. It comes back at the reset.", RED
@@ -3800,55 +3899,118 @@ class PopupMenu:
 
 # ---- settings window (right-click > settings) ----
 
+PERF_POINTS = 90   # 3 minutes of performance history, one point every 2 seconds
+VERSION = "6.0"
+PROJECT_URL = "https://github.com/have-you-tried-restarting/claude-usage-pet"
+ICON_FONT = "Segoe MDL2 Assets"   # windows' own icon font
+
+
 class SettingsWindow:
-    # every option, in the same style as the details panel: tabs along the top, switches, pills, sliders.
-    BG, FG, DIM, ON, KNOB = "#1c1c1e", "#f2f2f7", "#8e8e93", "#d77757", "#f2efe8"
-    CHIP_ON, CHIP_OFF, FAINT = "#3b2924", "#242426", "#5a5a5e"   # sound chips: warm when on, plain when off
-    CAP, CAP_EDGE, WARN = "#2c2c2e", "#3a3a3d", "#e8a33d"           # key caps, and the colour for warnings
-    W = 390
-    TABS = (("behaviour", "Behaviour"), ("look", "Look"), ("sound", "Sound"), ("usage", "Usage"),
-            ("keys", "Shortcuts"), ("system", "System"))
+    # laid out like the claude desktop app's settings: a sidebar of pages on the left (with search),
+    # and on the right the page title, then sections as rounded cards: what a setting does on the left,
+    # its control on the right. resizable, scrolls, and works from the keyboard too.
+    BG, SIDE, CARD, LINE = "#262624", "#1f1e1d", "#30302e", "#3d3d3a"
+    FG, DIM, FAINT = "#faf9f5", "#a6a39a", "#6b6a65"
+    ON, KNOB, SEL, WELL = "#d97757", "#faf9f5", "#3d3c38", "#232321"
+    CHIP_ON, CHIP_OFF = "#4a3128", "#3a3936"
+    CAP, CAP_EDGE, WARN, GOOD, BAD = "#3d3c38", "#4d4c47", "#e8a33d", "#4caf7d", "#e5534b"
+    W, H = 720, 580                          # starting size (base units, before display scaling)
+    MIN_W, MIN_H, MAX_W = 580, 420, 1100     # the tallest it can go is the screen's height
+    SB, TOP = 196, 46                        # sidebar width, and the strip along the top
+    PAGES = (("mascot", "Mascot", ""), ("appearance", "Appearance", ""),
+             ("sound", "Sound & talking", ""), ("usage", "Usage & alerts", ""),
+             ("shortcuts", "Shortcuts", ""), ("system", "System", ""),
+             ("about", "About & stats", ""))
 
     def __init__(self, pet):
-        self.pet, self.win, self.tab, self.fonts = pet, None, "behaviour", {}
+        self.pet, self.win, self.tab, self.fonts = pet, None, "mascot", {}
         self.hits, self.drag, self.move_from, self.s = [], None, None, 1.0
         self.recording, self.key_note = None, None   # which shortcut is waiting for keys / a message under it
+        self.scroll, self.max_scroll, self.fixed_n = 0, 0, 0
+        self.resizing, self.redraw_job, self.sized = None, None, False
+        self.query, self.search = "", None
+        self.focusables, self.focus_key, self.kb = [], None, False   # keyboard focus
+        self.saved_until, self.saved_job = 0.0, None
 
-    def rows(self, tab):
-        # (kind, label, variable, command, extra) for each option on a tab
+    # ---- what's on each page ----
+    def sections(self, page):
+        # each section: a heading, its rows, which settings its "Reset" puts back, and when it shows at all
         p = self.pet
-        if tab == "behaviour":
-            return [("choice", "Personality", p.energy, p.energy_changed, PROFILE_NAMES),
-                    ("toggle", "Take naps", p.naps, p.naps_changed, None),
-                    ("toggle", "Wizard when Claude works", p.wizard, p.changed, None),
-                    ("toggle", "Stand on windows", p.platforms, p.changed, None),
-                    ("toggle", "Animations", p.anim, p.anim_changed, None)]
-        if tab == "look":
-            return [("slider", "Size", p.size_var, p.set_scale, (MIN_SCALE, MAX_SCALE, 0.05, "{:.2f}x")),
-                    ("choice", "Bubble shows", p.bubble_mode, p.changed,
-                     (("both", "Both limits"), ("5h", "5-hour only"), ("hover", "On hover"))),
-                    ("choice", "Bubble style", p.bubble_style, p.changed, (("numbers", "Numbers"), ("bars", "Bars"))),
-                    ("toggle", "Keep details open", p.pin_var, p.pin_changed, None)]
-        if tab == "sound":
-            return [("toggle", "Sound effects", p.sounds, p.sounds_changed, None),
-                    ("slider", "Volume", p.volume, None, (0, 100, 5, "{:.0f}%")),
-                    ("sounds", "Which sounds", None, None, SOUND_GROUPS),
-                    ("choice", "Chatter", p.chatter, p.chatter_changed,
-                     (("off", "Off"), ("some", "Sometimes"), ("lots", "A lot")))]
-        if tab == "usage":
-            return [("choice", "Refresh every", p.poll, p.poll_changed, [(v, f"{v // 60} min") for v in POLL_CHOICES]),
-                    ("toggle", "Warn when nearly full", p.warn, p.changed, None),
-                    ("choice", "Yellow ring from", p.warn_at, p.changed, [(v, f"{v}%") for v in WARN_CHOICES]),
-                    ("choice", "Red ring from", p.panic_at, p.changed, [(v, f"{v}%") for v in PANIC_CHOICES]),
-                    ("toggle", "Count tokens like the Claude app", p.cc_app, p.cc_changed, None)]
-        if tab == "keys":
-            return [("toggle", "Keyboard shortcuts", p.hotkeys, p.hotkeys_changed, None),
-                    ("keys", "Shortcuts", None, None, SHORTCUTS)]
-        return [("toggle", "Desktop notifications", p.notify_on, p.changed, None),
-                ("toggle", "Hide during full screen", p.hide_fs, p.hide_fs_changed, None),
-                ("toggle", "Stay on one monitor", p.one_monitor, p.changed, None),
-                ("toggle", "Start with Windows", p.startup_var, p.startup_changed, None)]
+        sounds_on = lambda: bool(p.sounds.get())
 
+        def row(kind, label, key=None, var=None, cmd=None, extra=None, show=None, words=""):
+            return {"kind": kind, "label": label, "key": key, "var": var, "cmd": cmd, "extra": extra,
+                    "show": show, "words": words}
+
+        if page == "mascot":
+            return [("Movement", ["energy"], [
+                        row("choice", "Personality", "energy", p.energy, p.energy_changed, PROFILE_NAMES,
+                            words="parkour lively normal chill statue move walk jump")]),
+                    ("Behaviour", ["naps", "wizard", "platforms", "anim"], [
+                        row("toggle", "Take naps", "naps", p.naps, p.naps_changed, words="sleep"),
+                        row("toggle", "Wizard when Claude works", "wizard", p.wizard, p.changed, words="hat magic"),
+                        row("toggle", "Stand on windows", "platforms", p.platforms, p.changed, words="jump ledge"),
+                        row("toggle", "Animations", "anim", p.anim, p.anim_changed, words="still motion")])]
+        if page == "appearance":
+            return [("Preview", None, [row("preview", "Preview", words="look size bubble")]),
+                    ("Mascot", ["scale"], [
+                        row("slider", "Size", "scale", p.size_var, p.set_scale, (MIN_SCALE, MAX_SCALE, 0.05, "{:.2f}x"),
+                            words="big small scale")]),
+                    ("Usage bubble", ["bubble", "bubble_style"], [
+                        row("choice", "Bubble shows", "bubble", p.bubble_mode, p.changed,
+                            (("both", "Both limits"), ("5h", "5-hour only"), ("hover", "On hover"))),
+                        row("choice", "Bubble style", "bubble_style", p.bubble_style, p.changed,
+                            (("numbers", "Numbers"), ("bars", "Bars"))),
+                        row("toggle", "Keep details open", None, p.pin_var, p.pin_changed, words="panel pin")]),
+                    ("Time and date", ["clock", "dates"], [
+                        row("choice", "Clock", "clock", p.clock_fmt, p.clock_changed, (("12h", "3:05 PM"), ("24h", "15:05")),
+                            words="12 24 hour am pm"),
+                        row("choice", "Dates", "dates", p.dates, p.clock_changed,
+                            (("ddmm", "Fri 16/10"), ("mmdd", "Fri 10/16")), words="day month")])]
+        if page == "sound":
+            return [("Sound effects", ["sounds", "volume"], [
+                        row("toggle", "Sound effects", "sounds", p.sounds, p.sounds_changed, words="mute audio"),
+                        row("slider", "Volume", "volume", p.volume, None, (0, 100, 5, "{:.0f}%"), show=sounds_on,
+                            words="loud quiet")]),
+                    ("Which sounds", ["muted"], [
+                        row("sounds", "Which sounds", extra=SOUND_GROUPS, show=sounds_on,
+                            words="poke bounce scream splat parachute eagle hay wizard magic dance music milestones")]),
+                    ("Talking", ["chatter"], [
+                        row("choice", "Chatter", "chatter", p.chatter, p.chatter_changed,
+                            (("off", "Off"), ("some", "Sometimes"), ("lots", "A lot")), words="speech talk lines")])]
+        if page == "usage":
+            warn_on = lambda: bool(p.warn.get())
+            return [("Checking", ["poll"], [
+                        row("choice", "Refresh every", "poll", p.poll, p.poll_changed,
+                            [(v, f"{v // 60} min") for v in POLL_CHOICES], words="update interval")]),
+                    ("Warnings", ["warn", "warn_at", "panic_at", "notify"], [
+                        row("toggle", "Warn when nearly full", "warn", p.warn, p.changed, words="ring"),
+                        row("choice", "Yellow ring from", "warn_at", p.warn_at, p.changed,
+                            [(v, f"{v}%") for v in WARN_CHOICES], show=warn_on),
+                        row("choice", "Red ring from", "panic_at", p.panic_at, p.changed,
+                            [(v, f"{v}%") for v in PANIC_CHOICES], show=warn_on),
+                        row("toggle", "Desktop notifications", "notify", p.notify_on, p.changed, words="toast alert")]),
+                    ("Claude Code", ["cc_app"], [
+                        row("toggle", "Count tokens like the Claude app", "cc_app", p.cc_app, p.cc_changed,
+                            words="tokens stats")])]
+        if page == "shortcuts":
+            return [("Keyboard shortcuts", ["hotkeys", "keys"], [
+                        row("toggle", "Keyboard shortcuts", "hotkeys", p.hotkeys, p.hotkeys_changed, words="hotkey keys"),
+                        row("keys", "Shortcuts", extra=SHORTCUTS, show=lambda: bool(p.hotkeys.get()),
+                            words="hide show details panel ctrl alt")])]
+        if page == "system":
+            return [("Startup", None, [
+                        row("toggle", "Start with Windows", None, p.startup_var, p.startup_changed, words="boot login")]),
+                    ("Screens", ["hide_fs", "one_monitor"], [
+                        row("toggle", "Hide during full screen", "hide_fs", p.hide_fs, p.hide_fs_changed,
+                            words="video game"),
+                        row("toggle", "Stay on one monitor", "one_monitor", p.one_monitor, p.changed,
+                            words="display screen")])]
+        return [("Claude login", None, [row("login", "Claude login", words="account sign in expired token check")]),
+                ("Performance", None, [row("perf", "Performance", words="cpu memory fps frame rate stats")]),
+                ("About", None, [row("about", "About", words="version github project")])]
+
+    # ---- opening and closing ----
     def open(self):
         if self.win is not None and self.win.winfo_exists():
             self.win.lift()
@@ -3858,31 +4020,40 @@ class SettingsWindow:
         w.overrideredirect(True)
         w.attributes("-topmost", True)
         w.configure(bg=self.BG)
-        self.canvas = tk.Canvas(w, bg=self.BG, highlightthickness=0)
+        self.fonts = {}
+        self.canvas = tk.Canvas(w, bg=self.BG, highlightthickness=0, takefocus=0)
         self.canvas.pack()
         self.canvas.bind("<ButtonPress-1>", self.press)
         self.canvas.bind("<B1-Motion>", self.motion)
         self.canvas.bind("<ButtonRelease-1>", self.release)
+        self.canvas.bind("<MouseWheel>", self.wheel)
+        self.canvas.bind("<Motion>", self.hover_cursor)
         w.bind("<Escape>", self.escape)
         w.bind("<KeyPress>", self.key)
         w.protocol("WM_DELETE_WINDOW", lambda: None if self.recording else self.close())   # alt + F4 while recording
         self.s = p.dpi
+        # the search box is a real text box, sat on the canvas
+        self.search_var = tk.StringVar()
+        self.search = tk.Entry(self.canvas, textvariable=self.search_var, bg=self.WELL, fg=self.FG, relief="flat",
+                               insertbackground=self.FG, highlightthickness=0, borderwidth=0,
+                               font=self.font(8.5), takefocus=1)
+        self.search_var.trace_add("write", lambda *a: self.searched())
+        self.search.bind("<FocusIn>", self.search_in)
+        self.search.bind("<FocusOut>", self.search_out)
+        self.placeholder = False
+        self.search_out()
+        sc = p.screens[p.si]
+        if p.settings_size and not self.sized:   # the size you left it at last time
+            self.W, self.H = p.settings_size
+        self.sized = True
+        self.fit_to(sc)
         self.draw()
         pw, ph = self.size
-        sc = p.screens[p.si]
         x = min(max(sc.wl + 10, round(p.x - pw / 2)), sc.wr - pw - 10)
         y = max(sc.wt + 10, sc.wb - ph - round(150 * self.s))
         w.geometry(f"{pw}x{ph}+{x}+{y}")
         round_corners(w)
         w.focus_force()
-
-    def escape(self, e):
-        if self.recording:   # esc cancels a shortcut you were typing, a second esc closes the window
-            self.stop_recording()
-            self.key_note = None
-            self.draw()
-        else:
-            self.close()
 
     def close(self):
         self.stop_recording()
@@ -3891,48 +4062,813 @@ class SettingsWindow:
             self.win.destroy()
             self.win = None
 
-    # drawing helpers (same sizes and colours as the details panel). positions are in base units times s.
-    def font(self, size, bold=False):
-        px = max(8, round(size * 4 / 3 * self.s))
-        if (px, bold) not in self.fonts:
-            self.fonts[(px, bold)] = tkfont.Font(root=self.win, family="Segoe UI", size=-px,
-                                                 weight="bold" if bold else "normal")
-        return self.fonts[(px, bold)]
+    def fit_to(self, sc):
+        # keeps the size between the limits, and no taller than the screen
+        max_h = max(self.MIN_H, int((sc.wb - sc.wt) / self.s) - 20)
+        self.W = min(self.MAX_W, max(self.MIN_W, int(self.W)))
+        self.H = min(max_h, max(self.MIN_H, int(self.H)))
 
-    def text(self, x, y, text, fill, size, bold=False, anchor="nw", width=None):
+    # ---- drawing helpers. positions are in base units, times s on screen. ----
+    def font(self, size, bold=False, family="Segoe UI"):
+        px = max(8, round(size * 4 / 3 * self.s))
+        key = (px, bold, family)
+        if key not in self.fonts:
+            self.fonts[key] = tkfont.Font(root=self.win, family=family, size=-px, weight="bold" if bold else "normal")
+        return self.fonts[key]
+
+    def px_font(self, px):
+        # a bold font at an exact pixel size (the preview draws at the mascot's real size)
+        if ("px", px) not in self.fonts:
+            self.fonts[("px", px)] = tkfont.Font(root=self.win, family="Segoe UI", size=-px, weight="bold")
+        return self.fonts[("px", px)]
+
+    def text(self, x, y, text, fill, size, bold=False, anchor="nw", width=None, family="Segoe UI"):
         kw = {"width": width * self.s} if width else {}
-        item = self.canvas.create_text(x * self.s, y * self.s, anchor=anchor, fill=fill, font=self.font(size, bold),
-                                       text=text, **kw)
+        item = self.canvas.create_text(x * self.s, y * self.s, anchor=anchor, fill=fill,
+                                       font=self.font(size, bold, family), text=text, **kw)
         return self.canvas.bbox(item)[3] / self.s
 
-    def keycaps(self, right, y, name, live):
+    def box(self, x0, y0, x1, y1, r, fill, bg=None, tag=""):
+        s = self.s
+        round_rect(self.canvas, x0 * s, y0 * s, x1 * s, y1 * s, r * s, fill, bg or self.BG, True, tag)
+
+    def hit(self, what, x0, y0, x1, y1, focus=None):
+        # a clickable area. focus = (key, on space/enter, on left/right) makes it reachable with tab too.
+        s = self.s
+        self.hits.append((what, x0 * s, y0 * s, x1 * s, y1 * s))
+        if focus:
+            self.focusables.append((focus[0], (x0, y0, x1, y1), focus[1], focus[2] if len(focus) > 2 else None))
+
+    def changed_saved(self):
+        # the little "saved" note in the corner after each change
+        self.saved_until = time.time() + 1.6
+        if self.saved_job:
+            self.win.after_cancel(self.saved_job)
+        self.saved_job = self.win.after(1700, lambda: (setattr(self, "saved_job", None),
+                                                      self.win is not None and self.draw()))
+
+    # ---- the whole window ----
+    def draw(self):
+        s, W, H, c = self.s, self.W, self.H, self.canvas
+        view = H - self.TOP
+        for _ in range(2):   # (twice at most: once more if the scroll had to be pulled back in)
+            c.delete("all")
+            self.hits, self.focusables = [], []
+            end = self.draw_content(self.SB + 28, W - 28, self.TOP + 4 - self.scroll)
+            self.max_scroll = max(0, round(end + self.scroll - self.TOP - 4 - view + 24))
+            if self.scroll <= self.max_scroll:
+                break
+            self.scroll = self.max_scroll
+        content = [h for h in self.hits if h[4] > self.TOP * s and h[2] < H * s and h[1] >= self.SB * s]
+        content_focus = self.focusables
+        self.hits, self.focusables = [], []
+        # the strip along the top of the content (scrolled content slides under it), with the close button
+        c.create_rectangle(self.SB * s, 0, W * s, self.TOP * s, fill=self.BG, outline="")
+        if self.scroll > 0:
+            c.create_line(self.SB * s, self.TOP * s - 1, W * s, self.TOP * s - 1, fill=self.LINE)
+        self.hits.append((("move",), self.SB * s, 0, (W - 40) * s, self.TOP * s))
+        self.text(W - 22, 22, "", self.DIM, 8, family=ICON_FONT, anchor="center")
+        self.hit(("close",), W - 40, 4, W - 4, 40)
+        self.draw_sidebar()
+        # a slim scrollbar, the resize grip, and the "saved" note
+        if self.max_scroll:
+            track = view - 16
+            bar = max(24, track * view / (view + self.max_scroll))
+            by = self.TOP + 8 + (track - bar) * self.scroll / self.max_scroll
+            self.box(W - 7, by, W - 3, by + bar, 2, self.LINE)
+        for i in range(3):   # three little diagonal rows of dots: drag me
+            for j in range(i + 1):
+                gx, gy = W - 7 - (i - j) * 4, H - 7 - j * 4
+                c.create_rectangle((gx - 1) * s, (gy - 1) * s, (gx + 1) * s, (gy + 1) * s, fill=self.FAINT, outline="")
+        self.hits += [(("resize", 1, 1), (W - 16) * s, (H - 16) * s, W * s, H * s),
+                      (("resize", 1, 0), (W - 5) * s, self.TOP * s, W * s, H * s),
+                      (("resize", 0, 1), self.SB * s, (H - 5) * s, W * s, H * s)]
+        if time.time() < self.saved_until:
+            label = "✓  Saved"
+            w = self.font(8, True).measure(label) / s + 24
+            self.box(W - 24 - w, H - 44, W - 24, H - 18, 8, self.SEL)
+            self.text(W - 24 - w / 2, H - 31, label, self.GOOD, 8, True, "center")
+        self.fixed_n = len(self.hits)
+        self.hits += content
+        self.focusables = self.focusables + [f for f in content_focus]
+        if self.kb:   # the keyboard focus ring
+            ring = next((f for f in self.focusables if f[0] == self.focus_key), None)
+            if ring:
+                x0, y0, x1, y1 = ring[1]
+                c.create_rectangle((x0 - 3) * s, (y0 - 3) * s, (x1 + 3) * s, (y1 + 3) * s, outline=self.ON,
+                                   width=max(1, round(1.5 * s)))
+        self.size = (round(W * s), round(H * s))
+        self.canvas.configure(width=self.size[0], height=self.size[1])
+
+    def draw_sidebar(self):
+        s, c, H = self.s, self.canvas, self.H
+        c.create_rectangle(0, 0, self.SB * s, H * s, fill=self.SIDE, outline="")
+        self.hits.append((("move",), 0, 0, self.SB * s, 40 * s))
+        self.text(20, 15, "Settings", self.FG, 11, True)
+        # search
+        x0, y0, x1, y1 = 14, 48, self.SB - 14, 76
+        focused = self.win is not None and self.win.focus_get() is self.search
+        if focused:
+            self.box(x0 - 1.5, y0 - 1.5, x1 + 1.5, y1 + 1.5, 9, self.ON, self.SIDE)
+        self.box(x0, y0, x1, y1, 8, self.WELL, self.ON if focused else self.SIDE)
+        self.text(x0 + 15, (y0 + y1) / 2, "", self.FAINT, 7.5, family=ICON_FONT, anchor="center")
+        c.create_window((x0 + 27) * s, (y0 + 5) * s, anchor="nw", window=self.search,
+                        width=(x1 - x0 - 34) * s, height=(y1 - y0 - 10) * s)
+        # pages
+        y = 92
+        for name, label, icon in self.PAGES:
+            on = self.tab == name and not self.query
+            if on:
+                self.box(10, y, self.SB - 10, y + 32, 8, self.SEL, self.SIDE)
+            self.text(28, y + 16, icon, self.FG if on else self.DIM, 9, family=ICON_FONT, anchor="center")
+            self.text(46, y + 16, label, self.FG if on else self.DIM, 9, on, anchor="w")
+            self.hit(("tab", name), 10, y, self.SB - 10, y + 32, (("nav", name), lambda n=name: self.go(n)))
+            y += 36
+
+    def draw_content(self, x0, x1, y):
+        # the page title, then each section as a heading and a card
+        if self.query:
+            return self.draw_results(x0, x1, y)
+        title = next(label for name, label, _ in self.PAGES if name == self.tab)
+        y = self.text(x0, y + 6, title, self.FG, 15, True) + 18
+        for heading, reset, rows in self.sections(self.tab):
+            rows = [r for r in rows if not r["show"] or r["show"]()]
+            if rows:
+                y = self.section(x0, x1, y, heading, reset, rows)
+        return y
+
+    def section(self, x0, x1, y, heading, reset, rows, heading_text=None):
+        # a small heading (and a "Reset" on the right), then the rows in one rounded card
+        self.text(x0 + 2, y, heading_text or heading, self.DIM, 8, True)
+        if reset:
+            w = self.font(7.5).measure("Reset") / self.s
+            self.text(x1 - 2, y + 1, "Reset", self.FAINT, 7.5, anchor="ne")
+            self.hit(("reset", tuple(reset)), x1 - w - 8, y - 2, x1 + 2, y + 16,
+                     (("reset", heading), lambda r=tuple(reset): self.reset_section(r)))
+        y += 22
+        tag = f"card{y:.0f}"
+        top = y
+        for i, r in enumerate(rows):
+            if i:
+                self.canvas.create_line((x0 + 16) * self.s, y * self.s, (x1 - 16) * self.s, y * self.s, fill=self.LINE)
+            y = self.draw_row(x0, x1, y, r)
+        self.box(x0, top, x1, y, 10, self.CARD, tag=tag)
+        self.canvas.tag_lower(tag)
+        return y + 24
+
+    # ---- one row of settings ----
+    def draw_row(self, x0, x1, y, r):
+        p, s = self.pet, self.s
+        kind, label, var, cmd, extra = r["kind"], r["label"], r["var"], r["cmd"], r["extra"]
+        desc = TIPS.get(label, ("",))[0]
+        lx, inner = x0 + 16, x1 - x0 - 32
+        top = y + 14
+        if kind == "toggle":
+            self.text(lx, top, label, self.FG, 9)
+            end = self.text(lx, top + 19, desc, self.DIM, 8, width=inner - 60) if desc else top + 17
+            on = bool(var.get())
+            self.switch(x1 - 16, top, on)
+            act = lambda v=var, c=cmd: self.flip(v, c)
+            self.hit(("toggle", var, cmd), x0, y, x1, end + 14, (("row", label), act))
+            return end + 14
+        if kind == "choice":
+            seg_w = self.segment_width(extra)
+            beside = seg_w <= inner * 0.5
+            self.text(lx, top, label, self.FG, 9)
+            end = self.text(lx, top + 19, desc, self.DIM, 8, width=inner - (seg_w + 20 if beside else 0)) \
+                if desc else top + 17
+            if beside:
+                self.segmented(x1 - 16 - seg_w, top - 4, extra, var, cmd, label)
+                return max(end, top + 26) + 14
+            self.segmented(lx, end + 10, extra, var, cmd, label)
+            return end + 10 + 28 + 14
+        if kind == "slider":
+            lo, hi, step, fmt = extra
+            self.text(lx, top, label, self.FG, 9)
+            self.text(x1 - 16, top, fmt.format(var.get()), self.DIM, 9, True, "ne")
+            end = self.text(lx, top + 19, desc, self.DIM, 8, width=inner) if desc else top + 17
+            sx0, sx1, ty = lx, x1 - 16, end + 16
+            frac = (float(var.get()) - lo) / (hi - lo)
+            self.box(sx0, ty - 2, sx1, ty + 2, 2, self.LINE, self.CARD)
+            self.box(sx0, ty - 2, max(sx0 + 4, sx0 + (sx1 - sx0) * frac), ty + 2, 2, self.ON, self.CARD)
+            kx = sx0 + (sx1 - sx0) * frac
+            self.box(kx - 8, ty - 8, kx + 8, ty + 8, 8, self.KNOB, self.CARD)
+
+            def nudge(d, v=var, c=cmd, lo=lo, hi=hi, step=step):
+                nv = min(hi, max(lo, round((float(v.get()) + d * step) / step) * step))
+                nv = round(nv, 2) if isinstance(v, tk.DoubleVar) else int(nv)
+                v.set(nv)
+                if c:
+                    c(nv)
+                if v is p.volume:
+                    p.volume_changed()
+                self.changed_saved()
+
+            self.hit(("slide", var, cmd, lo, hi, step, sx0, sx1), x0, ty - 12, x1, ty + 12,
+                     (("row", label), None, nudge))
+            return ty + 10 + 14
+        if kind == "preview":
+            return self.draw_preview(x0, x1, y)
+        if kind == "sounds":
+            return self.draw_sounds(x0, x1, y, extra)
+        if kind == "keys":
+            return self.draw_keys(x0, x1, y, extra)
+        if kind == "login":
+            return self.draw_login(x0, x1, y)
+        if kind == "perf":
+            return self.draw_perf(x0, x1, y)
+        return self.draw_about(x0, x1, y)
+
+    def switch(self, right, y, on):
+        sw, sh = 36, 20
+        sx = right - sw
+        self.box(sx, y, sx + sw, y + sh, sh / 2, self.ON if on else self.LINE, self.CARD)
+        kx = sx + sw - sh + 3 if on else sx + 3
+        self.box(kx, y + 3, kx + sh - 6, y + sh - 3, (sh - 6) / 2, self.KNOB, self.ON if on else self.LINE)
+
+    def segment_width(self, options):
+        f = self.font(8, True)
+        return sum(f.measure(t) / self.s + 20 for _, t in options) + 6
+
+    def segmented(self, x, y, options, var, cmd, label):
+        # a row of options in one rounded well; the chosen one sits on a lighter tab (like claude's)
+        f = self.font(8, True)
+        w = self.segment_width(options)
+        self.box(x, y, x + w, y + 28, 8, self.WELL, self.CARD)
+        cx = x + 3
+        values = [v for v, _ in options]
+        for value, t in options:
+            ow = f.measure(t) / self.s + 20
+            on = var.get() == value
+            if on:
+                self.box(cx, y + 3, cx + ow, y + 25, 6, self.SEL, self.WELL)
+            self.text(cx + ow / 2, y + 14, t, self.FG if on else self.DIM, 8, True, "center")
+            self.hits.append((("pick", var, value, cmd), cx * self.s, y * self.s, (cx + ow) * self.s, (y + 28) * self.s))
+            cx += ow
+
+        def step(d, var=var, cmd=cmd, values=values):
+            i = values.index(var.get()) if var.get() in values else 0
+            var.set(values[(i + d) % len(values)])
+            cmd()
+            self.changed_saved()
+
+        self.focusables.append((("row", label), (x, y, x + w, y + 28), lambda: step(1), step))
+
+    # ---- the special rows ----
+    def draw_preview(self, x0, x1, y):
+        # a small live picture of the mascot at the chosen size, with its usage bubble
+        p, s, c = self.pet, self.s, self.canvas
+        sc = p.scale
+        bw, bh = max(1, round(BLOCK_W * sc)), max(2, round(BLOCK_H * sc))   # real pixels, like on screen
+        pet_w, pet_h = 18 * bw, 5 * bh
+        area_h = (pet_h + 60 * sc + 50) / s
+        ax0, ay0, ax1, ay1 = x0 + 16, y + 14, x1 - 16, y + 14 + area_h
+        self.box(ax0, ay0, ax1, ay1, 8, self.WELL, self.CARD)
+        mid, base = (ax0 + ax1) / 2 * s, (ay1 - 16) * s
+        px, py = mid - pet_w / 2, base - pet_h
+        for row_i, line in enumerate(BODY):
+            a, b = line.index("#"), line.rindex("#") + 1
+            c.create_rectangle(px + a * bw, py + row_i * bh, px + b * bw, py + (row_i + 1) * bh, fill=ORANGE, outline="")
+        for col, row_i in ARMS:
+            c.create_rectangle(px + col * bw, py + row_i * bh, px + (col + 1) * bw, py + (row_i + 1) * bh, fill=ORANGE,
+                               outline="")
+        for col in LEGS_STAND:
+            c.create_rectangle(px + col * bw, py + 4 * bh, px + (col + 1) * bw, py + 5 * bh, fill=ORANGE, outline="")
+        for col in EYES:
+            c.create_rectangle(px + col * bw, py + bh, px + (col + 1) * bw, py + 2 * bh, fill=EYE, outline="")
+        # the bubble, as it'd look
+        f = self.px_font(max(8, round(11 * sc)))
+        pad, dot = round(7 * sc), max(4, round(6 * sc))
+        bars = p.bubble_bars() if p.bubble_style.get() == "bars" and p.data else None
+        if bars:
+            lf = self.px_font(max(8, round(10 * sc)))
+            lab_w = max(lf.measure(lab) for lab, _, _ in bars)
+            bar_w, bar_h, row_h = round(56 * sc), max(3, round(5 * sc)), lf.metrics("linespace")
+            bub_w, bub_h = 2 * pad + lab_w + round(6 * sc) + bar_w, len(bars) * row_h + round(6 * sc)
+        else:
+            segs = p.bubble_segments()
+            bub_w = 2 * pad + sum(dot + round(4 * sc) + f.measure(t_) for t_, _ in segs) + round(9 * sc) * (len(segs) - 1)
+            bub_h = f.metrics("linespace") + round(6 * sc)
+        bx, by = mid - bub_w / 2, py - round(6 * sc) - bub_h
+        round_rect(c, bx, by, bx + bub_w, by + bub_h, round(5 * sc), BUBBLE, self.WELL, True)
+        c.create_polygon(mid - round(4 * sc), by + bub_h - 1, mid + round(4 * sc), by + bub_h - 1, mid,
+                         by + bub_h + round(4 * sc), fill=BUBBLE, outline="")
+        if bars:
+            yy = by + round(3 * sc)
+            for lab, pct, color in bars:
+                ym = yy + row_h / 2
+                c.create_text(bx + pad, ym, anchor="w", text=lab, fill=BUBBLE_TEXT, font=lf)
+                xb = bx + pad + lab_w + round(6 * sc)
+                c.create_rectangle(xb, ym - bar_h / 2, xb + bar_w, ym + bar_h / 2, fill=TRACK, outline="")
+                c.create_rectangle(xb, ym - bar_h / 2, xb + bar_w * min(pct, 100) / 100, ym + bar_h / 2, fill=color,
+                                   outline="")
+                yy += row_h
+        else:
+            xx, ym = bx + pad, by + bub_h / 2
+            for i, (t_, color) in enumerate(segs):
+                if i:
+                    xx += round(9 * sc)
+                c.create_oval(xx, ym - dot / 2, xx + dot, ym + dot / 2, fill=color, outline="")
+                xx += dot + round(4 * sc)
+                c.create_text(xx, ym, anchor="w", text=t_, fill=BUBBLE_TEXT, font=f)
+                xx += f.measure(t_)
+        note = {"hover": "The bubble only shows while you hover the mascot.",
+                "5h": "Showing the 5-hour limit only."}.get(p.bubble_mode.get(), "Live: changes here show straight away.")
+        end = self.text(x0 + 16, ay1 + 8, note, self.DIM, 7.5, width=x1 - x0 - 32)
+        return end + 14
+
+    def draw_sounds(self, x0, x1, y, groups):
+        # every sound as a chip: tap the name to switch it on or off, tap ▶ to hear it
+        y = self.text(x0 + 16, y + 14, "Tap a sound to switch it on or off. Tap ▶ to hear it.", self.DIM, 8,
+                      width=x1 - x0 - 32)
+        for group, items in groups:
+            y += 10
+            self.text(x0 + 16, y, group.upper(), self.FAINT, 7, True)
+            x, y = x0 + 16, y + 16
+            for k, name in items:
+                w = self.chip_width(name)
+                if x + w > x1 - 16 and x > x0 + 16:
+                    x, y = x0 + 16, y + 30
+                self.chip(x, y, name, k)
+                x += w + 6
+            y += 24
+        return y + 14
+
+    def chip_width(self, label):
+        return self.font(8, True).measure(label) / self.s + 30 + 24
+
+    def chip(self, x, y, label, k):
+        p, s, c = self.pet, self.s, self.canvas
+        on = k not in p.muted
+        w, h = self.chip_width(label), 24
+        self.box(x, y, x + w, y + h, h / 2, self.CHIP_ON if on else self.CHIP_OFF, self.CARD)
+        cx, cy, rad = x + 12, y + h / 2, 3.5
+        if on:
+            c.create_oval((cx - rad) * s, (cy - rad) * s, (cx + rad) * s, (cy + rad) * s, fill=self.ON, outline="")
+        else:
+            c.create_oval((cx - rad) * s, (cy - rad) * s, (cx + rad) * s, (cy + rad) * s, fill="", outline=self.FAINT,
+                          width=max(1, round(1.2 * s)))
+        self.text(x + 21, cy, label, self.FG if on else self.DIM, 8, True, "w")
+        sep = x + w - 24
+        c.create_line(sep * s, (y + 5) * s, sep * s, (y + h - 5) * s, fill=self.LINE)
+        self.text(sep + 12, cy, "▶", self.DIM, 6.5, anchor="center")
+        self.hits.append((("hear", k), sep * s, y * s, (x + w) * s, (y + h) * s))
+        self.hit(("sound", k), x, y, sep, y + h,
+                 (("chip", k), lambda k=k: self.toggle_chip(k), lambda d, k=k: p.play(k, preview=True)))
+
+    def toggle_chip(self, k):
+        self.pet.toggle_sound(k)
+        self.changed_saved()
+
+    def draw_keys(self, x0, x1, y, shortcuts):
+        y = self.text(x0 + 16, y + 14, TIPS["Shortcuts"][0], self.DIM, 8, width=x1 - x0 - 32)
+        for name, title, what in shortcuts:
+            y += 14
+            row = y
+            self.text(x0 + 16, y, title, self.FG, 9)
+            y = self.text(x0 + 16, y + 18, what, self.DIM, 7.5, width=x1 - x0 - 32 - 170)
+            self.keycaps(x1 - 16, row - 2, name)
+            note = self.key_note if self.key_note and self.key_note[0] == name else None
+            if not note and self.recording != name and self.pet.binds.get(name) \
+                    and self.pet.bind_ok.get(name) is False:
+                note = (name, "Another app already uses these keys. Pick different ones.")
+            if note:
+                y = self.text(x0 + 16, y + 4, note[1], self.WARN, 7.5, width=x1 - x0 - 32)
+            self.hit(("bind", name), x0, row - 6, x1, y + 6, (("bind", name), lambda n=name: self.toggle_record(n)))
+        return y + 16
+
+    def keycaps(self, right, y, name):
         # the keys of one shortcut, right-aligned: [Ctrl] [Alt] [P]. while recording: an orange "press keys" box.
-        s, c = self.s, self.canvas
+        s = self.s
         f8 = self.font(8, True)
         if self.recording == name:
             label = "Press the new keys…"
             w = f8.measure(label) / s + 24
-            round_rect(c, (right - w) * s, y * s, right * s, (y + 22) * s, 6 * s, self.ON, self.BG, True)
-            round_rect(c, (right - w + 1.5) * s, (y + 1.5) * s, (right - 1.5) * s, (y + 20.5) * s, 5 * s, self.BG,
-                       self.ON, True)
-            self.text(right - w / 2, y + 11, label, self.ON, 8, True, "center")
+            self.box(right - w, y, right, y + 24, 6, self.ON, self.CARD)
+            self.box(right - w + 1.5, y + 1.5, right - 1.5, y + 22.5, 5, self.CARD, self.ON)
+            self.text(right - w / 2, y + 12, label, self.ON, 8, True, "center")
             return
         combo = self.pet.binds.get(name)
         if not combo:
-            self.text(right - 4, y + 11, "Not set — click to add", self.FAINT, 8, True, "e")
+            self.text(right - 4, y + 12, "Not set — click to add", self.FAINT, 8, True, "e")
             return
         x = right
         for part in reversed(combo_parts(combo)):
             w = f8.measure(part) / s + 16
             x -= w
             # a key cap: a slightly lighter base under the face, so it looks like it sticks up
-            round_rect(c, x * s, y * s, (x + w) * s, (y + 22) * s, 5 * s, self.CAP_EDGE, self.BG, True)
-            round_rect(c, x * s, y * s, (x + w) * s, (y + 19.5) * s, 5 * s, self.CAP, self.CAP_EDGE, True)
-            self.text(x + w / 2, y + 10, part, self.FG if live else self.DIM, 8, True, "center")
+            self.box(x, y, x + w, y + 24, 5, self.CAP_EDGE, self.CARD)
+            self.box(x, y, x + w, y + 21.5, 5, self.CAP, self.CAP_EDGE)
+            self.text(x + w / 2, y + 11, part, self.FG, 8, True, "center")
             x -= 4
 
+    def draw_login(self, x0, x1, y):
+        # is the pet logged in? and if not, exactly how to fix it
+        p = self.pet
+        err = p.error or ""
+        if err.startswith(("login expired", "no login")):
+            dot, head = self.BAD, "Not logged in" if err.startswith("no login") else "Login expired"
+        elif err:
+            dot, head = self.WARN, "Can't check right now"
+        elif p.data:
+            dot, head = self.GOOD, "Connected"
+        else:
+            dot, head = self.FAINT, "Checking…"
+        cy = y + 22
+        self.canvas.create_oval((x0 + 16) * self.s, (cy - 4) * self.s, (x0 + 24) * self.s, (cy + 4) * self.s,
+                                fill=dot, outline="")
+        self.text(x0 + 32, cy, head, self.FG, 9, True, "w")
+        wait = max(0, math.ceil(p.next_at - time.time()))
+        line = (f"Last checked {fmt_time(p.updated)}. " if p.updated else "") + \
+               ("Checking now…" if p.busy else f"Next check in {wait // 60}m {wait % 60:02d}s.")
+        end = self.text(x0 + 16, y + 38, line, self.DIM, 8, width=x1 - x0 - 140)
+        # a "check now" button
+        label = "Check now"
+        bw_ = self.font(8, True).measure(label) / self.s + 24
+        self.box(x1 - 16 - bw_, y + 10, x1 - 16, y + 36, 7, self.SEL, self.CARD)
+        self.text(x1 - 16 - bw_ / 2, y + 23, label, self.FG, 8, True, "center")
+        self.hit(("check",), x1 - 16 - bw_, y + 10, x1 - 16, y + 36, (("check",), self.check_now))
+        if err:
+            head_, _, steps = err.partition("\n\n")
+            why = head_.split(". ", 1)[1] if ". " in head_ else head_   # (the status line already says what's wrong)
+            end = self.text(x0 + 16, end + 10, why[0].upper() + why[1:], self.DIM, 8, width=x1 - x0 - 32)
+            if steps:
+                end = self.text(x0 + 16, end + 8, steps, self.FG, 8, width=x1 - x0 - 32)
+        return end + 14
+
+    def check_now(self):
+        self.pet.next_at = time.time()
+        self.pet.refresh()
+        self.draw()
+
+    def draw_perf(self, x0, x1, y):
+        # live numbers about the pet itself, refreshed every 2 seconds while this page is open
+        p, s, c = self.pet, self.s, self.canvas
+        y = self.text(x0 + 16, y + 14, "How much of your computer the mascot uses. Updates every 2 seconds.",
+                      self.DIM, 8, width=x1 - x0 - 32) + 6
+        hist = list(p.perf_hist)
+        rows = self.perf_rows()
+        for i, (name, value, note, level, graph) in enumerate(rows):
+            if i:
+                c.create_line((x0 + 16) * s, y * s, (x1 - 16) * s, y * s, fill=self.LINE)
+            y += 12
+            dot = {0: self.GOOD, 1: self.WARN, 2: self.BAD}.get(level)
+            if dot:
+                c.create_oval((x0 + 16) * s, (y + 4) * s, (x0 + 23) * s, (y + 11) * s, fill=dot, outline="")
+            self.text(x0 + (29 if dot else 16), y, name, self.FG, 8.5, True)
+            self.text(x1 - 16, y, value, self.FG, 9, True, "ne")
+            y = self.text(x0 + 16, y + 17, note, self.DIM, 7.5, width=x1 - x0 - 32 - 100)
+            if graph is not None:
+                self.graph(x0 + 16, y + 6, x1 - 16, y + 52, [h[graph[0]] for h in hist], *graph[1:])
+                self.text(x0 + 16, y + 55, "3 min ago", self.FAINT, 7)
+                y = self.text(x1 - 16, y + 55, "now", self.FAINT, 7, anchor="ne")
+            y += 12
+        return y + 4
+
+    def perf_rows(self):
+        # (name, value, small note, 0 good / 1 so-so / 2 high / None no rating, graph or None)
+        p = self.pet
+        pf = p.perf
+        up = int(time.time() - p.started)
+        h, m = divmod(up // 60, 60)
+        moving = p.frame_ms() <= 16
+        try:
+            disk = sum(f.stat().st_size for f in SOUND_DIR.glob("*.wav")) / 2 ** 20
+        except OSError:
+            disk = 0.0
+        cpu = pf["cpu"]
+        # graph = (which value in the history, unit, smallest top of the scale, line colour, fill colour)
+        return [
+            ("CPU", f"{cpu:.1f}%", f"of your whole processor ({pf.get('cpu_core', 0):.1f}% of one core)",
+             0 if cpu < 1 else 1 if cpu < 3 else 2, (0, "%", 1, "#d97757", "#3d2b24")),
+            ("Memory", f"{pf['mem']:.0f} MB", "in use right now", 0 if pf["mem"] < 80 else 1 if pf["mem"] < 150 else 2,
+             (1, " MB", 64, "#5ea1ff", "#25303f")),
+            ("Frame rate", f"{pf['fps']:.0f} fps", "60 while moving, less while standing still" if moving else
+             "slows down while standing still, to save power", None, (2, " fps", 60, "#4caf7d", "#24362c")),
+            ("Usage checks", f"{p.checks_ok} ok · {p.checks_failed} failed",
+             f"every {p.poll.get() // 60} min" + (f" · last at {fmt_time(p.updated)}" if p.updated else ""),
+             0 if not p.checks_failed else 1, None),
+            ("Claude Code logs", f"{getattr(p.cc, 'scan_ms', 0):.0f} ms", "to read new log lines (in the background)",
+             None, None),
+            ("Windows watched", f"{len(p.plats)}", "for standing on and bumping into", None, None),
+            ("Sound files", f"{disk:.1f} MB", "made once and kept in your temp folder", None, None),
+            ("Running for", f"{h}h {m}m" if h else f"{m}m", "since the mascot started", None, None),
+        ]
+
+    def graph(self, x0, y0, x1, y1, values, unit, floor, line, fill):
+        # a small area chart: newest on the right, the last 3 minutes across. the scale grows to fit.
+        s, c = self.s, self.canvas
+        self.box(x0, y0, x1, y1, 6, self.WELL, self.CARD)
+        top = max([floor] + [v * 1.2 for v in values])
+        self.text(x0 + 6, y0 + 3, f"{top:.0f}{unit}" if top >= 10 else f"{top:.1f}{unit}", self.FAINT, 6.5)
+        if len(values) < 2:
+            self.text((x0 + x1) / 2, (y0 + y1) / 2, "collecting…", self.FAINT, 7, anchor="center")
+            return
+        gx0, gx1, gy0, gy1 = x0 + 2, x1 - 2, y0 + 4, y1 - 2
+        step = (gx1 - gx0) / (PERF_POINTS - 1)
+        start = gx1 - step * (len(values) - 1)
+        pts = [(start + i * step, gy1 - (gy1 - gy0) * min(v, top) / top) for i, v in enumerate(values)]
+        area = [start * s, gy1 * s] + [v * s for xy in pts for v in xy] + [pts[-1][0] * s, gy1 * s]
+        c.create_polygon(area, fill=fill, outline="")
+        c.create_line([v * s for xy in pts for v in xy], fill=line, width=max(1, round(1.5 * s)))
+
+    def draw_about(self, x0, x1, y):
+        y = self.text(x0 + 16, y + 14, f"Claude usage pet {VERSION}", self.FG, 9, True)
+        y = self.text(x0 + 16, y + 4, "A little desktop mascot that keeps an eye on your Claude plan usage. "
+                      "Unofficial: not made by or affiliated with Anthropic.", self.DIM, 8, width=x1 - x0 - 32)
+        label = "View the project on GitHub  ↗"
+        w = self.font(8, True).measure(label) / self.s
+        end = self.text(x0 + 16, y + 10, label, self.ON, 8, True)
+        self.hit(("link",), x0 + 12, y + 6, x0 + 20 + w, end + 4, (("link",), lambda: webbrowser.open(PROJECT_URL)))
+        return end + 14
+
+    # ---- search ----
+    def search_in(self, e=None):
+        if self.placeholder:
+            self.placeholder = False
+            self.search.configure(fg=self.FG)
+            self.search_var.set("")
+        self.draw()
+
+    def search_out(self, e=None):
+        if not self.search_var.get().strip():
+            self.placeholder = True
+            self.search_var.set("Search settings")
+            self.search.configure(fg=self.FAINT)
+        if e is not None:
+            self.draw()
+
+    def searched(self):
+        if self.placeholder:
+            if self.search_var.get() == "Search settings":
+                return
+            self.placeholder = False   # real text arrived while the grey hint was showing
+            self.search.configure(fg=self.FG)
+        q = self.search_var.get().strip().lower()
+        if q != self.query:
+            self.query, self.scroll = q, 0
+            self.draw()
+
+    def draw_results(self, x0, x1, y):
+        # every row, on any page, whose name, description or options mention what you typed
+        q = self.query
+        y = self.text(x0, y + 6, "Search", self.FG, 15, True) + 4
+        y = self.text(x0, y, f"Results for “{self.search_var.get().strip()}”", self.DIM, 8.5) + 18
+        found = 0
+        for page, page_label, _ in self.PAGES:
+            for heading, reset, rows in self.sections(page):
+                hits = []
+                for r in rows:
+                    if r["show"] and not r["show"]():
+                        continue
+                    hay = " ".join([r["label"], TIPS.get(r["label"], ("",))[0], heading, page_label, r["words"]]
+                                   + [str(t_) for _, t_ in (r["extra"] if r["kind"] == "choice" else [])]).lower()
+                    if all(word in hay for word in q.split()):
+                        hits.append(r)
+                if hits:
+                    found += len(hits)
+                    y = self.section(x0, x1, y, heading, reset, hits, f"{page_label}  ›  {heading}")
+        if not found:
+            y = self.text(x0, y, "No settings match. Try a different word, like “sound” or “size”.",
+                          self.DIM, 8.5, width=x1 - x0)
+        return y
+
+    # ---- doing things ----
+    def go(self, page):
+        self.stop_recording()
+        self.key_note = None
+        if self.query:
+            self.search_var.set("")
+            self.win.focus_set()
+            self.search_out()
+        self.tab, self.scroll = page, 0
+        self.draw()
+
+    def flip(self, var, cmd):
+        var.set(not var.get())
+        cmd()
+        self.changed_saved()
+
+    def toggle_record(self, name):
+        if self.recording == name:
+            self.stop_recording()   # clicked it again: never mind
+        else:
+            self.stop_recording()
+            self.record(name)
+        self.draw()
+
+    def reset_section(self, keys):
+        # puts one section's settings back to how they started
+        p = self.pet
+        for k in keys:
+            if k == "muted":
+                p.muted.clear()
+            elif k == "keys":
+                self.stop_recording()
+                self.key_note = None
+                p.reset_keys()
+            elif k == "scale":
+                p.set_scale(DEFAULTS["scale"])
+            else:
+                for page, _, _ in self.PAGES:
+                    for _, _, rows in self.sections(page):
+                        for r in rows:
+                            if r["key"] == k and r["var"].get() != DEFAULTS[k]:
+                                r["var"].set(DEFAULTS[k])
+                                if r["cmd"]:
+                                    r["cmd"]()
+        p.save()
+        self.changed_saved()
+        self.draw()
+
+    def hit_at(self, x, y):
+        # over the sidebar or the top strip, only their own buttons count (not content scrolled under them)
+        fixed_zone = y < self.TOP * self.s or x < self.SB * self.s
+        hits = self.hits[:self.fixed_n] if fixed_zone else self.hits
+        return next((h[0] for h in hits if h[1] <= x <= h[3] and h[2] <= y <= h[4]), None)
+
+    def press(self, e):
+        self.kb = False   # clicking hides the keyboard focus ring
+        hit = self.hit_at(e.x, e.y)
+        if self.win.focus_get() is self.search and (not hit or hit[0] != "search"):
+            self.win.focus_set()
+        if not hit:
+            self.draw()
+            return
+        kind = hit[0]
+        if kind == "close":
+            self.close()
+            return
+        if kind == "move":
+            self.move_from = (e.x_root - self.win.winfo_x(), e.y_root - self.win.winfo_y())
+            return
+        if kind == "resize":
+            self.resizing = (hit[1], hit[2], e.x_root, e.y_root, self.W, self.H)
+            return
+        if kind == "search":
+            self.draw()
+            self.search.focus_set()
+            return
+        if kind == "tab":
+            self.go(hit[1])
+            return
+        if kind == "toggle":
+            self.flip(hit[1], hit[2])
+        elif kind == "pick":
+            if hit[1].get() != hit[2]:
+                hit[1].set(hit[2])
+                hit[3]()
+                self.changed_saved()
+        elif kind == "sound":
+            self.toggle_chip(hit[1])
+        elif kind == "hear":
+            self.pet.play(hit[1], preview=True)
+        elif kind == "bind":
+            self.toggle_record(hit[1])
+            return
+        elif kind == "reset":
+            self.reset_section(hit[1])
+            return
+        elif kind == "check":
+            self.check_now()
+            return
+        elif kind == "link":
+            webbrowser.open(PROJECT_URL)
+        elif kind == "slide":
+            self.drag = hit
+            self.slide_to(e.x)
+            return
+        if self.win is not None:
+            self.draw()
+
+    def motion(self, e):
+        if self.resizing:
+            dx_on, dy_on, x0, y0, w0, h0 = self.resizing
+            self.W = w0 + (e.x_root - x0) / self.s if dx_on else self.W
+            self.H = h0 + (e.y_root - y0) / self.s if dy_on else self.H
+            self.fit_to(self.pet.screens[self.pet.si])
+            if self.redraw_job is None:   # redraw at most about 60 times a second while dragging
+                self.redraw_job = self.win.after(15, self.resized)
+        elif self.drag:
+            self.slide_to(e.x)
+        elif self.move_from:
+            self.win.geometry(f"+{e.x_root - self.move_from[0]}+{e.y_root - self.move_from[1]}")
+
+    def resized(self):
+        self.redraw_job = None
+        if self.win is not None:
+            self.draw()
+            self.win.geometry(f"{self.size[0]}x{self.size[1]}")
+
+    def release(self, e):
+        if self.resizing:
+            self.resizing = None
+            self.pet.settings_size = [int(self.W), int(self.H)]   # remembered for next time
+            self.pet.save()
+        if self.drag:
+            if self.drag[1] is self.pet.volume:
+                self.pet.volume_changed()   # play a sample at the new volume
+            self.changed_saved()
+        self.drag = self.move_from = None
+
+    def slide_to(self, x):
+        _, var, cmd, lo, hi, step, x0, x1 = self.drag
+        frac = min(1.0, max(0.0, (x / self.s - x0) / (x1 - x0)))
+        v = round((lo + (hi - lo) * frac) / step) * step
+        v = round(v, 2) if isinstance(var, tk.DoubleVar) else int(v)
+        if v != var.get():
+            var.set(v)
+            if cmd:
+                cmd(v)
+            self.draw()
+
+    def wheel(self, e):
+        if self.max_scroll:
+            self.scroll = min(self.max_scroll, max(0, self.scroll - e.delta / 120 * 48))
+            self.draw()
+
+    def hover_cursor(self, e):
+        # resize arrows over the edges and corner, a hand over things you can click
+        hit = self.hit_at(e.x, e.y)
+        if hit and hit[0] == "resize":
+            want = {(1, 1): "size_nw_se", (1, 0): "sb_h_double_arrow", (0, 1): "sb_v_double_arrow"}[hit[1:]]
+        elif hit and hit[0] not in ("move",):
+            want = "hand2"
+        else:
+            want = ""
+        if self.canvas.cget("cursor") != want:
+            self.canvas.configure(cursor=want)
+
+    # ---- the keyboard ----
+    def escape(self, e):
+        if self.recording:   # esc cancels a shortcut you were typing
+            self.stop_recording()
+            self.key_note = None
+            self.draw()
+        elif self.query or self.win.focus_get() is self.search:     # ... or clears the search
+            self.search_var.set("")
+            self.win.focus_set()
+            self.search_out()
+        else:
+            self.close()
+
+    def move_focus(self, d):
+        keys = [f[0] for f in self.focusables]
+        if not keys:
+            return
+        i = keys.index(self.focus_key) if self.focus_key in keys else (-1 if d > 0 else 0)
+        self.focus_key = keys[(i + d) % len(keys)]
+        self.kb = True
+        self.draw()
+        ring = next(f for f in self.focusables if f[0] == self.focus_key)
+        x0, y0, x1, y1 = ring[1]
+        if ring[0][0] != "nav":   # scroll it into view
+            if y0 < self.TOP + 8:
+                self.scroll = max(0, self.scroll - (self.TOP + 8 - y0))
+                self.draw()
+            elif y1 > self.H - 16:
+                self.scroll = min(self.max_scroll, self.scroll + (y1 - self.H + 16))
+                self.draw()
+
+    def key(self, e):
+        # shortcuts being recorded first; then tab / arrows / space / enter to get around without a mouse
+        if self.recording:
+            return self.record_key(e)
+        in_search = self.win.focus_get() is self.search
+        ctrl = u32.GetAsyncKeyState(0x11) & 0x8000
+        if ctrl and e.keysym.lower() == "f":
+            self.search.focus_set()
+            self.draw()
+            return "break"
+        if e.keysym in ("Tab", "ISO_Left_Tab"):
+            if in_search:
+                self.win.focus_set()
+            self.move_focus(-1 if e.state & 0x1 else 1)
+            return "break"
+        if in_search:
+            if e.keysym == "Down":
+                self.win.focus_set()
+                self.move_focus(1)
+                return "break"
+            return None   # typing in the search box
+        if e.keysym in ("Down", "Up"):
+            self.move_focus(1 if e.keysym == "Down" else -1)
+            return "break"
+        f = next((f for f in self.focusables if f[0] == self.focus_key), None) if self.kb else None
+        if not f:
+            return None
+        if e.keysym in ("space", "Return") and f[2]:
+            f[2]()
+            self.draw()
+            return "break"
+        if e.keysym in ("Left", "Right") and f[3]:
+            f[3](1 if e.keysym == "Right" else -1)
+            self.draw()
+            return "break"
+        return None
+
+    # ---- recording a new shortcut ----
     def record(self, name):
-        # start listening for the new keys for this shortcut
         self.recording, self.key_note = name, None
         self.pet.pause_keys(True)
         self.win.focus_force()
@@ -3942,10 +4878,8 @@ class SettingsWindow:
             self.recording = None
             self.pet.pause_keys(False)
 
-    def key(self, e):
+    def record_key(self, e):
         # the keys pressed while recording a shortcut. tk on windows gives the key's windows code as keycode.
-        if not self.recording:
-            return
         vk = e.keycode
         if vk in (0x10, 0x11, 0x12, 0x5B, 0x5C, 0xA0, 0xA1, 0xA2, 0xA3, 0xA4, 0xA5, 0x14, 0x90):
             return "break"   # just a modifier so far: wait for the real key
@@ -3956,6 +4890,7 @@ class SettingsWindow:
         if vk == 0x08 and not mods:   # backspace: no shortcut for this one
             self.stop_recording()
             self.pet.set_key(name, None)
+            self.changed_saved()
         elif key_name(vk) is None:
             self.key_note = (name, "That key can't be used. Try a letter, a number or an F key.")
         elif not mods & 0xB:
@@ -3969,190 +4904,9 @@ class SettingsWindow:
                 self.key_note = None
                 self.stop_recording()
                 self.pet.set_key(name, combo)
+                self.changed_saved()
         self.draw()
         return "break"
-
-    def chip(self, x, y, label, on, live, hit):
-        # a sound you can switch on or off: warm with a filled dot when on, plain with an empty ring when off
-        s, c = self.s, self.canvas
-        w, h = self.font(8, True).measure(label) / s + 30, 22
-        lit = on and live
-        round_rect(c, x * s, y * s, (x + w) * s, (y + h) * s, h / 2 * s, self.CHIP_ON if lit else self.CHIP_OFF,
-                   self.BG, True)
-        cx, cy, rad = x + 12, y + h / 2, 3.5
-        if on:
-            c.create_oval((cx - rad) * s, (cy - rad) * s, (cx + rad) * s, (cy + rad) * s,
-                          fill=self.ON if live else self.FAINT, outline="")
-        else:
-            c.create_oval((cx - rad) * s, (cy - rad) * s, (cx + rad) * s, (cy + rad) * s,
-                          fill="", outline=self.FAINT, width=max(1, round(1.2 * s)))
-        self.text(x + 21, y + h / 2, label, self.FG if lit else self.DIM if live else self.FAINT, 8, True, "w")
-        self.hits.append((hit, x * s, y * s, (x + w) * s, (y + h) * s))
-        return w
-
-    def pill(self, x, y, label, on, hit):
-        s = self.s
-        w = self.font(8, True).measure(label) / s + 14
-        if on:
-            round_rect(self.canvas, x * s, y * s, (x + w) * s, (y + 19) * s, 4 * s, TRACK, self.BG, True)
-        self.text(x + 7, y + 9.5, label, self.FG if on else self.DIM, 8, True, "w")
-        self.hits.append((hit, x * s, y * s, (x + w) * s, (y + 19) * s))
-        return w
-
-    def draw(self):
-        # every tab gets the same height, so the tabs never move when you switch
-        tallest = max(self.draw_tab(tab) for tab, _ in self.TABS) + 30
-        self.draw_tab(self.tab)
-        self.text(16, tallest - 26, "Changes apply straight away.", self.DIM, 7.5)   # always at the bottom
-        self.size = (round(self.W * self.s), round(tallest * self.s))
-        self.canvas.configure(width=self.size[0], height=self.size[1])
-
-    def draw_tab(self, tab):
-        s, W, c = self.s, self.W, self.canvas
-        c.delete("all")
-        self.hits = [(("move",), 0, 0, (W - 34) * s, 34 * s)]   # drag the title bar to move the window
-        self.text(16, 12, "Settings", self.FG, 10.5, True)
-        self.text(W - 16, 8, "\u00d7", self.DIM, 12, True, "n")
-        self.hits.append((("close",), (W - 34) * s, 0, W * s, 34 * s))
-        x = 12
-        for name, label in self.TABS:
-            x += self.pill(x, 40, label, tab == name, ("tab", name)) + 3
-        y = 76
-        for kind, label, var, cmd, extra in self.rows(tab):
-            top = y
-            desc = TIPS.get(label, ("",))[0]
-            if kind == "toggle":
-                self.text(16, y, label, self.FG, 9, True)
-                y = self.text(16, y + 18, desc, self.DIM, 8, width=W - 32 - 58) if desc else y + 18
-                on = bool(var.get())   # a little switch on the right
-                sx, sy, sw, sh = W - 16 - 38, top + 2, 38, 21
-                round_rect(c, sx * s, sy * s, (sx + sw) * s, (sy + sh) * s, sh / 2 * s, self.ON if on else TRACK,
-                           self.BG, True)
-                kx = sx + sw - sh + 3 if on else sx + 3
-                round_rect(c, kx * s, (sy + 3) * s, (kx + sh - 6) * s, (sy + sh - 3) * s, (sh - 6) / 2 * s, self.KNOB,
-                           self.ON if on else TRACK, True)
-                self.hits.append((("toggle", var, cmd), 0, top * s, W * s, (y + 6) * s))
-            elif kind == "choice":
-                self.text(16, y, label, self.FG, 9, True)
-                y = self.text(16, y + 18, desc, self.DIM, 8, width=W - 32) if desc else y + 18
-                x, y = 12, y + 6
-                for value, text in extra:
-                    x += self.pill(x, y, text, var.get() == value, ("pick", var, value, cmd)) + 3
-                y += 19
-            elif kind == "keys":
-                # each shortcut: what it does on the left, its keys as little key caps on the right
-                live = bool(self.pet.hotkeys.get())
-                self.text(16, y, label, self.FG, 9, True)
-                y = self.text(16, y + 18, desc, self.DIM, 8, width=W - 32)
-                for name, title, what in extra:
-                    y += 12
-                    row = y
-                    self.text(16, y, title, self.FG if live else self.DIM, 8.5, True)
-                    y = self.text(16, y + 16, what, self.DIM, 7.5, width=W - 32 - 150)
-                    self.keycaps(W - 16, row - 2, name, live)
-                    note = self.key_note if self.key_note and self.key_note[0] == name else None
-                    if not note and live and self.recording != name and self.pet.binds.get(name) \
-                            and self.pet.bind_ok.get(name) is False:
-                        note = (name, "Another app already uses these keys. Pick different ones.")
-                    if note:
-                        y = self.text(16, y + 3, note[1], self.WARN, 7.5, width=W - 32)
-                    self.hits.append((("bind", name), 0, (row - 4) * s, W * s, (y + 4) * s))
-                y += 14
-                w_ = self.pill(12, y, "Reset to defaults", False, ("reset_keys",))
-                y += 19
-            elif kind == "sounds":
-                # every sound as a chip, in small labelled groups. all dimmed while sound effects are off.
-                live = bool(self.pet.sounds.get())
-                self.text(16, y, label, self.FG, 9, True)
-                y = self.text(16, y + 18, desc if live else "Sound effects are off, so none of these play.",
-                              self.DIM, 8, width=W - 32)
-                for group, items in extra:
-                    y += 8
-                    self.text(16, y, group.upper(), self.FAINT if not live else self.DIM, 7, True)
-                    x, y = 16, y + 15
-                    for k, name in items:
-                        x += self.chip(x, y, name, k not in self.pet.muted, live, ("sound", k)) + 6
-                    y += 22
-            else:   # a slider
-                lo, hi, step, fmt = extra
-                self.text(16, y, label, self.FG, 9, True)
-                self.text(W - 16, y, fmt.format(var.get()), self.DIM, 9, True, "ne")
-                y = self.text(16, y + 18, desc, self.DIM, 8, width=W - 32) if desc else y + 18
-                x0, x1, ty = 16, W - 16, y + 14
-                frac = (float(var.get()) - lo) / (hi - lo)
-                round_rect(c, x0 * s, (ty - 2) * s, x1 * s, (ty + 2) * s, 2 * s, TRACK, self.BG, True)
-                round_rect(c, x0 * s, (ty - 2) * s, max(x0 + 4, x0 + (x1 - x0) * frac) * s, (ty + 2) * s, 2 * s,
-                           self.ON, self.BG, True)
-                kx = x0 + (x1 - x0) * frac
-                round_rect(c, (kx - 8) * s, (ty - 8) * s, (kx + 8) * s, (ty + 8) * s, 8 * s, self.KNOB, self.BG, True)
-                self.hits.append((("slide", var, cmd, lo, hi, step, x0, x1), 0, (ty - 12) * s, W * s, (ty + 12) * s))
-                y = ty + 10
-            y += 16
-        return y
-
-    def hit_at(self, x, y):
-        return next((h[0] for h in self.hits if h[1] <= x <= h[3] and h[2] <= y <= h[4]), None)
-
-    def press(self, e):
-        hit = self.hit_at(e.x, e.y)
-        if not hit:
-            return
-        kind = hit[0]
-        if kind == "close":
-            self.close()
-            return
-        if kind == "move":
-            self.move_from = (e.x_root - self.win.winfo_x(), e.y_root - self.win.winfo_y())
-        elif kind == "tab":
-            self.tab = hit[1]
-            self.stop_recording()
-            self.key_note = None
-        elif kind == "toggle":
-            hit[1].set(not hit[1].get())
-            hit[2]()
-        elif kind == "pick":
-            hit[1].set(hit[2])
-            hit[3]()
-        elif kind == "sound":
-            self.pet.toggle_sound(hit[1])
-        elif kind == "bind":
-            if self.recording == hit[1]:
-                self.stop_recording()   # clicked it again: never mind
-            else:
-                self.stop_recording()
-                self.record(hit[1])
-        elif kind == "reset_keys":
-            self.stop_recording()
-            self.key_note = None
-            self.pet.reset_keys()
-        elif kind == "slide":
-            self.drag = hit
-            self.slide_to(e.x)
-            return
-        if self.win is not None:
-            self.draw()
-
-    def motion(self, e):
-        if self.drag:
-            self.slide_to(e.x)
-        elif self.move_from:
-            self.win.geometry(f"+{e.x_root - self.move_from[0]}+{e.y_root - self.move_from[1]}")
-
-    def release(self, e):
-        if self.drag and self.drag[1] is self.pet.volume:
-            self.pet.volume_changed()   # play a sample at the new volume
-        self.drag = self.move_from = None
-
-    def slide_to(self, x):
-        _, var, cmd, lo, hi, step, x0, x1 = self.drag
-        frac = min(1.0, max(0.0, (x / self.s - x0) / (x1 - x0)))
-        v = round((lo + (hi - lo) * frac) / step) * step
-        v = round(v, 2) if isinstance(var, tk.DoubleVar) else int(v)
-        if v != var.get():
-            var.set(v)
-            if cmd:
-                cmd(v)
-            self.draw()
 
 
 if __name__ == "__main__":
