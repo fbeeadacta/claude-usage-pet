@@ -2,7 +2,7 @@
 
 A small Claude mascot that walks along the top of the Windows taskbar. A bubble above its head shows Claude plan usage. If any file here gets lost or corrupted, this note has enough detail to rebuild it. You can give this file to Claude and ask it to rebuild the project.
 
-Last updated: 2026-10-09 (version 4.2)
+Last updated: 2026-10-09 (version 5)
 
 ## Files in this folder
 
@@ -17,6 +17,8 @@ Last updated: 2026-10-09 (version 4.2)
 | `pet_settings.json` | Saved settings: size, toggles, position. Created the first time the pet runs. Safe to delete. Not on GitHub. |
 | `pet_state.json` | The pet's memory: when each limit last moved, milestones it has already announced, and how many times you've poked it. Safe to delete (it just forgets). Not on GitHub. |
 | `LOCAL_NOTES.md` | Details about this particular computer (paths, monitors, Python install). Not on GitHub. |
+| `pet_errors.log` | What went wrong, if anything (Python error details, never the login token). Kept under about 200 KB. Safe to delete. Not on GitHub. |
+| `docs/*.png` | Screenshots for the README, staged on a plain backdrop (nothing personal in them). |
 
 ## How to use it
 
@@ -32,7 +34,7 @@ Last updated: 2026-10-09 (version 4.2)
 4. **Click** the mascot to poke it. It squishes, hops, makes a happy face and pops a heart.
 5. **Drag** the mascot to pick it up. It hangs from the spot you grabbed and swings as you move. Its legs wiggle.
    - **Throw it** by letting go while moving. It keeps your speed, screams, bounces off screen edges and the floor, and slides to a stop. From high up it opens a parachute. A hard landing leaves it dizzy.
-6. **Right-click** the mascot to open the menu:
+6. **Right-click** the mascot to open the menu. **Settings…** at the top opens a window with every option and a short description of each. The menu has:
    - Refresh now
    - Refresh every (2, 3, 4 or 5 minutes; 2 is the default. Faster settings got "slow down" answers, so they were removed.)
    - Keep details open (the panel stays until you close it with ×)
@@ -47,6 +49,11 @@ Last updated: 2026-10-09 (version 4.2)
    - Chatter (off, sometimes, or a lot)
    - Size (0.75x to 3x)
    - Bubble (both limits, 5-hour only, or only when you hover; and show numbers or show bars)
+   - Accessory (the ones you've unlocked; locked ones say how to get them)
+   - Stand on windows (on/off)
+   - Sound effects (off by default)
+   - Desktop notifications (on/off)
+   - Keyboard shortcuts (on/off: Ctrl + Alt + P hides or shows the pet, Ctrl + Alt + D pins or closes the details panel)
    - Hide during full screen (on/off)
    - Stay on one monitor (on/off)
    - Start with Windows (on/off)
@@ -77,7 +84,15 @@ Last updated: 2026-10-09 (version 4.2)
   - replies to some pokes, plus poke-count milestones (10, 50, 100, 500)
   - "wheee!" when you pick it up, a yawn before sleeping, and a hello when you come back
   - a warning if your login expires
-- **Memory:** it remembers when each limit last moved, which milestones it has already announced, and your poke count, even after a restart.
+- **Standing on windows:** when it falls past the top of a window (dropped, thrown, or walking off an edge), it lands there. It rides along if you move the window, and falls off when the window closes, minimizes or maximizes. At a window's edge it either turns around or walks off (50/50).
+- **Time of day:** a "good morning" the first time you're at the computer after 5 AM. After midnight, a gentle "it's late, maybe wrap up?" about every 40–60 minutes. Between 11 PM and 6 AM it naps three times as often and walks slower.
+- **Tool errors:** when a Claude Code tool call fails, it looks worried (raised eyebrows) for 3 seconds and sometimes says "oops".
+- **Accessories:** a party hat at 10 pokes, sunglasses at 50, a crown at 100, and a scarf the first time a limit reaches 100%. Pick one in Settings or right-click → Accessory.
+- **Old numbers:** if the last successful check is more than 10 minutes old (and more than 3 refreshes), the bubble turns grey and says how old the numbers are, for example "15m old".
+- **Login renewals:** it watches Claude Code's login file. When Claude Code renews your login after it expired, the pet checks again straight away.
+- **Notifications** (if on): at 90% and 100% of a limit, when a nearly-used limit resets, when your login expires, and when you unlock an accessory.
+- **Sounds** (if on): a pop when poked, a scream when thrown, a chime at milestones and resets.
+- **Memory:** it remembers when each limit last moved, which milestones it has already announced, your poke count, unlocked accessories, and when it last said good morning, even after a restart.
 
 Only one pet runs at a time. Starting it again while it's already running does nothing, so **quit the old one first** (right-click → Quit) after updating the file.
 
@@ -87,7 +102,9 @@ Only one pet runs at a time. Starting it again while it's already running does n
 - **The pet won't start at all:** to see the error message, open this folder in File Explorer, click the address bar, type `cmd`, press Enter, then type `py claude_pet.py` and press Enter. The error appears in that window.
 - **Nothing happens when you start it:** a pet is probably already running. It may be hidden because something is full-screen, or sitting on your other monitor.
 - **"Rate limited" / the bubble says "slow down":** the usage service answered "too many requests". This used to happen with the old 30-second and 1-minute refresh settings, and can still happen after restarting the pet several times in a row (each start checks straight away). Your last numbers stay on screen. It waits 3 minutes, then 6, 12 and so on (up to 30, or longer if the service asks), and goes back to normal after the next successful check.
-- **The bubble says "login expired":** open Claude Code once so it refreshes your login. The pet picks up the new login by itself.
+- **The bubble says "login expired":** open Claude Code once so it refreshes your login. The pet notices the renewed login file and checks again straight away.
+- **Something seems broken:** look in `pet_errors.log` in this folder, or send it to Claude. It never contains your login token.
+- **A keyboard shortcut does nothing:** another app may already use Ctrl + Alt + P or D. `pet_errors.log` will say so. Turn "Keyboard shortcuts" off, or change `HOTKEY_PET` / `HOTKEY_DETAILS` near the top of `claude_pet.py`.
 - **The bubble says "no login":** Claude Code isn't signed in on this computer. Run `claude` once and sign in.
 - **It hides when it shouldn't, or doesn't hide during full screen:** turn off "Hide during full screen" in the menu, then tell Claude which app caused it.
 - **The double-click shortcut stops working after a Python update:** the shortcut points to one specific Python version's `pythonw.exe`. Rebuild it using the settings in `LOCAL_NOTES.md`, or ask Claude to fix it.
@@ -117,6 +134,9 @@ Only one pet runs at a time. Starting it again while it's already running does n
 - "Total tokens" is input + output + cache write + cache read.
 - Only numbers are kept from the logs (times, session ids, model names and token counts), never message text.
 - Claude.ai chat has no local token log, so there are no token numbers for chat. Only the plan % covers it.
+- **Cost estimate:** what the same tokens would cost on the pay-as-you-go API (your plan covers them, so it's only for comparison). Always counted once per answer, whichever counting mode is on. Prices are in `PRICES` near the top of `claude_pet.py` (dollars per million: input, output, cache read). Cache writes cost 1.25× input for the 5-minute cache and 2× for the 1-hour cache, using the 1-hour amount the logs record. Models with no price are left out, and the panel says so.
+- **Projects:** each answer's `cwd` (the folder Claude Code was working in). The Projects view shows the top 5 by tokens, with session counts.
+- **Tool errors:** user lines whose `message.content` has a `tool_result` with `is_error: true`.
 
 ## How it's built (to rebuild from scratch)
 
@@ -272,6 +292,7 @@ There's also 30 px of side space for z's and sparks.
 
 **Memory file (`pet_state.json`):**
 - Holds `seen` (per limit: %, when it last changed, `resets_at`), `last_5h`, `pokes`, `milestones`, `last_usage` and `history`.
+- Also `unlocked` (accessories) and `greeted` (the date of the last "good morning").
 - `history` is `[time, 5-hour %, weekly %]` from each successful check: every check for the last 6 hours, then one per 10 minutes, kept for 8 days.
 - Saved every 60 s and when you quit.
 - Bad values are ignored.
@@ -316,6 +337,28 @@ There's also 30 px of side space for z's and sparks.
 - Thrown faster than 900 px/s: a scream. Landing faster than 1100 px/s: dizzy for 2.4 s (stars circle its head).
 - **Parachute:** opens when falling faster than 150 px/s with more than 260 px (`CHUTE_HEIGHT`) still to go. It then falls at 110 px/s, drifting side to side. The 36-block red and white canopy has 4 strings to its raised hands and head.
 
+**Standing on windows:**
+- `list_platforms()` lists visible, normal app windows front to back (not minimized, maximized, cloaked, tool windows, click-through overlays, the desktop or taskbar, or the pet's own), at least 150×100 px. It uses the compositor's visible edges (`DwmGetWindowAttribute` 9) because `GetWindowRect` includes invisible borders.
+- The list is refreshed every 0.2 s while it's falling, held, or standing on a window.
+- While falling, if it passes a window's top edge with its middle more than 12 px inside the window (and nothing in front covers that spot), that window becomes its floor (`plat`, `plat_box`). Each refresh moves it with the window. If the window is gone, or it walks or slides past the edge, it falls.
+- The parachute decision measures to the next ledge below, not the taskbar.
+
+**Accessories:** `ACCESSORIES` and the `PARTY` / `CROWN` pictures in the code. The sunglasses and scarf are body blocks, so they turn with it when it's tilted. Hats are drawn on the head (not while tilted, not in wizard mode).
+
+**Worried face:** open eyes plus two short slanted eyebrows on the lower half of row 0.
+
+**Per-monitor scaling:** `GetDpiForMonitor` gives each screen's scaling (`Screen.dpi`), and the size used is `scale × that screen's dpi`. Moving to a monitor with different scaling resizes it once.
+
+**Keyboard shortcuts:** a background thread registers them with `RegisterHotKey` and runs its own message loop. Presses come back to the main thread through a queue.
+
+**Notifications:** a Windows toast sent through PowerShell (`Windows.UI.Notifications`), in the background, with no console window.
+
+**Sounds:** made the first time they're needed, using maths (sine sweeps, a wobbly sawtooth scream, a noise whoosh), into `%TEMP%\claude_pet_sounds\*.wav`. Played with `winsound`, asynchronously.
+
+**Error log:** `log_error()` appends a time stamp and traceback to `pet_errors.log`, trimming to the newest half when it's over `ERROR_LOG_KB`. Tk callback errors, log-reading errors, notification and sound errors, and crashes all go there.
+
+**Settings window:** a normal window (dark title bar via `DwmSetWindowAttribute` 20) with two columns. Each option uses the same Tk variables and commands as the menu, so both stay in sync. The descriptions come from `TIPS`.
+
 **Dancing:** a 5% chance whenever it stops walking (or when it's bored). It lasts 3.5–6 s. The beat is 0.25 s: arms up left, down, up right, both up. It bops down on beats 2 and 4 and sways half a block, with music notes floating up.
 
 **Menu tooltips:** Windows draws the right-click menu itself, so tooltips use `<<MenuSelect>>` (which item is highlighted). It then finds the open menu's position (window class `#32768`) and shows a small dark window beside it, on the left, or on the right when there's no room, after 0.35 s. The texts are in `TIPS` in the code. The tooltip is moved with `SetWindowPos` if Tk holds the move back while the menu is open.
@@ -327,6 +370,7 @@ There's also 30 px of side space for z's and sparks.
   - `scale`, `x` and `y`
   - on/off switches: `walk`, `jump`, `naps`, `anim`, `wizard`, `warn`, `cc_app`, `hide_fs`, `one_monitor`
   - `poll`, the refresh time in seconds (120/180/240/300)
+  - `notify`, `sounds`, `hotkeys`, `platforms` (on/off) and `accessory` ("none" or an unlocked one)
   - `warn_at` (70/75/80/85) and `panic_at` (85/90/95), the yellow and red ring levels
   - `bubble` ("both" / "5h" / "hover") and `bubble_style` ("numbers" / "bars")
   - `chatter` ("off" / "some" / "lots")
@@ -352,7 +396,7 @@ There's also 30 px of side space for z's and sparks.
 - Commits use the GitHub no-reply email, set for this repo only, so no personal email is in the history.
 
 **Before making the repo public:**
-1. Pick a license. With no license file, others can look at the code but legally can't reuse it. MIT is the usual simple choice.
+1. ~~Pick a license.~~ Done: MIT (`LICENSE`), covering the code only. The README says the Claude name and mascot belong to Anthropic.
 2. Re-read `README.md`, especially the unofficial and not-affiliated note. The mascot design belongs to Anthropic.
 3. Check that no personal details have slipped into tracked files. Search for your Windows username and your email.
 4. On GitHub, go to Settings → General → Danger Zone → Change visibility.
@@ -400,6 +444,23 @@ There's also 30 px of side space for z's and sparks.
 - Memory saved, reloaded and checked.
 - No errors.
 
+**Version 5, tested on 2026-10-09** (left monitor):
+- Landing on a real window from another program, riding it when it moved, and falling when it closed.
+- The parachute only on long drops.
+- All four accessories.
+- Unlocking the party hat at 10 pokes.
+- Worried face after a tool error.
+- Faded "15m old" bubble.
+- An immediate re-check when the login file changes.
+- Error log.
+- Generating all 5 sounds (not played).
+- Ctrl + Alt + P hiding and showing.
+- The settings window.
+- Projects view and cost line.
+- One real notification.
+- Both monitors read as 100% scaling.
+- The earlier throw, parachute, monitor, speech, wizard and memory tests still pass.
+
 **Not tested yet:**
 - Real API data inside the pet.
 - Wizard mode triggered by real Claude Code activity (it was tested by calling it directly).
@@ -407,6 +468,7 @@ There's also 30 px of side space for z's and sparks.
 - Right-click menu clicks.
 - Real mouse hover, click, drag and throw. These were tested with pretend mouse events.
 - Hovering the menu tooltips with the mouse (they were tested with the keyboard).
+- Sounds actually playing, the "good morning" and late-night lines (time-dependent), and a monitor at a different scaling.
 - Ctrl + mouse wheel.
 - Start with Windows.
 - Real YouTube, Netflix or game full screen. This was tested with a stand-in full-screen window.
@@ -417,13 +479,30 @@ There's also 30 px of side space for z's and sparks.
 **Known limits:**
 - It sits at the bottom of the screen if the taskbar auto-hides.
 - If a monitor has different display scaling, the pet keeps its size in real pixels, so it looks smaller or bigger there.
-- No automatic login refresh.
+- No automatic login refresh: the pet only notices when Claude Code renews the login. Doing the renewal itself would mean sending the refresh token to Anthropic's login server (not api.anthropic.com) and could clash with Claude Code, so it's left out unless you decide otherwise.
 - Claude Code stats only cover this computer's logs. If Claude Code deletes old logs, they disappear from the stats too.
 
 **Ideas for later:**
 - Dim the bubble when the data is stale.
 
 ## Change log
+
+- **2026-10-09 (version 5):**
+  - Error log.
+  - Per-monitor scaling.
+  - Old numbers fade in the bubble.
+  - Cost estimate at API prices.
+  - Projects view.
+  - Worried face on Claude Code tool errors.
+  - Desktop notifications.
+  - Keyboard shortcuts (Ctrl + Alt + P / D).
+  - Time-of-day behaviour.
+  - Standing on (and riding) windows.
+  - Unlockable accessories.
+  - Optional sound effects.
+  - Settings window.
+  - Re-checks straight away when Claude Code renews the login.
+  - README screenshots.
 
 - **2026-10-09 (version 4.2):**
   - Fixed the dark box flash and the flicker when switching between dragged/thrown and other states: the window now never resizes or jumps.

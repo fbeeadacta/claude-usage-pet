@@ -32,6 +32,11 @@ import threading
 import subprocess
 import urllib.request
 import urllib.error
+import traceback
+import tempfile
+import wave
+import struct
+import winsound
 import tkinter as tk
 import tkinter.font as tkfont
 from collections import namedtuple, Counter
@@ -74,6 +79,9 @@ GROUND_FRICTION = 900      # how fast it stops sliding after landing, pixels per
 CHUTE_HEIGHT = 260         # opens a parachute when falling from higher than this above the floor
 CHUTE_SPEED = 110          # falling speed with the parachute open, pixels per second
 DANCE_CHANCE = 0.05        # chance of a little dance whenever it stops walking
+STALE_MIN = 10             # numbers older than this (and 3 checks) look faded in the bubble
+ERROR_LOG_KB = 200         # pet_errors.log is trimmed to stay about this small
+HOTKEY_PET, HOTKEY_DETAILS = "P", "D"   # ctrl + alt + this letter: show/hide the pet, pin the details
 POLL_CHOICES = (120, 180, 240, 300)   # menu: refresh every (faster ones got "slow down" answers)
 # pace messages (details panel)
 AHEAD_BY = 10          # used% this far above the clock = "ahead of pace"
@@ -134,6 +142,16 @@ ATTENTION_LINES = ["psst... hey. got a minute?", "*polite cough*", "I'm still he
 BORED_LINES = ["I counted all the pixels on your taskbar. twice.", "bored. so bored.",
                "should I take up a hobby? knitting, maybe.", "no tokens today? I'll just... stand here.",
                "I've been practising my dance moves.", "is it home time yet?"]
+MORNING_LINES = ["good morning! ready when you are.", "morning! let's make today a good one.",
+                 "rise and shine! (I've been up for ages)", "good morning! I kept your taskbar warm."]
+LATE_LINES = ["it's late... maybe wrap up soon?", "past midnight. the code will still be here tomorrow.",
+              "*yawn* aren't you sleepy?", "night owl mode. don't forget to sleep!"]
+OOPS_LINES = ["oops, something went wrong in there.", "uh oh. a tool tripped over.",
+              "that didn't work. Claude will try again!", "*winces* an error. it happens."]
+UNLOCK_LINES = {"party": "I unlocked a party hat! right-click > settings > accessory.",
+                "shades": "sunglasses unlocked. I look cool now.",
+                "crown": "100 pokes. I am royalty now. crown unlocked!",
+                "scarf": "we hit 100% together. I got a cosy scarf for it!"}
 FULL_LINES = ["100%. that's what I call a hard day's work.", "we used ALL of it. I'm so proud.",
               "the tank is empty. see you after the reset!", "*collapses dramatically*",
               "I'm exhausted. clocking out until the reset.", "not a single token left. legendary."]
@@ -199,8 +217,49 @@ TIPS = {
     "Start with Windows": ("Starts the mascot automatically.", [
         ("On", "It starts when you sign in to Windows."),
         ("Off", "Start it yourself with the Start Claude Pet shortcut.")]),
+    "Settings…": ("Opens a window with every option in one place, each with a short description.", []),
+    "Stand on windows": ("Lets the mascot land on top of your windows.", [
+        ("On", "When it falls (dropped, thrown or walking off an edge) past the top of a window, it lands there, "
+               "rides along if you move the window, and falls off when it closes."),
+        ("Off", "It only ever stands on the taskbar.")]),
+    "Sound effects": ("Little sounds: a pop when poked, a scream when thrown, a boing, a chime at milestones.", [
+        ("On", "Plays them (quietly, through Windows' normal sound output)."),
+        ("Off", "Silent. This is the default.")]),
+    "Desktop notifications": ("Windows notifications for the important moments.", [
+        ("On", "A notification at 90% and 100% of a limit, when a nearly-used limit resets, when your login "
+               "expires, and when you unlock an accessory. Shows even while the mascot is hidden."),
+        ("Off", "Only the mascot's own speech bubbles.")]),
+    "Keyboard shortcuts": ("Shortcuts that work anywhere in Windows.", [
+        ("On", "Ctrl + Alt + P hides or shows the mascot. Ctrl + Alt + D pins or closes the details panel."),
+        ("Off", "The shortcuts do nothing.")]),
+    "Accessory": ("Something for it to wear. Unlock more by poking it and by using a limit up to 100%.", [
+        ("Party hat", "Poke it 10 times."), ("Sunglasses", "Poke it 50 times."), ("Crown", "Poke it 100 times."),
+        ("Scarf", "Use a limit all the way to 100%.")]),
     "Quit": ("Closes the mascot. Your settings and its memory are saved first.", []),
 }
+
+# api list prices, dollars per million tokens: (model id starts with, input, output, cache read).
+# cache writes cost 1.25x input (5 minute cache) or 2x input (1 hour cache). first match wins.
+# these are what the same tokens would cost on the api. on a subscription plan you don't pay them.
+PRICES = [("claude-opus-5-5", 4, 20, 0.20), ("claude-opus-5", 5, 25, 0.50), ("claude-opus-4", 5, 25, 0.50),
+          ("claude-fable-5-1", 10, 50, 0.25), ("claude-fable-5", 10, 50, 1.00), ("claude-mythos", 10, 50, 0.25),
+          ("claude-sonnet-5", 2, 10, 0.20), ("claude-sonnet-4", 3, 15, 0.30),
+          ("claude-haiku-5", 0.10, 0.50, 0.01), ("claude-haiku-4", 1, 5, 0.10)]
+
+
+def answer_cost(a):
+    # api-price dollars for one logged answer, or None for a model we don't have a price for
+    price = next((pr for pr in PRICES if a[2].startswith(pr[0])), None)
+    if price is None:
+        return None
+    _, pin, pout, pread = price
+    cw1h = a[7] if len(a) > 7 else 0
+    return (a[3] * pin + a[4] * pout + (a[5] - cw1h) * 1.25 * pin + cw1h * 2 * pin + a[6] * pread) / 1e6
+
+
+def fmt_money(d):
+    return f"${d:,.2f}" if d < 1000 else f"${d:,.0f}"
+
 
 # rough book sizes in tokens, for the fun comparison in the claude code tab
 BOOKS = [("The Little Prince", 22_000), ("The Great Gatsby", 61_000), ("The Hobbit", 124_000),
@@ -252,6 +311,12 @@ NOTE = ["..##", "..#.", "..#.", "###.", "###."]   # a music note, for dancing
 CHUTE = ["".join(("r" if (i // 4) % 2 == 0 else "w") if abs(i - 17.5) < w / 2 else "." for i in range(36))
          for w in (12, 20, 26, 30, 34, 36)]
 
+# accessories you unlock: name -> (menu label, how to unlock)
+ACCESSORIES = {"party": ("Party hat", "poke it 10 times"), "shades": ("Sunglasses", "poke it 50 times"),
+               "crown": ("Crown", "poke it 100 times"), "scarf": ("Scarf", "use a limit up to 100%")}
+PARTY = ["....w....", "...#y#...", "...y#y...", "..#y#y#..", "..y#y#y..", ".#y#y#y#.", "#y#y#y#y#"]
+CROWN = ["#...#...#", "##.###.##", "#########", "#r##b##r#", "#########"]
+
 ORANGE, EYE, BLUSH_C = "#d77757", "#2b1a14", "#f4a08f"
 BUBBLE, BUBBLE_TEXT = "#1f1e1d", "#f2efe8"
 SPEECH, SPEECH_TEXT = "#f2efe8", "#2b1a14"
@@ -260,6 +325,7 @@ WARN_C, PANIC_C = "#f2c14e", "#e5534b"
 FULL_C, FULL_EDGE = "#0d0d0d", "#c8c8cd"   # the ring at 100%: black with a silver edge
 NOTE_C = ["#ff9ad5", "#8be9fd", "#ffe08a"]
 CHUTE_R, CHUTE_W, STRING_C = "#e5534b", "#f2efe8", "#d9d4c7"
+SHADES_C, SCARF_C, SCARF_D = "#141414", "#c94f6d", "#9e3a55"
 HAT_C, BAND_C, STAR_C, WAND_C = "#6c4ab6", "#f2c14e", "#ffe08a", "#8b5a2b"
 SPARK_C = ["#ffe08a", "#8be9fd", "#ff9ad5", "#ffffff"]
 DIM, RED, TRACK = "#8e8e93", "#e5534b", "#3a3a3c"
@@ -433,14 +499,17 @@ def compare_line(tokens):
     return f"That's {100 * tokens / BOOKS[0][1]:.0f}% of {BOOKS[0][0]} so far."
 
 
-def build_stats(answers, lines, starts=None):
+def build_stats(answers, lines, starts=None, real=None):
     # the claude code tab's numbers, for all time, 30 days and 7 days.
     # starts (session -> first time) = peak hour is when sessions start, like the claude app.
+    # real = each answer once. the cost estimate always uses that, whichever way tokens are counted.
+    real = answers if real is None else real
     today = datetime.date.today()
     by_day = Counter()
     for a in answers:
         by_day[a[0].date()] += a[3] + a[4] + a[5] + a[6]
-    out = {"today": by_day.get(today, 0), "heat": dict(by_day), "ranges": {}}
+    today_cost = sum(c for a in real if a[0].date() == today and (c := answer_cost(a)) is not None)
+    out = {"today": by_day.get(today, 0), "today_cost": today_cost, "heat": dict(by_day), "ranges": {}}
     for name, days in (("all", None), ("30d", 30), ("7d", 7)):
         since = None if days is None else today - datetime.timedelta(days=days - 1)
         A = [a for a in answers if since is None or a[0].date() >= since]
@@ -455,10 +524,24 @@ def build_stats(answers, lines, starts=None):
         if starts:
             began = Counter(t.hour for t in starts.values() if since is None or t.date() >= since)
             hours = began or hours
+        projects, proj_sessions, cost, unpriced = Counter(), {}, 0.0, False
+        for a in A:
+            proj = a[8] if len(a) > 8 else "?"
+            projects[proj] += a[3] + a[4] + a[5] + a[6]
+            proj_sessions.setdefault(proj, set()).add(a[1])
+        for a in real:
+            if since is None or a[0].date() >= since:
+                c = answer_cost(a)
+                if c is None:
+                    unpriced = unpriced or not a[2].startswith("<")
+                else:
+                    cost += c
         out["ranges"][name] = {
             "sessions": len({ln[1] for ln in L}), "messages": len(L), "tokens": sum(parts),
             "parts": parts, "days": len({ln[0].date() for ln in L}),
             "peak": hours.most_common(1)[0][0] if hours else None, "models": models.most_common(),
+            "projects": [(name_, tok, len(proj_sessions[name_])) for name_, tok in projects.most_common()],
+            "cost": cost, "unpriced": unpriced,
         }
     return out
 
@@ -474,6 +557,7 @@ class ClaudeCodeLog:
         self.copies = []          # the extra logged copies of those answers (the claude app counts them too)
         self.starts = {}          # session -> its first line's time
         self.lines = []           # (local time, session) for every user and assistant line
+        self.last_error = 0.0     # when a tool call last failed (for the worried face)
         self.stats = None         # summary for the panel
         self.last_growth = 0.0    # when new output tokens last appeared
         self.built_at = 0.0
@@ -484,7 +568,7 @@ class ClaudeCodeLog:
             try:
                 self.scan()
             except Exception:
-                pass   # a weird log line must never stop the pet
+                log_error("reading claude code's logs")   # a weird log line must never stop the pet
             time.sleep(CC_SCAN_SECONDS)
 
     def scan(self):
@@ -522,7 +606,7 @@ class ClaudeCodeLog:
             self.last_growth = time.time()
         if self.stats is None or (changed and time.time() - self.built_at > 10):
             self.stats = {"real": build_stats(self.answers, self.lines),
-                          "app": build_stats(self.answers + self.copies, self.lines, self.starts)}
+                          "app": build_stats(self.answers + self.copies, self.lines, self.starts, self.answers)}
             self.built_at = time.time()
         self.ready = True
 
@@ -560,11 +644,18 @@ class ClaudeCodeLog:
         if session not in self.starts or when < self.starts[session]:
             self.starts[session] = when
         m = d.get("message")
+        if d["type"] == "user" and isinstance(m, dict) and isinstance(m.get("content"), list):
+            if self.ready and any(isinstance(b, dict) and b.get("type") == "tool_result" and b.get("is_error")
+                                  for b in m["content"]):
+                self.last_error = time.time()   # a tool call failed
         if d["type"] == "assistant" and isinstance(m, dict) and isinstance(m.get("usage"), dict):
             u = m["usage"]
             n = [int(u.get(k) or 0) for k in ("input_tokens", "output_tokens",
                                               "cache_creation_input_tokens", "cache_read_input_tokens")]
-            row = (when, session, str(m.get("model") or "unknown"), *n)
+            cc = u.get("cache_creation") if isinstance(u.get("cache_creation"), dict) else {}
+            cw1h = int(cc.get("ephemeral_1h_input_tokens") or 0)
+            project = Path(str(d.get("cwd") or "?")).name or "?"   # the folder claude code worked in
+            row = (when, session, str(m.get("model") or "unknown"), *n, cw1h, project)
             key = (m.get("id"), d.get("requestId"))
             if key in self.seen_answers:
                 self.copies.append(row)   # same answer, logged again
@@ -575,16 +666,39 @@ class ClaudeCodeLog:
         return 0
 
 
+# ---- error log ----
+
+ERROR_LOG = HERE / "pet_errors.log"
+
+
+def log_error(what, exc=None):
+    # writes what went wrong (with the python traceback) to pet_errors.log, kept small.
+    # the login token is never in here: tracebacks don't include it.
+    try:
+        text = "".join(traceback.format_exception(*exc)) if exc else traceback.format_exc()
+        if text.strip() in ("NoneType: None", ""):
+            text = ""
+        stamp = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        old = ERROR_LOG.read_text(encoding="utf-8") if ERROR_LOG.exists() else ""
+        if len(old) > ERROR_LOG_KB * 1024:
+            old = old[-ERROR_LOG_KB * 512:]   # keep the newer half
+        ERROR_LOG.write_text(old + f"[{stamp}] {what}\n{text}\n", encoding="utf-8")
+    except Exception:
+        pass
+
+
 # ---- settings and memory files ----
 
 DEFAULTS = {"scale": DEFAULT_SCALE, "walk": True, "jump": True, "naps": True, "anim": True,
-            "bubble": "both", "bubble_style": "numbers", "chatter": "some", "wizard": True, "warn": True, "cc_app": True,
+            "bubble": "both", "bubble_style": "numbers", "chatter": "some", "wizard": True, "warn": True, "cc_app": True, "notify": True, "sounds": False, "hotkeys": True,
+            "platforms": True, "accessory": "none",
             "warn_at": WARN_AT, "panic_at": PANIC_AT, "poll": POLL_SECONDS,
             "hide_fs": True, "one_monitor": False, "panel_tab": "plan", "plan_chart": "5h", "cc_view": "overview",
             "cc_range": "all", "x": None, "y": None}
 CHOICES = {"bubble": ("both", "5h", "hover"), "bubble_style": ("numbers", "bars"),
-           "chatter": tuple(CHATTER), "panel_tab": ("plan", "cc"), "plan_chart": ("5h", "7d"), "cc_view": ("overview", "models"),
-           "cc_range": ("all", "30d", "7d")}
+           "chatter": tuple(CHATTER), "panel_tab": ("plan", "cc"), "plan_chart": ("5h", "7d"), "cc_view": ("overview", "models", "projects"),
+           "cc_range": ("all", "30d", "7d"),
+           "accessory": ("none",) + tuple(ACCESSORIES)}
 
 
 def read_json(path):
@@ -613,7 +727,8 @@ def load_settings():
         st["scale"] = min(MAX_SCALE, max(MIN_SCALE, float(st["scale"])))
     except (TypeError, ValueError):
         st["scale"] = DEFAULT_SCALE
-    for k in ("walk", "jump", "naps", "anim", "wizard", "warn", "cc_app", "hide_fs", "one_monitor"):
+    for k in ("walk", "jump", "naps", "anim", "wizard", "warn", "cc_app", "notify", "sounds", "hotkeys",
+              "platforms", "hide_fs", "one_monitor"):
         st[k] = st[k] if isinstance(st[k], bool) else DEFAULTS[k]
     for k, ok in CHOICES.items():
         if st[k] not in ok:
@@ -630,7 +745,12 @@ def load_settings():
 def load_memory():
     # moods that survive a restart: when each limit last moved, pokes, milestones already said
     m = read_json(STATE_FILE)
-    out = {"seen": {}, "last_5h": None, "pokes": 0, "milestones": {}, "last_usage": time.time(), "history": []}
+    out = {"seen": {}, "last_5h": None, "pokes": 0, "milestones": {}, "last_usage": time.time(), "history": [],
+           "unlocked": [], "greeted": ""}
+    if isinstance(m.get("unlocked"), list):
+        out["unlocked"] = [a for a in m["unlocked"] if a in ACCESSORIES]
+    if isinstance(m.get("greeted"), str):
+        out["greeted"] = m["greeted"]
     try:
         num = lambda v: None if v is None else float(v)
         out["history"] = [(float(h[0]), num(h[1]), num(h[2])) for h in m.get("history", [])]
@@ -695,7 +815,7 @@ k32.GetTickCount.restype = wintypes.DWORD
 
 # a screen: its full rectangle (m...) and the part not covered by the taskbar (w...).
 # the bottom of the work part (wb) is the floor the pet stands on.
-Screen = namedtuple("Screen", "ml mt mr mb wl wt wr wb")
+Screen = namedtuple("Screen", "ml mt mr mb wl wt wr wb dpi", defaults=(1.0,))   # dpi: 1.0 = 100% scaling
 
 WS_CAPTION = 0x00C00000
 WS_EX_TRANSPARENT, WS_EX_TOOLWINDOW = 0x20, 0x80
@@ -722,7 +842,13 @@ def list_screens():
         mi.cbSize = ctypes.sizeof(MONITORINFO)
         if u32.GetMonitorInfoW(hmon, ctypes.byref(mi)):
             m, w = mi.rcMonitor, mi.rcWork
-            found.append(Screen(m.left, m.top, m.right, m.bottom, w.left, w.top, w.right, w.bottom))
+            dx, dy = wintypes.UINT(96), wintypes.UINT(96)
+            try:   # this monitor's own display scaling (windows 8.1 and newer)
+                ctypes.windll.shcore.GetDpiForMonitor(hmon, 0, ctypes.byref(dx), ctypes.byref(dy))
+            except (AttributeError, OSError):
+                pass
+            found.append(Screen(m.left, m.top, m.right, m.bottom, w.left, w.top, w.right, w.bottom,
+                                (dx.value or 96) / 96))
         return True
 
     u32.EnumDisplayMonitors(None, None, MONITORENUMPROC(cb), 0)
@@ -780,6 +906,43 @@ def fullscreen_screens(screens):
     return [bool(x) for x in result]
 
 
+def window_box(hwnd):
+    # a window's visible edges (windows adds invisible borders, so ask the compositor first)
+    r = wintypes.RECT()
+    if dwm is not None and dwm.DwmGetWindowAttribute(hwnd, 9, ctypes.byref(r), ctypes.sizeof(r)) == 0:
+        return r.left, r.top, r.right, r.bottom
+    if u32.GetWindowRect(hwnd, ctypes.byref(r)):
+        return r.left, r.top, r.right, r.bottom
+    return None
+
+
+def list_platforms():
+    # normal app windows, front to back, as (id, left, top, right, bottom): their top edges are ledges
+    found, me = [], os.getpid()
+
+    def cb(hwnd, lp):
+        try:
+            if not u32.IsWindowVisible(hwnd) or u32.IsIconic(hwnd) or u32.IsZoomed(hwnd):
+                return True
+            pid = wintypes.DWORD()
+            u32.GetWindowThreadProcessId(hwnd, ctypes.byref(pid))
+            if pid.value == me or u32.GetWindowLongW(hwnd, -20) & (WS_EX_TRANSPARENT | WS_EX_TOOLWINDOW):
+                return True
+            name = ctypes.create_unicode_buffer(64)
+            u32.GetClassNameW(hwnd, name, 64)
+            if name.value in NOT_APPS or is_cloaked(hwnd):
+                return True
+            box = window_box(hwnd)
+            if box and box[2] - box[0] >= 150 and box[3] - box[1] >= 100:
+                found.append((int(hwnd or 0),) + box)
+        except Exception:
+            pass
+        return True
+
+    u32.EnumWindows(WNDENUMPROC(cb), 0)
+    return found
+
+
 def idle_seconds():
     # how long since you last touched the mouse or keyboard
     lii = LASTINPUTINFO()
@@ -803,6 +966,82 @@ def menu_rects():
 
     u32.EnumWindows(WNDENUMPROC(cb), 0)
     return found
+
+
+def notify(title, body):
+    # a windows notification in the corner of the screen, sent through powershell (no installs needed)
+    esc = lambda s_: (s_.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
+                      .replace('"', "&quot;").replace("'", "''"))
+    ps = ("[Windows.UI.Notifications.ToastNotificationManager, Windows.UI.Notifications, ContentType = WindowsRuntime] | Out-Null;"
+          "[Windows.Data.Xml.Dom.XmlDocument, Windows.Data.Xml.Dom.XmlDocument, ContentType = WindowsRuntime] | Out-Null;"
+          "$x = New-Object Windows.Data.Xml.Dom.XmlDocument;"
+          f"$x.LoadXml('<toast><visual><binding template=\"ToastGeneric\"><text>{esc(title)}</text>"
+          f"<text>{esc(body)}</text></binding></visual></toast>');"
+          "$t = New-Object Windows.UI.Notifications.ToastNotification $x;"
+          "[Windows.UI.Notifications.ToastNotificationManager]::CreateToastNotifier("
+          "'{1AC14E77-02E7-4E5D-B744-2EB1AE5198B7}\\WindowsPowerShell\\v1.0\\powershell.exe').Show($t)")
+
+    def run():
+        try:
+            subprocess.run(["powershell", "-NoProfile", "-Command", ps], capture_output=True, timeout=20,
+                           creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0))
+        except Exception:
+            log_error("showing a notification")
+
+    threading.Thread(target=run, daemon=True).start()
+
+
+def hotkey_thread(inbox):
+    # listens for ctrl + alt + P / D anywhere in windows. needs its own thread with a message loop.
+    u = ctypes.WinDLL("user32", use_last_error=True)
+    mods = 0x0001 | 0x0002 | 0x4000   # alt, ctrl, no auto-repeat
+    got = [bool(u.RegisterHotKey(None, i, mods, ord(k))) for i, k in ((1, HOTKEY_PET), (2, HOTKEY_DETAILS))]
+    inbox.put(("registered", got))
+    msg = wintypes.MSG()
+    while u.GetMessageW(ctypes.byref(msg), None, 0, 0) > 0:
+        if msg.message == 0x0312:   # WM_HOTKEY
+            inbox.put(("hotkey", msg.wParam))
+
+
+SOUND_DIR = Path(tempfile.gettempdir()) / "claude_pet_sounds"
+
+
+def make_sound(kind):
+    # little sound effects, made from maths the first time they're needed (no sound files to ship)
+    path = SOUND_DIR / f"{kind}.wav"
+    if path.exists():
+        return path
+    rate, frames = 22050, []
+
+    def tone(dur, f0, f1, vol=0.5, wobble=0.0, saw=False, noise=False):
+        n = int(rate * dur)
+        phase = 0.0
+        for i in range(n):
+            k = i / n
+            f = f0 + (f1 - f0) * k + (math.sin(i / rate * 2 * math.pi * 7) * wobble if wobble else 0)
+            phase += 2 * math.pi * f / rate
+            v = random.uniform(-1, 1) if noise else (((phase / math.pi) % 2) - 1 if saw else math.sin(phase))
+            env = min(1.0, i / (rate * 0.01)) * (1 - k) ** 1.5
+            frames.append(int(v * env * vol * 32767))
+
+    if kind == "pop":
+        tone(0.09, 700, 1400)
+    elif kind == "boing":
+        tone(0.35, 160, 520, wobble=60)
+    elif kind == "scream":
+        tone(0.75, 950, 480, vol=0.35, wobble=40, saw=True)
+    elif kind == "chime":
+        tone(0.16, 880, 880)
+        tone(0.28, 1320, 1320)
+    else:   # whoosh: the parachute opening
+        tone(0.4, 0, 0, vol=0.25, noise=True)
+    SOUND_DIR.mkdir(exist_ok=True)
+    with wave.open(str(path), "wb") as w:
+        w.setnchannels(1)
+        w.setsampwidth(2)
+        w.setframerate(rate)
+        w.writeframes(struct.pack(f"<{len(frames)}h", *frames))
+    return path
 
 
 def round_corners(win):
@@ -966,6 +1205,11 @@ class Pet:
         self.warn_at = tk.IntVar(value=st["warn_at"])
         self.panic_at = tk.IntVar(value=st["panic_at"])
         self.poll = tk.IntVar(value=st["poll"])
+        self.notify_on = tk.BooleanVar(value=st["notify"])
+        self.sounds = tk.BooleanVar(value=st["sounds"])
+        self.hotkeys = tk.BooleanVar(value=st["hotkeys"])
+        self.platforms = tk.BooleanVar(value=st["platforms"])
+        self.accessory = tk.StringVar(value=st["accessory"])
         self.hide_fs = tk.BooleanVar(value=st["hide_fs"])
         self.one_monitor = tk.BooleanVar(value=st["one_monitor"])
         self.bubble_mode = tk.StringVar(value=st["bubble"])
@@ -992,6 +1236,17 @@ class Pet:
         self.last_usage = mem["last_usage"]   # when tokens last went up anywhere
         self.first_result = True
         self.history = mem["history"]   # [(time, 5-hour %, weekly %)] for the plan tab's chart
+        self.unlocked = mem["unlocked"]  # accessories earned so far
+        self.greeted = mem["greeted"]    # the date it last said good morning
+        if self.accessory.get() not in self.unlocked:
+            self.accessory.set("none")
+        self.last_ok = 0.0               # when the last good answer arrived (old numbers look faded)
+        self.creds_mtime = self.creds_changed_at()
+        self.user_hidden = False         # hidden with ctrl + alt + P
+        self.keys = queue.Queue()        # hotkey presses from the hotkey thread
+        self.hotkey_state = None
+        if self.hotkeys.get():
+            threading.Thread(target=hotkey_thread, args=(self.keys,), daemon=True).start()
         self.limited = 0                # "slow down" answers in a row
 
         # claude code's logs, read in the background
@@ -1004,7 +1259,8 @@ class Pet:
         self.next_quote = time.time() + random.uniform(60, 180)
         self.speech, self.quiet_until = None, 0.0
         self.last_touch = time.time()             # last hover, poke or drag
-        self.next_attention = self.next_full_line = 0.0
+        self.next_attention = self.next_full_line = self.next_late_line = 0.0
+        self.error_seen, self.worried_t = time.time(), 0.0
 
         # screens. x is the pet's centre and y its feet, both in screen pixels.
         self.screens = self.get_screens()
@@ -1025,6 +1281,8 @@ class Pet:
         self.angle, self.spin, self.hang = 0.0, 0.0, 0.0   # tilt while dragged or tumbling
         self.grab_local, self.grip, self.trail, self.drag_vx = (0, 0), (0, 0), [], 0.0
         self.chute, self.bounces = False, 0
+        self.plat, self.plat_box, self.plats, self.plats_at = None, None, [], 0.0   # standing on a window
+        self.edge_turn = None
         self.dizzy_t = self.stretch_t = self.dance_t = 0.0
         self.center_x, self.feet_win, self.body_at, self.pet_px = 0, 0, (0, 0), (72, 40)
         self.dir = random.choice((-1, 1))
@@ -1049,6 +1307,7 @@ class Pet:
         self.fader = Fader(self.root, 1.0, 1.0, self.place)
         self.details = Details(self)
         self.tip = Tooltip(self)
+        self.settings = SettingsWindow(self)
         self.build_menu()
         c = self.canvas
         c.bind("<Button-1>", self.press)
@@ -1057,6 +1316,7 @@ class Pet:
         c.bind("<Button-3>", self.show_menu)
         self.root.bind_all("<Control-MouseWheel>", self.wheel)
 
+        self.root.report_callback_exception = lambda *exc: log_error("inside the pet", exc)
         self.redraw()
         self.data_tick()
         self.ui_tick()
@@ -1065,6 +1325,8 @@ class Pet:
 
     def build_menu(self):
         m = self.menu = tk.Menu(self.root, tearoff=0)
+        m.add_command(label="Settings…", command=self.settings.open)
+        m.add_separator()
         m.add_command(label="Refresh now", command=self.refresh)
         rf = tk.Menu(m, tearoff=0)
         for v in POLL_CHOICES:
@@ -1078,6 +1340,7 @@ class Pet:
         m.add_checkbutton(label="Jump now and then", variable=self.jump, command=self.changed)
         m.add_checkbutton(label="Take naps", variable=self.naps, command=self.naps_changed)
         m.add_checkbutton(label="Wizard when Claude works", variable=self.wizard, command=self.changed)
+        m.add_checkbutton(label="Stand on windows", variable=self.platforms, command=self.changed)
         m.add_checkbutton(label="Warn when nearly full", variable=self.warn, command=self.changed)
         lv = tk.Menu(m, tearoff=0)
         lv.add_command(label="Yellow ring from", state="disabled")
@@ -1105,7 +1368,12 @@ class Pet:
         for val, label in (("numbers", "Show numbers"), ("bars", "Show bars")):
             bub.add_radiobutton(label=label, variable=self.bubble_style, value=val, command=self.changed)
         m.add_cascade(label="Bubble", menu=bub)
+        self.acc_menu = tk.Menu(m, tearoff=0)
+        m.add_cascade(label="Accessory", menu=self.acc_menu)
         m.add_separator()
+        m.add_checkbutton(label="Sound effects", variable=self.sounds, command=self.changed)
+        m.add_checkbutton(label="Desktop notifications", variable=self.notify_on, command=self.changed)
+        m.add_checkbutton(label="Keyboard shortcuts", variable=self.hotkeys, command=self.hotkeys_changed)
         m.add_checkbutton(label="Hide during full screen", variable=self.hide_fs, command=self.hide_fs_changed)
         m.add_checkbutton(label="Stay on one monitor", variable=self.one_monitor, command=self.changed)
         m.add_checkbutton(label="Start with Windows", variable=self.startup_var, command=self.startup_changed)
@@ -1113,7 +1381,18 @@ class Pet:
         m.add_command(label="Quit", command=self.quit)
         m.bind("<<MenuSelect>>", lambda e: self.tip.hover(m))
 
+    def fill_accessories(self, menu):
+        # unlocked ones can be picked; locked ones show how to get them
+        menu.delete(0, "end")
+        menu.add_radiobutton(label="None", variable=self.accessory, value="none", command=self.changed)
+        for key, (label, how) in ACCESSORIES.items():
+            if key in self.unlocked:
+                menu.add_radiobutton(label=label, variable=self.accessory, value=key, command=self.changed)
+            else:
+                menu.add_command(label=f"{label} (locked: {how})", state="disabled")
+
     def show_menu(self, e):
+        self.fill_accessories(self.acc_menu)
         try:
             self.menu.tk_popup(e.x_root, e.y_root)
         finally:
@@ -1122,18 +1401,21 @@ class Pet:
 
     # settings
     def s(self):
-        return self.scale * self.dpi   # your size setting times windows' display scaling
+        # your size setting times the display scaling of the monitor it's on
+        return self.scale * self.screens[self.si].dpi
 
     def save(self):
         st = {k: (v.get() if isinstance(v, tk.Variable) else v) for k, v in (
             ("scale", self.scale), ("walk", self.walk), ("jump", self.jump), ("naps", self.naps),
             ("anim", self.anim), ("bubble", self.bubble_mode), ("bubble_style", self.bubble_style),
-            ("chatter", self.chatter), ("wizard", self.wizard), ("warn", self.warn), ("cc_app", self.cc_app), ("warn_at", self.warn_at), ("panic_at", self.panic_at), ("poll", self.poll), ("hide_fs", self.hide_fs),
+            ("chatter", self.chatter), ("wizard", self.wizard), ("warn", self.warn), ("cc_app", self.cc_app), ("warn_at", self.warn_at), ("panic_at", self.panic_at), ("poll", self.poll),
+            ("notify", self.notify_on), ("sounds", self.sounds), ("hotkeys", self.hotkeys),
+            ("platforms", self.platforms), ("accessory", self.accessory), ("hide_fs", self.hide_fs),
             ("one_monitor", self.one_monitor), ("panel_tab", self.panel_tab), ("cc_view", self.cc_view),
             ("cc_range", self.cc_range), ("plan_chart", self.plan_chart), ("x", round(self.x)), ("y", round(self.y)))}
         write_json(SETTINGS_FILE, st)
         write_json(STATE_FILE, {"seen": self.seen, "last_5h": self.last_5h, "pokes": self.pokes,
-                                "history": self.history,
+                                "history": self.history, "unlocked": self.unlocked, "greeted": self.greeted,
                                 "milestones": self.milestones, "last_usage": self.last_usage})
         self.saved_at = time.time()
 
@@ -1160,6 +1442,7 @@ class Pet:
                 self.root.after_cancel(self.anim_job)
                 self.anim_job = None
             self.wake(hop=False)
+            self.plat = None
             self.y, self.vy = self.screens[self.si].wb, 0.0   # land and stand still
             self.state, self.squash_t, self.pending_v, self.parts = "idle", 0.0, 0.0, []
             self.happy_t = self.wave_t = self.look_t = 0.0
@@ -1359,6 +1642,7 @@ class Pet:
             vx, vy = max(-cap, min(cap, vx)), max(-cap, min(cap, vy))
             self.follow_grip()
             self.angle = (self.angle + math.pi) % (2 * math.pi) - math.pi   # rights itself the short way
+            self.plat = None
             i = self.floor_below(self.x, self.y)
             self.si = i if i is not None else self.nearest_screen(self.x, self.y)
             sc = self.screens[self.si]
@@ -1421,6 +1705,32 @@ class Pet:
         self.quiet_until = now + 25
         return True
 
+    def play(self, kind):
+        if self.sounds.get() and not self.hidden:
+            try:
+                winsound.PlaySound(str(make_sound(kind)), winsound.SND_FILENAME | winsound.SND_ASYNC | winsound.SND_NODEFAULT)
+            except Exception:
+                log_error(f"playing the {kind} sound")
+
+    def toast(self, title, body):
+        if self.notify_on.get():
+            notify(title, body)
+
+    def unlock(self, name):
+        if name in self.unlocked:
+            return
+        self.unlocked.append(name)
+        self.say(UNLOCK_LINES[name], force=True)
+        self.toast("Claude pet", f"New accessory: {ACCESSORIES[name][0]}. Pick it in right-click > Settings.")
+        self.happy_t, self.celebrate = 1.5, 1
+        self.save()
+
+    def creds_changed_at(self):
+        try:
+            return CREDENTIALS.stat().st_mtime
+        except OSError:
+            return 0.0
+
     def note_usage(self, now, hold):
         # tokens just went up somewhere: work (wizard time) for at least `hold` seconds
         self.working_until = max(self.working_until, now + hold)
@@ -1445,7 +1755,23 @@ class Pet:
         elif not working and self.was_working and now - self.work_started > 45:
             self.say(random.choice(WORK_DONE), force=True)
         self.was_working = working
-        if working or self.state == "sleep" or self.details.visible or idle_seconds() > 60:
+        if self.cc.last_error > self.error_seen:   # a claude code tool call just failed
+            self.error_seen = self.cc.last_error
+            if self.anim.get() and self.state != "sleep":
+                self.worried_t = 3.0
+                if random.random() < 0.6:
+                    self.say(random.choice(OOPS_LINES))
+        hour = datetime.datetime.now().hour
+        present = idle_seconds() < 60
+        today = datetime.date.today().isoformat()
+        if present and 5 <= hour < 12 and self.greeted != today and self.state != "sleep":
+            self.greeted = today   # first time at the computer this morning
+            if self.say(random.choice(MORNING_LINES), force=True):
+                self.wave_t = 1.4
+        if present and hour < 5 and now >= self.next_late_line and not working:
+            if self.say(random.choice(LATE_LINES)):
+                self.next_late_line = now + random.uniform(40, 60) * 60
+        if working or self.state == "sleep" or self.details.visible or not present:
             return   # busy, asleep, or nobody's there to listen
         if self.full():
             if now >= self.next_full_line and self.say(random.choice(FULL_LINES)):
@@ -1482,10 +1808,16 @@ class Pet:
         # you clicked it: squish, hop, happy face and a heart
         self.pokes += 1
         self.last_touch = time.time()
-        if self.pokes in POKE_COUNT:
-            self.say(POKE_COUNT[self.pokes], force=True)
-        elif random.random() < 0.35:
-            self.say(random.choice(POKE_LINES), force=True)
+        self.play("pop")
+        for need, name in ((10, "party"), (50, "shades"), (100, "crown")):
+            if self.pokes >= need and name not in self.unlocked:
+                self.unlock(name)
+                break
+        else:
+            if self.pokes in POKE_COUNT:
+                self.say(POKE_COUNT[self.pokes], force=True)
+            elif random.random() < 0.35:
+                self.say(random.choice(POKE_LINES), force=True)
         if not self.anim.get():
             return
         self.wake()
@@ -1533,7 +1865,7 @@ class Pet:
                 self.fs = [False] * len(self.screens)
         else:
             self.fs = [False] * len(self.screens)
-        self.set_hidden(self.fs[self.si])
+        self.set_hidden(self.fs[self.si] or self.user_hidden)
 
     def hand(self):
         # which row the wand hand is on while casting (it waves between two)
@@ -1585,17 +1917,24 @@ class Pet:
                     if self.last_5h is not None and self.last_5h >= 15 and r["pct"] <= self.last_5h - 15:
                         self.celebrate = 3    # the 5-hour limit just reset. party.
                         self.say(random.choice(RESET_LINES), force=True)
+                        self.play("chime")
+                        if self.last_5h >= 90:
+                            self.toast("Claude usage: 5-hour limit reset", "Fresh limits. Back to work!")
                     elif self.last_5h is not None and r["pct"] > self.last_5h and not self.first_result:
                         self.note_usage(now, self.poll.get() + 10)   # chat or other apps are using tokens
                     self.last_5h = r["pct"]
                 self.check_milestone(r)
             self.first_result = False
             self.limited = 0
+            self.last_ok = now
+            if any(r["pct"] >= 100 for r in parse_rows(data)):
+                self.unlock("scarf")
             self.next_at = now + self.poll.get()
             self.remember(now, parse_rows(data))
         else:
             if err.startswith("login expired") and not (self.error or "").startswith("login expired"):
                 self.say("I can't see your usage anymore. open Claude Code to log back in?", force=True)
+                self.toast("Claude pet: login expired", "Open Claude Code once so it can renew your login.")
             if err.startswith("rate limited"):
                 # asked to slow down: wait 3, 6, 12... minutes (up to 30), or longer if the service says so
                 self.limited += 1
@@ -1641,11 +1980,19 @@ class Pet:
         new = [lvl for lvl in reached if lvl not in said]
         if new:
             self.say(lines[max(new)], force=True)
+            self.play("chime")
+            if max(new) >= 90:
+                self.toast(f"Claude usage: {NICE.get(r['key'], r['label'])} at {r['pct']:.0f}%", lines[max(new)])
             said.extend(new)
 
     def data_tick(self):
         self.take_result()
         now = time.time()
+        stamp = self.creds_changed_at()
+        if stamp != self.creds_mtime:   # claude code just renewed your login: check again straight away
+            self.creds_mtime = stamp
+            if self.error and not self.error.startswith("rate limited"):
+                self.next_at = now
         if not self.busy and now >= self.next_at:
             self.refresh()
         if now - self.saved_at >= 60:
@@ -1654,13 +2001,43 @@ class Pet:
             self.details.draw()
         self.root.after(1000, self.data_tick)
 
+    def check_keys(self):
+        while True:
+            try:
+                kind, val = self.keys.get_nowait()
+            except queue.Empty:
+                return
+            if kind == "registered":
+                self.hotkey_state = val
+                if not all(val):
+                    log_error("a keyboard shortcut is already used by another app")
+            elif self.hotkeys.get() and val == 1:   # ctrl + alt + P: show or hide the pet
+                self.user_hidden = not self.user_hidden
+                self.check_fullscreen()
+            elif self.hotkeys.get() and val == 2:   # ctrl + alt + D: pin or close the details
+                if self.details.visible:
+                    self.details.hide()
+                elif not self.hidden:
+                    self.details.show(pinned=True)
+
+    def hotkeys_changed(self):
+        if self.hotkeys.get() and self.hotkey_state is None:
+            threading.Thread(target=hotkey_thread, args=(self.keys,), daemon=True).start()
+        self.changed()
+
     def ui_tick(self):
-        # 10 times a second: hover. twice a second: full screen. every second: away, moods, talking.
+        # 10 times a second: hover, shortcuts. twice a second: full screen. every second: moods.
         now = time.time()
+        self.check_keys()
         self.check_hover(now)
         if now >= self.next_fs_check:
             self.next_fs_check = now + 0.5
             self.check_fullscreen()
+        if self.platforms.get() and (self.plat is not None or not self.grounded() or self.held):
+            if now - self.plats_at >= 0.2:
+                self.update_platforms()
+        elif self.plat is not None:
+            self.plat = None
         if now >= self.next_slow_check:
             self.next_slow_check = now + 1
             self.check_away()
@@ -1676,14 +2053,27 @@ class Pet:
         picks = [by_key[k] for k in ("five_hour", "seven_day") if k in by_key] or rows[:2]
         return picks[:1] if self.bubble_mode.get() == "5h" else picks
 
+    def stale_for(self):
+        # minutes since the last good answer, if that's long enough that the numbers may be out of date
+        if not self.data or not self.last_ok:
+            return 0
+        age = time.time() - self.last_ok
+        return int(age // 60) if age > max(STALE_MIN * 60, 3 * self.poll.get()) else 0
+
     def bubble_segments(self):
-        segs = [(f"{SHORT.get(r['key'], r['label'])} {r['pct']:.0f}%", bar_color(r["pct"])) for r in self.shown_rows()]
+        old = self.stale_for()
+        segs = [(f"{SHORT.get(r['key'], r['label'])} {r['pct']:.0f}%", DIM if old else bar_color(r["pct"]))
+                for r in self.shown_rows()]
+        if old:
+            segs.append((f"{old}m old" if old < 120 else f"{old // 60}h old", DIM))
         if self.error:
             segs.append(("!" if segs else short_error(self.error), RED))
         return segs or [("...", DIM)]
 
     def bubble_bars(self):
-        return [(SHORT.get(r["key"], r["label"][:4]), round(r["pct"]), bar_color(r["pct"])) for r in self.shown_rows()]
+        old = self.stale_for()
+        return [(SHORT.get(r["key"], r["label"][:4]), round(r["pct"]), DIM if old else bar_color(r["pct"]))
+                for r in self.shown_rows()]
 
     def warn_level(self):
         # 0 = fine (or warnings switched off), 1 = yellow ring, 2 = red ring, 3 = completely used up
@@ -1701,8 +2091,54 @@ class Pet:
     def walking_allowed(self):
         return self.walk.get() and not self.details.visible and not self.hidden and not self.full()
 
+    def floor(self):
+        # the taskbar (or screen bottom), or the top of the window it's standing on
+        return self.plat_box[2] if self.plat is not None else self.screens[self.si].wb
+
     def grounded(self):
-        return self.vy >= 0 and self.y >= self.screens[self.si].wb - 0.5
+        return self.vy >= 0 and self.y >= self.floor() - 0.5
+
+    def update_platforms(self):
+        # refreshes the list of windows. if it's standing on one, it rides along when the window moves,
+        # and falls when the window closes, minimizes, maximizes or slides out from under it.
+        self.plats, self.plats_at = list_platforms(), time.time()
+        if self.plat is None:
+            return
+        box = next((w for w in self.plats if w[0] == self.plat), None)
+        if box is None or self.held:
+            self.plat = None
+            return
+        dx, dy = box[1] - self.plat_box[1], box[2] - self.plat_box[2]
+        self.plat_box = box
+        if self.grounded() or abs(self.y - box[2] + dy) < 1:
+            self.x, self.y = self.x + dx, box[2]
+        if not box[1] <= self.x <= box[3]:
+            self.plat = None
+
+    def drop_left(self):
+        # how far it still has to fall: to the next window top below it, or the taskbar
+        floor = self.floor()
+        if self.platforms.get() and self.plat is None and self.plats:
+            ledge = self.platform_under(self.y, floor)
+            if ledge:
+                floor = ledge[2]
+        return floor - self.y
+
+    def platform_under(self, y0, y1):
+        # the first window top it passes while falling from y0 to y1, if its middle is over that window
+        # and nothing in front of the window is covering that spot
+        s = self.s()
+        for i, w in enumerate(self.plats):
+            _, left, top, right, _ = w
+            if not (y0 - 1 <= top <= y1 + 1 and left + 12 * s <= self.x <= right - 12 * s):
+                continue
+            sc = self.screens[self.si]
+            if top < sc.mt + self.pet_px[1] or top > sc.wb - 30 * s:
+                continue
+            if any(o[1] <= self.x < o[3] and o[2] <= top - 2 < o[4] for o in self.plats[:i]):
+                continue
+            return w
+        return None
 
     def jump_now(self, height):
         # crouch for a moment, then jump high enough to rise `height` pixels
@@ -1769,7 +2205,7 @@ class Pet:
     def physics(self, dt):
         s = self.s()
         self.clock += dt
-        for name in ("happy_t", "wave_t", "look_t", "dizzy_t", "stretch_t"):
+        for name in ("happy_t", "wave_t", "look_t", "dizzy_t", "stretch_t", "worried_t"):
             setattr(self, name, getattr(self, name) - dt)
         if self.state != "sleep":
             self.next_blink -= dt
@@ -1793,7 +2229,8 @@ class Pet:
         sc = self.screens[self.si]
         if not self.grounded():   # in the air
             g = GRAVITY * s
-            if (not self.chute and self.vy > 150 * s and sc.wb - self.y > CHUTE_HEIGHT * s
+            y_before = self.y
+            if (not self.chute and self.vy > 150 * s and self.drop_left() > CHUTE_HEIGHT * s
                     and abs(self.angle) < 0.4):
                 self.chute = True   # a long way down: open the parachute
                 if random.random() < 0.6:
@@ -1813,11 +2250,17 @@ class Pet:
                 self.slide(dt)
             elif walking:
                 self.move_x(self.dir * WALK_SPEED * s * dt)
-            if self.y >= self.screens[self.si].wb:
+            if self.platforms.get() and self.plat is None and self.vy > 0 and self.plats:
+                hit = self.platform_under(y_before, self.y)
+                if hit:
+                    self.plat, self.plat_box = hit[0], hit
+            if self.y >= self.floor():
                 self.land(s)
             return
         if abs(self.vx) > 5 * s:   # still sliding after a throw
             self.slide(dt)
+            if self.plat is not None and not self.plat_box[1] <= self.x <= self.plat_box[3]:
+                self.plat = None   # slid off the window
             self.vx -= math.copysign(min(abs(self.vx), GROUND_FRICTION * s * dt), self.vx)
             return
         self.vx = 0.0
@@ -1861,8 +2304,22 @@ class Pet:
                 self.state, self.state_t = "idle", 2.0
             return
         self.state_t -= dt
+        if walking and self.plat is not None:
+            # on a window: at its edge, either turn around or walk off and fall
+            _, left, _, right, _ = self.plat_box
+            near = self.x + self.dir * 10 * s
+            if left <= near <= right:
+                self.edge_turn = None
+            else:
+                if self.edge_turn is None:
+                    self.edge_turn = random.random() < 0.5
+                if self.edge_turn:
+                    self.dir, self.edge_turn = -self.dir, None
         if walking:
-            self.move_x(self.dir * WALK_SPEED * s * dt)
+            night = not 6 <= datetime.datetime.now().hour < 23
+            self.move_x(self.dir * WALK_SPEED * (0.7 if night else 1) * s * dt)
+            if self.plat is not None and not self.plat_box[1] <= self.x <= self.plat_box[3]:
+                self.plat = None   # walked off the edge
             self.step_t += dt
             if self.step_t >= 0.18:
                 self.step_t, self.step = 0.0, self.step + 1
@@ -1872,7 +2329,8 @@ class Pet:
             if random.random() < DANCE_CHANCE and not self.full():
                 self.start_dance()
             elif self.state == "walk" or not self.walking_allowed():
-                if self.naps.get() and random.random() < NAP_CHANCE and not self.details.visible:
+                night = not 6 <= datetime.datetime.now().hour < 23
+                if self.naps.get() and random.random() < NAP_CHANCE * (3 if night else 1) and not self.details.visible:
                     self.fall_asleep("nap")
                 else:
                     self.state, self.state_t = "idle", random.uniform(3, 8)
@@ -1911,7 +2369,7 @@ class Pet:
 
     def land(self, s):
         impact = self.vy
-        self.y = self.screens[self.si].wb
+        self.y = self.floor()
         if self.chute:
             self.chute, self.vy, self.squash_t = False, 0.0, 0.07
             return
@@ -1956,6 +2414,8 @@ class Pet:
             eyes = "closed"
         elif anim and (self.happy_t > 0 or dancing):
             eyes = "happy"
+        elif anim and self.worried_t > 0:
+            eyes = "worried"   # a claude code tool call just failed
         elif anim and self.blink_t > 0:
             eyes = "closed"
         elif full and not airborne:
@@ -2006,7 +2466,7 @@ class Pet:
                 round(math.sin(self.clock * 1.6) * 1.4) if chute else None,
                 (0, -1, 0, 1)[beat] if dancing else 0,
                 int(self.clock * 8) % 12 if anim and self.dizzy_t > 0 else None,
-                sleeping and int(self.clock / 1.4) % 2 == 1)
+                sleeping and int(self.clock / 1.4) % 2 == 1, self.accessory.get())
 
     def redraw(self):
         f = self.frame()
@@ -2035,7 +2495,8 @@ class Pet:
 
     def draw(self, f):
         (_, legs, eyes, eye_dir, sink_kind, arms, wand, warn, wiz, parts, segs, bars, err, show_bubble,
-         speech, rot, chute, shift, dizzy, breath) = f
+         speech, rot, chute, shift, dizzy, breath, acc) = f
+        hat = {"party": PARTY, "crown": CROWN}.get(acc) if not wiz else None
         c = self.canvas
         c.delete("all")
         s = self.s()
@@ -2076,7 +2537,8 @@ class Pet:
         side = round(30 * s)                               # room for z's, notes and sparks
         above = max((len(HAT) - 1) * pb if wiz else 0,     # room above the head: hat, parachute, stars
                     (len(CHUTE) + 10) * pb if chute is not None else 0,
-                    6 * pb if dizzy is not None else 0)
+                    6 * pb if dizzy is not None else 0,
+                    len(hat) * pb if hat else 0)
         # the window is ONE fixed size whatever the mascot is doing, and its middle always sits at the
         # same spot in it. resizing or shifting the window between frames made windows flash a dark box
         # or the mascot flicker, because moving and redrawing a window don't happen at the same instant.
@@ -2129,16 +2591,36 @@ class Pet:
             block(col, 4)
         for col in EYES:
             x1, y1 = (col + eye_dir) * bw, bh + sink
-            if eyes == "open":
+            if eyes in ("open", "worried"):
                 emit(x1, y1, x1 + bw, y1 + bh, EYE)
             elif eyes == "tired":   # heavy eyelids
                 emit(x1, y1 + bh // 2, x1 + bw, y1 + bh, EYE)
             else:   # a thin line: low for closed, high for a happy squint
                 ly = y1 + (bh // 5 if eyes == "happy" else bh // 2)
                 emit(x1, ly, x1 + bw, ly + max(1, bh // 4), EYE)
+        if eyes == "worried":   # little slanted eyebrows
+            for col, inner in ((EYES[0] + eye_dir, 1), (EYES[1] + eye_dir, -1)):
+                yb, th = sink + bh // 2, max(1, bh // 6)
+                emit((col - 1) * bw if inner > 0 else col * bw, yb + th, col * bw if inner > 0 else (col + 1) * bw,
+                     yb + 2 * th, EYE)
+                emit(col * bw if inner > 0 else (col - 1) * bw, yb, (col + 1) * bw if inner > 0 else col * bw,
+                     yb + th, EYE)
         if eyes == "happy":
             for col in BLUSH:
                 block(col, 2, color=BLUSH_C)
+        if acc == "shades":
+            block(4, 1, 3, SHADES_C)
+            block(11, 1, 3, SHADES_C)
+            yb = bh + sink + bh // 4
+            emit(7 * bw, yb, 11 * bw, yb + max(1, bh // 6), SHADES_C)
+        elif acc == "scarf":
+            block(3, 3, 12, SCARF_C)
+            block(15, 3, 1, SCARF_D)
+        if hat and not rot:
+            gw = len(hat[0]) * pb
+            self.glyph(hat, px + 9 * bw - gw // 2, py + sink - len(hat) * pb + pb, pb,
+                       {"#": "#ff6fae", "y": "#ffe08a", "w": "#ffffff"} if acc == "party"
+                       else {"#": "#f2c14e", "r": "#e5534b", "b": "#5ea1ff"})
         if wiz and not rot:
             # wizard hat on the head, wand in the raised hand
             hx = px + 3 * bw + (12 * bw - len(HAT[0]) * pb) // 2
@@ -2459,7 +2941,7 @@ class Details:
         self.s = s = p.dpi * min(1.6, max(1.0, p.scale))
         # every tab and view gets the same height, so the tabs never jump when you switch
         tallest = 0
-        for tab, view in (("plan", "overview"), ("cc", "overview"), ("cc", "models")):
+        for tab, view in (("plan", "overview"), ("cc", "overview"), ("cc", "models"), ("cc", "projects")):
             tallest = max(tallest, self.draw_tab(tab, view))
         self.draw_tab(p.panel_tab.get(), p.cc_view.get())
         H = tallest + 12
@@ -2516,7 +2998,8 @@ class Details:
             y = self.draw_chart(y + 6, rows, now_dt)
         st = p.cc_stats()
         if st:
-            self.text(12, y, f"Claude Code today: {fmt_tokens(st['today'])} tokens", self.DIM, 8)
+            self.text(12, y, f"Claude Code today: {fmt_tokens(st['today'])} tokens · about "
+                             f"{fmt_money(st['today_cost'])} at API prices", self.DIM, 8, width=PANEL_W - 24)
             y += 18
         return y
 
@@ -2614,7 +3097,7 @@ class Details:
         W, s = PANEL_W, self.s
         rng = p.cc_range.get()
         x = 10
-        for name, label in (("overview", "Overview"), ("models", "Models")):
+        for name, label in (("overview", "Overview"), ("models", "Models"), ("projects", "Projects")):
             x += self.pill(x, y, label, view == name, "view:" + name) + 2
         x = W - 10
         for name, label in (("7d", "7d"), ("30d", "30d"), ("all", "All")):
@@ -2657,7 +3140,20 @@ class Details:
                     x0, y0 = gx + col * pitch, gy + row * pitch
                     self.canvas.create_rectangle(x0, y0, x0 + cell, y0 + cell, fill=HEAT[lvl], width=0)
             y += 7 * pitch / s + 12
-            y = self.text(14, y, compare_line(r["tokens"]), self.DIM, 8, width=W - 28) + 12
+            y = self.text(14, y, compare_line(r["tokens"]), self.DIM, 8, width=W - 28) + 4
+            y = self.text(14, y, self.cost_line(r), self.DIM, 8, width=W - 28) + 12
+        elif view == "projects":
+            total = r["tokens"] or 1
+            for name, tok, sessions in r["projects"][:5]:
+                label = name if len(name) <= 30 else name[:29] + "…"
+                self.text(12, y, label, self.FG, 9, True)
+                self.text(W - 12, y, f"{fmt_tokens(tok)} · {100 * tok / total:.0f}%", self.FG, 9, True, "ne")
+                self.rect_(12, y + 20, W - 12, y + 25, TRACK)
+                self.rect_(12, y + 20, 12 + (W - 24) * tok / total, y + 25, "#5ea1ff")
+                self.text(12, y + 28, f"{sessions} session{'s' if sessions != 1 else ''}", self.DIM, 7)
+                y += 46
+            if len(r["projects"]) > 5:
+                y = self.text(12, y, f"and {len(r['projects']) - 5} more", self.DIM, 8) + 8
         else:
             total = r["tokens"] or 1
             for m, t in r["models"][:4]:
@@ -2669,10 +3165,120 @@ class Details:
             i_, o_, w_, r_ = r["parts"]
             self.text(12, y, f"input {fmt_tokens(i_)} · output {fmt_tokens(o_)}", self.DIM, 8)
             self.text(12, y + 16, f"cache write {fmt_tokens(w_)} · cache read {fmt_tokens(r_)}", self.DIM, 8)
-            y += 44
+            y = self.text(12, y + 32, self.cost_line(r), self.DIM, 8, width=W - 24) + 12
         how = ("Counted like the Claude app (every logged copy), from this computer's logs." if p.cc_app.get()
                else "Real count (each answer once), from this computer's logs.")
         return self.text(14, y, how, self.DIM, 7, width=W - 28) + 4
+
+    def cost_line(self, r):
+        # what these tokens would cost on the pay-as-you-go api (always counted once)
+        extra = " (some models have no price here)" if r["unpriced"] else ""
+        return f"About {fmt_money(r['cost'])} at API prices{extra}. Your plan covers this; it's for comparison."
+
+
+# ---- settings window (right-click > settings…) ----
+
+class SettingsWindow:
+    BG, FG, DIM, CARD, PICK = "#1c1c1e", "#f2f2f7", "#8e8e93", "#2c2c2e", "#d77757"
+
+    def __init__(self, pet):
+        self.pet, self.win = pet, None
+
+    def open(self):
+        if self.win is not None and self.win.winfo_exists():
+            self.win.deiconify()
+            self.win.lift()
+            return
+        p = self.pet
+        w = self.win = tk.Toplevel(p.root)
+        w.title("Claude pet settings")
+        w.configure(bg=self.BG, padx=18, pady=14)
+        w.resizable(False, False)
+        w.attributes("-topmost", True)
+        try:   # dark title bar on windows 10/11
+            w.update_idletasks()
+            hwnd = u32.GetParent(w.winfo_id()) or w.winfo_id()
+            on = ctypes.c_int(1)
+            dwm.DwmSetWindowAttribute(hwnd, 20, ctypes.byref(on), ctypes.sizeof(on))
+        except Exception:
+            pass
+        cols = [tk.Frame(w, bg=self.BG) for _ in range(2)]
+        for i, col in enumerate(cols):
+            col.grid(row=0, column=i, sticky="n", padx=(0, 26) if i == 0 else 0)
+        L, R = cols
+        self.section(L, "Behaviour")
+        self.check(L, "Walk around", p.walk, p.changed)
+        self.check(L, "Jump now and then", p.jump, p.changed)
+        self.check(L, "Take naps", p.naps, p.naps_changed)
+        self.check(L, "Wizard when Claude works", p.wizard, p.changed)
+        self.check(L, "Stand on windows", p.platforms, p.changed)
+        self.check(L, "Animations", p.anim, p.anim_changed)
+        self.section(L, "Look")
+        tk.Label(L, text="Size", bg=self.BG, fg=self.FG, font=("Segoe UI", 10), anchor="w").pack(fill="x")
+        tk.Scale(L, from_=MIN_SCALE, to=MAX_SCALE, resolution=0.05, orient="horizontal", variable=p.size_var,
+                 command=lambda v: p.set_scale(float(v)), bg=self.BG, fg=self.FG, troughcolor=self.CARD,
+                 highlightthickness=0, bd=0, length=300, showvalue=True).pack(anchor="w")
+        self.choice(L, "Bubble shows", p.bubble_mode, (("both", "Both limits"), ("5h", "5-hour"),
+                                                       ("hover", "On hover")), p.changed)
+        self.choice(L, "Bubble style", p.bubble_style, (("numbers", "Numbers"), ("bars", "Bars")), p.changed)
+        opts = [("none", "None")] + [(k, v[0]) for k, v in ACCESSORIES.items()]
+        self.choice(L, "Accessory", p.accessory, opts, p.changed, locked={k for k in ACCESSORIES if k not in p.unlocked})
+        self.note(L, TIPS["Accessory"][0])
+
+        self.section(R, "Talking and alerts")
+        self.choice(R, "Chatter", p.chatter, (("off", "Off"), ("some", "Sometimes"), ("lots", "A lot")),
+                    p.chatter_changed)
+        self.check(R, "Sound effects", p.sounds, p.changed)
+        self.check(R, "Desktop notifications", p.notify_on, p.changed)
+        self.section(R, "Usage")
+        self.choice(R, "Refresh every", p.poll, [(v, f"{v // 60} min") for v in POLL_CHOICES], p.poll_changed)
+        self.check(R, "Warn when nearly full", p.warn, p.changed)
+        self.choice(R, "Yellow ring from", p.warn_at, [(v, f"{v}%") for v in WARN_CHOICES], p.changed)
+        self.choice(R, "Red ring from", p.panic_at, [(v, f"{v}%") for v in PANIC_CHOICES], p.changed)
+        self.check(R, "Count tokens like the Claude app", p.cc_app, p.cc_changed)
+        self.section(R, "System")
+        self.check(R, "Hide during full screen", p.hide_fs, p.hide_fs_changed)
+        self.check(R, "Stay on one monitor", p.one_monitor, p.changed)
+        self.check(R, "Start with Windows", p.startup_var, p.startup_changed)
+        self.check(R, "Keyboard shortcuts", p.hotkeys, p.hotkeys_changed)
+        foot = tk.Frame(w, bg=self.BG)
+        foot.grid(row=1, column=0, columnspan=2, sticky="ew", pady=(14, 0))
+        tk.Label(foot, text="Changes apply straight away.", bg=self.BG, fg=self.DIM,
+                 font=("Segoe UI", 9)).pack(side="left")
+        tk.Button(foot, text="Close", command=w.destroy, bg=self.CARD, fg=self.FG, activebackground="#3a3a3c",
+                  activeforeground=self.FG, relief="flat", padx=16, pady=3, font=("Segoe UI", 9)).pack(side="right")
+        w.update_idletasks()   # open it near the mascot, on the same screen
+        sc = p.screens[p.si]
+        x = min(max(sc.wl + 10, round(p.x - w.winfo_reqwidth() / 2)), sc.wr - w.winfo_reqwidth() - 10)
+        y = max(sc.wt + 10, sc.wb - w.winfo_reqheight() - 140)
+        w.geometry(f"+{x}+{y}")
+
+    def section(self, parent, title):
+        tk.Label(parent, text=title, bg=self.BG, fg=self.PICK, font=("Segoe UI", 11, "bold"),
+                 anchor="w").pack(fill="x", pady=(10, 2))
+
+    def note(self, parent, text):
+        tk.Label(parent, text=text, bg=self.BG, fg=self.DIM, font=("Segoe UI", 8), anchor="w", justify="left",
+                 wraplength=300).pack(fill="x", padx=(22, 0), pady=(0, 4))
+
+    def check(self, parent, label, var, command):
+        tk.Checkbutton(parent, text=label, variable=var, command=command, bg=self.BG, fg=self.FG,
+                       selectcolor=self.CARD, activebackground=self.BG, activeforeground=self.FG,
+                       font=("Segoe UI", 10), anchor="w", bd=0, highlightthickness=0).pack(fill="x")
+        if label in TIPS:
+            self.note(parent, TIPS[label][0])
+
+    def choice(self, parent, label, var, options, command, locked=()):
+        tk.Label(parent, text=label, bg=self.BG, fg=self.FG, font=("Segoe UI", 10), anchor="w").pack(fill="x",
+                                                                                                    pady=(4, 2))
+        row = tk.Frame(parent, bg=self.BG)
+        row.pack(fill="x", pady=(0, 4))
+        for value, text in options:
+            tk.Radiobutton(row, text=text, variable=var, value=value, command=command, indicatoron=0,
+                           bg=self.CARD, fg=self.FG, selectcolor=self.PICK, activebackground="#3a3a3c",
+                           activeforeground=self.FG, disabledforeground="#55555a", relief="flat", bd=0,
+                           padx=9, pady=3, font=("Segoe UI", 9),
+                           state="disabled" if value in locked else "normal").pack(side="left", padx=(0, 4))
 
 
 if __name__ == "__main__":
@@ -2685,4 +3291,8 @@ if __name__ == "__main__":
         sys.exit(0)
     if already_running():
         sys.exit(0)
-    Pet().root.mainloop()
+    try:
+        Pet().root.mainloop()
+    except Exception:
+        log_error("the pet stopped")
+        raise
