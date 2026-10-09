@@ -56,6 +56,7 @@ WALK_SPEED = 28            # pixels per second
 JUMP_EVERY = 30            # on average one hop every this many seconds
 HOP_HEIGHT = 34            # pixels
 GRAVITY = 1150             # pixels per second per second
+FPS = 60                   # frames a second while it moves (falls back to slower frames when idle)
 MAX_STEP_UP = 400          # tallest ledge (onto a higher monitor) it will jump up
 # moods
 SLEEP_AFTER_MIN = 5        # falls asleep when you've been away from the computer this long
@@ -74,8 +75,11 @@ CHATTER = {"off": 0, "some": 1.0, "lots": 2.5}   # how often it talks (menu: cha
 SPEAK_CPS = 30             # typing speed of speech bubbles, letters per second
 ATTENTION_MIN = 20         # asks for a little attention after this long without a hover, poke or drag
 # throwing, parachutes, dancing (pixels are at 1x size)
-THROW_DRAG = 0.6           # air slows a throw by this fraction per second
-GROUND_FRICTION = 900      # how fast it stops sliding after landing, pixels per second per second
+THROW_KEEP = 0.38          # share of your mouse speed a throw keeps (it's a bit heavy)
+THROW_MAX = 1500           # fastest throw, pixels per second
+THROW_MIN = 250            # mouse speeds below this just drop it instead of throwing
+THROW_DRAG = 1.5           # air slows a throw by this fraction per second
+GROUND_FRICTION = 1600     # how fast it stops sliding after landing, pixels per second per second
 CHUTE_HEIGHT = 260         # opens a parachute when falling from higher than this above the floor
 CHUTE_SPEED = 110          # falling speed with the parachute open, pixels per second
 DANCE_CHANCE = 0.05        # chance of a little dance whenever it stops walking
@@ -148,10 +152,6 @@ LATE_LINES = ["it's late... maybe wrap up soon?", "past midnight. the code will 
               "*yawn* aren't you sleepy?", "night owl mode. don't forget to sleep!"]
 OOPS_LINES = ["oops, something went wrong in there.", "uh oh. a tool tripped over.",
               "that didn't work. Claude will try again!", "*winces* an error. it happens."]
-UNLOCK_LINES = {"party": "I unlocked a party hat! right-click > settings > accessory.",
-                "shades": "sunglasses unlocked. I look cool now.",
-                "crown": "100 pokes. I am royalty now. crown unlocked!",
-                "scarf": "we hit 100% together. I got a cosy scarf for it!"}
 FULL_LINES = ["100%. that's what I call a hard day's work.", "we used ALL of it. I'm so proud.",
               "the tank is empty. see you after the reset!", "*collapses dramatically*",
               "I'm exhausted. clocking out until the reset.", "not a single token left. legendary."]
@@ -163,7 +163,7 @@ MILESTONES = {
                   90: "90% of the week used. careful!",
                   100: "the whole week's limit. legendary effort."},
 }
-# menu tooltips: what each option does, then what happens when it's on or off (or its choices)
+# what each setting does (shown under it in the settings window), then its on/off effects or choices
 TIPS = {
     "Refresh now": ("Checks your plan usage right away, instead of waiting for the next automatic check.", []),
     "Refresh every": ("How often the mascot checks your plan usage on its own.", [
@@ -226,16 +226,19 @@ TIPS = {
         ("On", "Plays them (quietly, through Windows' normal sound output)."),
         ("Off", "Silent. This is the default.")]),
     "Desktop notifications": ("Windows notifications for the important moments.", [
-        ("On", "A notification at 90% and 100% of a limit, when a nearly-used limit resets, when your login "
-               "expires, and when you unlock an accessory. Shows even while the mascot is hidden."),
+        ("On", "A notification at 90% and 100% of a limit, when a nearly-used limit resets, and when your login "
+               "expires. Shows even while the mascot is hidden."),
         ("Off", "Only the mascot's own speech bubbles.")]),
     "Keyboard shortcuts": ("Shortcuts that work anywhere in Windows.", [
         ("On", "Ctrl + Alt + P hides or shows the mascot. Ctrl + Alt + D pins or closes the details panel."),
         ("Off", "The shortcuts do nothing.")]),
-    "Accessory": ("Something for it to wear. Unlock more by poking it and by using a limit up to 100%.", [
-        ("Party hat", "Poke it 10 times."), ("Sunglasses", "Poke it 50 times."), ("Crown", "Poke it 100 times."),
-        ("Scarf", "Use a limit all the way to 100%.")]),
     "Quit": ("Closes the mascot. Your settings and its memory are saved first.", []),
+    "Volume": ("How loud the sound effects are. You'll hear a sample when you let go.", []),
+    "Size": ("How big the mascot is. Ctrl + mouse wheel over it works too.", []),
+    "Bubble shows": ("Which limits the bubble above its head shows, or only show it when you hover.", []),
+    "Bubble style": ("Numbers, or two small bars.", []),
+    "Yellow ring from": ("When the warning ring turns yellow.", []),
+    "Red ring from": ("When the warning ring turns red. It turns black at 100%.", []),
 }
 
 # api list prices, dollars per million tokens: (model id starts with, input, output, cache read).
@@ -311,12 +314,6 @@ NOTE = ["..##", "..#.", "..#.", "###.", "###."]   # a music note, for dancing
 CHUTE = ["".join(("r" if (i // 4) % 2 == 0 else "w") if abs(i - 17.5) < w / 2 else "." for i in range(36))
          for w in (12, 20, 26, 30, 34, 36)]
 
-# accessories you unlock: name -> (menu label, how to unlock)
-ACCESSORIES = {"party": ("Party hat", "poke it 10 times"), "shades": ("Sunglasses", "poke it 50 times"),
-               "crown": ("Crown", "poke it 100 times"), "scarf": ("Scarf", "use a limit up to 100%")}
-PARTY = ["....w....", "...#y#...", "...y#y...", "..#y#y#..", "..y#y#y..", ".#y#y#y#.", "#y#y#y#y#"]
-CROWN = ["#...#...#", "##.###.##", "#########", "#r##b##r#", "#########"]
-
 ORANGE, EYE, BLUSH_C = "#d77757", "#2b1a14", "#f4a08f"
 BUBBLE, BUBBLE_TEXT = "#1f1e1d", "#f2efe8"
 SPEECH, SPEECH_TEXT = "#f2efe8", "#2b1a14"
@@ -325,7 +322,6 @@ WARN_C, PANIC_C = "#f2c14e", "#e5534b"
 FULL_C, FULL_EDGE = "#0d0d0d", "#c8c8cd"   # the ring at 100%: black with a silver edge
 NOTE_C = ["#ff9ad5", "#8be9fd", "#ffe08a"]
 CHUTE_R, CHUTE_W, STRING_C = "#e5534b", "#f2efe8", "#d9d4c7"
-SHADES_C, SCARF_C, SCARF_D = "#141414", "#c94f6d", "#9e3a55"
 HAT_C, BAND_C, STAR_C, WAND_C = "#6c4ab6", "#f2c14e", "#ffe08a", "#8b5a2b"
 SPARK_C = ["#ffe08a", "#8be9fd", "#ff9ad5", "#ffffff"]
 DIM, RED, TRACK = "#8e8e93", "#e5534b", "#3a3a3c"
@@ -691,14 +687,14 @@ def log_error(what, exc=None):
 
 DEFAULTS = {"scale": DEFAULT_SCALE, "walk": True, "jump": True, "naps": True, "anim": True,
             "bubble": "both", "bubble_style": "numbers", "chatter": "some", "wizard": True, "warn": True, "cc_app": True, "notify": True, "sounds": False, "hotkeys": True,
-            "platforms": True, "accessory": "none",
+            "platforms": True, "volume": 60,
             "warn_at": WARN_AT, "panic_at": PANIC_AT, "poll": POLL_SECONDS,
             "hide_fs": True, "one_monitor": False, "panel_tab": "plan", "plan_chart": "5h", "cc_view": "overview",
             "cc_range": "all", "x": None, "y": None}
 CHOICES = {"bubble": ("both", "5h", "hover"), "bubble_style": ("numbers", "bars"),
            "chatter": tuple(CHATTER), "panel_tab": ("plan", "cc"), "plan_chart": ("5h", "7d"), "cc_view": ("overview", "models", "projects"),
            "cc_range": ("all", "30d", "7d"),
-           "accessory": ("none",) + tuple(ACCESSORIES)}
+           }
 
 
 def read_json(path):
@@ -733,6 +729,8 @@ def load_settings():
     for k, ok in CHOICES.items():
         if st[k] not in ok:
             st[k] = DEFAULTS[k]
+    if isinstance(st["volume"], bool) or not isinstance(st["volume"], int) or not 0 <= st["volume"] <= 100:
+        st["volume"] = DEFAULTS["volume"]
     for k, ok in (("warn_at", WARN_CHOICES), ("panic_at", PANIC_CHOICES), ("poll", POLL_CHOICES)):
         if st[k] not in ok or isinstance(st[k], bool):
             st[k] = DEFAULTS[k]
@@ -746,9 +744,7 @@ def load_memory():
     # moods that survive a restart: when each limit last moved, pokes, milestones already said
     m = read_json(STATE_FILE)
     out = {"seen": {}, "last_5h": None, "pokes": 0, "milestones": {}, "last_usage": time.time(), "history": [],
-           "unlocked": [], "greeted": ""}
-    if isinstance(m.get("unlocked"), list):
-        out["unlocked"] = [a for a in m["unlocked"] if a in ACCESSORIES]
+           "greeted": ""}
     if isinstance(m.get("greeted"), str):
         out["greeted"] = m["greeted"]
     try:
@@ -777,6 +773,10 @@ def load_memory():
 
 u32 = ctypes.WinDLL("user32", use_last_error=True)
 k32 = ctypes.WinDLL("kernel32", use_last_error=True)
+try:
+    winmm = ctypes.WinDLL("winmm")   # for a finer timer while the mascot is moving
+except OSError:
+    winmm = None
 try:
     dwm = ctypes.WinDLL("dwmapi")
     dwm.DwmGetWindowAttribute.argtypes = [wintypes.HWND, wintypes.DWORD, ctypes.c_void_p, wintypes.DWORD]
@@ -810,6 +810,7 @@ u32.GetWindowThreadProcessId.restype = wintypes.DWORD
 u32.GetLastInputInfo.argtypes = [ctypes.POINTER(LASTINPUTINFO)]
 u32.GetParent.argtypes = [wintypes.HWND]
 u32.GetParent.restype = wintypes.HWND
+u32.GetAsyncKeyState.restype = ctypes.c_short
 u32.SetWindowPos.argtypes = [wintypes.HWND, wintypes.HWND, ctypes.c_int, ctypes.c_int, ctypes.c_int, ctypes.c_int, wintypes.UINT]
 k32.GetTickCount.restype = wintypes.DWORD
 
@@ -952,22 +953,6 @@ def idle_seconds():
     return ((k32.GetTickCount() - lii.dwTime) & 0xFFFFFFFF) / 1000
 
 
-def menu_rects():
-    # where windows has drawn the open popup menus (their window class is "#32768")
-    found = []
-
-    def cb(hwnd, lp):
-        name = ctypes.create_unicode_buffer(16)
-        u32.GetClassNameW(hwnd, name, 16)
-        r = wintypes.RECT()
-        if name.value == "#32768" and u32.IsWindowVisible(hwnd) and u32.GetWindowRect(hwnd, ctypes.byref(r)):
-            found.append((r.left, r.top, r.right, r.bottom))
-        return True
-
-    u32.EnumWindows(WNDENUMPROC(cb), 0)
-    return found
-
-
 def notify(title, body):
     # a windows notification in the corner of the screen, sent through powershell (no installs needed)
     esc = lambda s_: (s_.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
@@ -1006,9 +991,11 @@ def hotkey_thread(inbox):
 SOUND_DIR = Path(tempfile.gettempdir()) / "claude_pet_sounds"
 
 
-def make_sound(kind):
-    # little sound effects, made from maths the first time they're needed (no sound files to ship)
-    path = SOUND_DIR / f"{kind}.wav"
+def make_sound(kind, volume=100):
+    # little sound effects, made from maths the first time they're needed (no sound files to ship).
+    # windows' simple sound player has no volume knob, so each volume gets its own quieter copy.
+    volume = max(0, min(100, int(volume)))
+    path = SOUND_DIR / f"{kind}_{volume}.wav"
     if path.exists():
         return path
     rate, frames = 22050, []
@@ -1022,7 +1009,7 @@ def make_sound(kind):
             phase += 2 * math.pi * f / rate
             v = random.uniform(-1, 1) if noise else (((phase / math.pi) % 2) - 1 if saw else math.sin(phase))
             env = min(1.0, i / (rate * 0.01)) * (1 - k) ** 1.5
-            frames.append(int(v * env * vol * 32767))
+            frames.append(int(v * env * vol * volume / 100 * 32767))
 
     if kind == "pop":
         tone(0.09, 700, 1400)
@@ -1125,6 +1112,18 @@ def corner(c, r, fill, bg, smooth, q):
     return _corners[key]
 
 
+def move_window(win, x, y, w=None, h=None):
+    # moves a window and makes sure it really went there. tk sometimes holds a move back
+    # (seen with the right-click menu after it had been parked off screen), so if it didn't
+    # arrive, move it directly with windows.
+    win.geometry(f"{w}x{h}+{x}+{y}" if w else f"+{x}+{y}")
+    win.update_idletasks()
+    if (win.winfo_rootx(), win.winfo_rooty()) != (x, y):
+        hwnd = u32.GetParent(win.winfo_id()) or win.winfo_id()
+        flags = 0x0014 | (0x0001 if not w else 0)   # no z-order change, no activation, (keep size)
+        u32.SetWindowPos(hwnd, None, x, y, w or 0, h or 0, flags)
+
+
 def round_rect(c, x1, y1, x2, y2, r, fill, bg=KEY, smooth=False):
     # a rounded box: three rectangles plus four corner images, all on whole pixels so nothing steps
     x1, y1, x2, y2 = round(x1), round(y1), round(x2), round(y2)
@@ -1209,7 +1208,7 @@ class Pet:
         self.sounds = tk.BooleanVar(value=st["sounds"])
         self.hotkeys = tk.BooleanVar(value=st["hotkeys"])
         self.platforms = tk.BooleanVar(value=st["platforms"])
-        self.accessory = tk.StringVar(value=st["accessory"])
+        self.volume = tk.IntVar(value=st["volume"])
         self.hide_fs = tk.BooleanVar(value=st["hide_fs"])
         self.one_monitor = tk.BooleanVar(value=st["one_monitor"])
         self.bubble_mode = tk.StringVar(value=st["bubble"])
@@ -1236,10 +1235,7 @@ class Pet:
         self.last_usage = mem["last_usage"]   # when tokens last went up anywhere
         self.first_result = True
         self.history = mem["history"]   # [(time, 5-hour %, weekly %)] for the plan tab's chart
-        self.unlocked = mem["unlocked"]  # accessories earned so far
         self.greeted = mem["greeted"]    # the date it last said good morning
-        if self.accessory.get() not in self.unlocked:
-            self.accessory.set("none")
         self.last_ok = 0.0               # when the last good answer arrived (old numbers look faded)
         self.creds_mtime = self.creds_changed_at()
         self.user_hidden = False         # hidden with ctrl + alt + P
@@ -1301,14 +1297,14 @@ class Pet:
         self.hovering, self.hover_since, self.leave_at, self.hover_until = False, None, None, 0.0
         self.geo, self.last_frame, self.rects = None, None, {}
         self.anim_job, self.last_t = None, time.perf_counter()
+        self.fine_timer, self.next_frame = False, time.perf_counter()
         self.saved_at = time.time()
         self.next_fs_check = self.next_slow_check = 0.0
 
         self.fader = Fader(self.root, 1.0, 1.0, self.place)
         self.details = Details(self)
-        self.tip = Tooltip(self)
         self.settings = SettingsWindow(self)
-        self.build_menu()
+        self.popup = PopupMenu(self)
         c = self.canvas
         c.bind("<Button-1>", self.press)
         c.bind("<B1-Motion>", self.motion)
@@ -1323,81 +1319,16 @@ class Pet:
         if self.anim.get():
             self.start_anim()
 
-    def build_menu(self):
-        m = self.menu = tk.Menu(self.root, tearoff=0)
-        m.add_command(label="Settings…", command=self.settings.open)
-        m.add_separator()
-        m.add_command(label="Refresh now", command=self.refresh)
-        rf = tk.Menu(m, tearoff=0)
-        for v in POLL_CHOICES:
-            rf.add_radiobutton(label=f"{v} seconds" if v < 60 else f"{v // 60} minute{'s' if v > 60 else ''}",
-                               variable=self.poll, value=v, command=self.poll_changed)
-        m.add_cascade(label="Refresh every", menu=rf)
-        m.add_checkbutton(label="Keep details open", variable=self.pin_var, command=self.pin_changed)
-        m.add_checkbutton(label="Count tokens like the Claude app", variable=self.cc_app, command=self.cc_changed)
-        m.add_separator()
-        m.add_checkbutton(label="Walk around", variable=self.walk, command=self.changed)
-        m.add_checkbutton(label="Jump now and then", variable=self.jump, command=self.changed)
-        m.add_checkbutton(label="Take naps", variable=self.naps, command=self.naps_changed)
-        m.add_checkbutton(label="Wizard when Claude works", variable=self.wizard, command=self.changed)
-        m.add_checkbutton(label="Stand on windows", variable=self.platforms, command=self.changed)
-        m.add_checkbutton(label="Warn when nearly full", variable=self.warn, command=self.changed)
-        lv = tk.Menu(m, tearoff=0)
-        lv.add_command(label="Yellow ring from", state="disabled")
-        for v in WARN_CHOICES:
-            lv.add_radiobutton(label=f"   {v}%", variable=self.warn_at, value=v, command=self.changed)
-        lv.add_separator()
-        lv.add_command(label="Red ring from", state="disabled")
-        for v in PANIC_CHOICES:
-            lv.add_radiobutton(label=f"   {v}%", variable=self.panic_at, value=v, command=self.changed)
-        m.add_cascade(label="Warning levels", menu=lv)
-        m.add_checkbutton(label="Animations", variable=self.anim, command=self.anim_changed)
-        talk = tk.Menu(m, tearoff=0)
-        for val, label in (("off", "Off"), ("some", "Sometimes"), ("lots", "A lot")):
-            talk.add_radiobutton(label=label, variable=self.chatter, value=val, command=self.chatter_changed)
-        m.add_cascade(label="Chatter", menu=talk)
-        sizes = tk.Menu(m, tearoff=0)
-        for v in SIZES:
-            sizes.add_radiobutton(label=f"{v:g}x", variable=self.size_var, value=v,
-                                  command=lambda v=v: self.set_scale(v))
-        m.add_cascade(label="Size", menu=sizes)
-        bub = tk.Menu(m, tearoff=0)
-        for val, label in (("both", "Both limits"), ("5h", "5-hour only"), ("hover", "Only when I hover")):
-            bub.add_radiobutton(label=label, variable=self.bubble_mode, value=val, command=self.changed)
-        bub.add_separator()
-        for val, label in (("numbers", "Show numbers"), ("bars", "Show bars")):
-            bub.add_radiobutton(label=label, variable=self.bubble_style, value=val, command=self.changed)
-        m.add_cascade(label="Bubble", menu=bub)
-        self.acc_menu = tk.Menu(m, tearoff=0)
-        m.add_cascade(label="Accessory", menu=self.acc_menu)
-        m.add_separator()
-        m.add_checkbutton(label="Sound effects", variable=self.sounds, command=self.changed)
-        m.add_checkbutton(label="Desktop notifications", variable=self.notify_on, command=self.changed)
-        m.add_checkbutton(label="Keyboard shortcuts", variable=self.hotkeys, command=self.hotkeys_changed)
-        m.add_checkbutton(label="Hide during full screen", variable=self.hide_fs, command=self.hide_fs_changed)
-        m.add_checkbutton(label="Stay on one monitor", variable=self.one_monitor, command=self.changed)
-        m.add_checkbutton(label="Start with Windows", variable=self.startup_var, command=self.startup_changed)
-        m.add_separator()
-        m.add_command(label="Quit", command=self.quit)
-        m.bind("<<MenuSelect>>", lambda e: self.tip.hover(m))
-
-    def fill_accessories(self, menu):
-        # unlocked ones can be picked; locked ones show how to get them
-        menu.delete(0, "end")
-        menu.add_radiobutton(label="None", variable=self.accessory, value="none", command=self.changed)
-        for key, (label, how) in ACCESSORIES.items():
-            if key in self.unlocked:
-                menu.add_radiobutton(label=label, variable=self.accessory, value=key, command=self.changed)
-            else:
-                menu.add_command(label=f"{label} (locked: {how})", state="disabled")
-
     def show_menu(self, e):
-        self.fill_accessories(self.acc_menu)
-        try:
-            self.menu.tk_popup(e.x_root, e.y_root)
-        finally:
-            self.menu.grab_release()
-            self.tip.hide()
+        if self.popup.visible:   # right-clicking again closes it
+            self.popup.hide()
+            return
+        if not self.details.pinned:
+            self.details.hide()   # the hover panel would otherwise pop up over the menu and catch its clicks
+        # open beside the mascot's body, not on top of it, so the mascot stays clickable
+        pw, ph = self.pet_px
+        bx, by = (self.geo[2] + self.body_at[0], self.geo[3] + self.body_at[1]) if self.geo else (e.x_root, e.y_root)
+        self.popup.show(e.x_root, e.y_root, avoid=(bx, by, bx + pw, by + ph))
 
     # settings
     def s(self):
@@ -1410,12 +1341,12 @@ class Pet:
             ("anim", self.anim), ("bubble", self.bubble_mode), ("bubble_style", self.bubble_style),
             ("chatter", self.chatter), ("wizard", self.wizard), ("warn", self.warn), ("cc_app", self.cc_app), ("warn_at", self.warn_at), ("panic_at", self.panic_at), ("poll", self.poll),
             ("notify", self.notify_on), ("sounds", self.sounds), ("hotkeys", self.hotkeys),
-            ("platforms", self.platforms), ("accessory", self.accessory), ("hide_fs", self.hide_fs),
+            ("platforms", self.platforms), ("volume", self.volume), ("hide_fs", self.hide_fs),
             ("one_monitor", self.one_monitor), ("panel_tab", self.panel_tab), ("cc_view", self.cc_view),
             ("cc_range", self.cc_range), ("plan_chart", self.plan_chart), ("x", round(self.x)), ("y", round(self.y)))}
         write_json(SETTINGS_FILE, st)
         write_json(STATE_FILE, {"seen": self.seen, "last_5h": self.last_5h, "pokes": self.pokes,
-                                "history": self.history, "unlocked": self.unlocked, "greeted": self.greeted,
+                                "history": self.history, "greeted": self.greeted,
                                 "milestones": self.milestones, "last_usage": self.last_usage})
         self.saved_at = time.time()
 
@@ -1488,6 +1419,8 @@ class Pet:
         self.startup_var.set(startup_path().exists())   # show what really happened
 
     def quit(self):
+        if self.fine_timer and winmm:
+            winmm.timeEndPeriod(1)
         self.save()
         self.root.destroy()
 
@@ -1575,6 +1508,7 @@ class Pet:
         if hide:
             self.held = self.pressed = False
             self.details.hide()
+            self.popup.hide()
         self.fader.to(0.0 if hide else 1.0, instant=not self.anim.get())
 
     # mouse
@@ -1633,13 +1567,17 @@ class Pet:
             self.held = False
             s = self.s()
             now = time.perf_counter()
-            trail = [t for t in self.trail if now - t[0] < 0.1]
+            trail = [t for t in self.trail if now - t[0] < 0.12]
             vx = vy = 0.0
-            if len(trail) >= 2 and trail[-1][0] - trail[0][0] > 0.01:
+            if len(trail) >= 2 and trail[-1][0] - trail[0][0] > 0.02:
                 d = trail[-1][0] - trail[0][0]
                 vx, vy = (trail[-1][1] - trail[0][1]) / d, (trail[-1][2] - trail[0][2]) / d
-            cap = 2600 * s
-            vx, vy = max(-cap, min(cap, vx)), max(-cap, min(cap, vy))
+            speed = math.hypot(vx, vy)
+            if speed < THROW_MIN * s:
+                vx = vy = 0.0   # a small flick just drops it
+            else:   # it's heavy: it keeps only part of your mouse speed, up to a limit
+                k = min(THROW_KEEP * speed, THROW_MAX * s) / speed
+                vx, vy = vx * k, vy * k
             self.follow_grip()
             self.angle = (self.angle + math.pi) % (2 * math.pi) - math.pi   # rights itself the short way
             self.plat = None
@@ -1650,8 +1588,8 @@ class Pet:
             self.y = min(self.y, sc.wb)
             if self.anim.get():   # it keeps the speed you threw it with
                 self.vx, self.vy, self.bounces = vx, vy, 0
-                self.spin += vx * 0.004 / s
-                if math.hypot(vx, vy) > 900 * s:
+                self.spin += vx * 0.003 / s
+                if math.hypot(vx, vy) > 650 * s:
                     self.say(random.choice(THROW_LINES), force=True)
             else:
                 self.y, self.angle, self.spin = sc.wb, 0.0, 0.0
@@ -1680,8 +1618,8 @@ class Pet:
             if self.hover_since is None:
                 self.hover_since = now
                 self.greet()
-            elif not d.visible and now - self.hover_since >= HOVER_DELAY:
-                d.show()
+            elif not d.visible and now - self.hover_since >= HOVER_DELAY and not self.popup.visible:
+                d.show()   # (not while the right-click menu is open)
         elif not over_pet:
             self.hover_since = None
         if d.visible and not d.pinned:
@@ -1705,25 +1643,21 @@ class Pet:
         self.quiet_until = now + 25
         return True
 
-    def play(self, kind):
-        if self.sounds.get() and not self.hidden:
+    def play(self, kind, preview=False):
+        if (self.sounds.get() or preview) and not self.hidden and self.volume.get() > 0:
             try:
-                winsound.PlaySound(str(make_sound(kind)), winsound.SND_FILENAME | winsound.SND_ASYNC | winsound.SND_NODEFAULT)
+                winsound.PlaySound(str(make_sound(kind, self.volume.get())),
+                                   winsound.SND_FILENAME | winsound.SND_ASYNC | winsound.SND_NODEFAULT)
             except Exception:
                 log_error(f"playing the {kind} sound")
+
+    def volume_changed(self):
+        self.play("pop", preview=True)   # a little sample at the new volume
+        self.save()
 
     def toast(self, title, body):
         if self.notify_on.get():
             notify(title, body)
-
-    def unlock(self, name):
-        if name in self.unlocked:
-            return
-        self.unlocked.append(name)
-        self.say(UNLOCK_LINES[name], force=True)
-        self.toast("Claude pet", f"New accessory: {ACCESSORIES[name][0]}. Pick it in right-click > Settings.")
-        self.happy_t, self.celebrate = 1.5, 1
-        self.save()
 
     def creds_changed_at(self):
         try:
@@ -1809,15 +1743,10 @@ class Pet:
         self.pokes += 1
         self.last_touch = time.time()
         self.play("pop")
-        for need, name in ((10, "party"), (50, "shades"), (100, "crown")):
-            if self.pokes >= need and name not in self.unlocked:
-                self.unlock(name)
-                break
-        else:
-            if self.pokes in POKE_COUNT:
-                self.say(POKE_COUNT[self.pokes], force=True)
-            elif random.random() < 0.35:
-                self.say(random.choice(POKE_LINES), force=True)
+        if self.pokes in POKE_COUNT:
+            self.say(POKE_COUNT[self.pokes], force=True)
+        elif random.random() < 0.35:
+            self.say(random.choice(POKE_LINES), force=True)
         if not self.anim.get():
             return
         self.wake()
@@ -1927,8 +1856,6 @@ class Pet:
             self.first_result = False
             self.limited = 0
             self.last_ok = now
-            if any(r["pct"] >= 100 for r in parse_rows(data)):
-                self.unlock("scarf")
             self.next_at = now + self.poll.get()
             self.remember(now, parse_rows(data))
         else:
@@ -2029,6 +1956,7 @@ class Pet:
         # 10 times a second: hover, shortcuts. twice a second: full screen. every second: moods.
         now = time.time()
         self.check_keys()
+        self.popup.watch()
         self.check_hover(now)
         if now >= self.next_fs_check:
             self.next_fs_check = now + 0.5
@@ -2188,7 +2116,22 @@ class Pet:
         dt, self.last_t = min(0.05, now - self.last_t), now
         self.physics(dt)
         self.redraw()
-        self.anim_job = self.root.after(self.frame_ms(), self.anim_tick)
+        ms = self.frame_ms()
+        fast = ms <= 16
+        if fast != self.fine_timer:
+            # windows' clock normally ticks every 15.6 ms, so "wait 16 ms" sometimes became 31 ms and
+            # throws looked jittery. while it's moving, ask for a 1 ms clock; give it back when it stops.
+            try:
+                (winmm.timeBeginPeriod if fast else winmm.timeEndPeriod)(1)
+                self.fine_timer = fast
+            except (AttributeError, OSError):
+                pass
+        if fast:   # a steady 60 frames a second: aim each frame at the next 1/60 s mark
+            self.next_frame = max(self.next_frame + 1 / FPS, now)
+            ms = max(1, round((self.next_frame - time.perf_counter()) * 1000))
+        else:
+            self.next_frame = now
+        self.anim_job = self.root.after(ms, self.anim_tick)
 
     def frame_ms(self):
         # fast while moving, slower while standing around, very slow while hidden
@@ -2196,7 +2139,7 @@ class Pet:
             return 500
         if (self.held or self.pressed or self.squash_t > 0 or not self.grounded() or self.angle or self.vx
                 or (self.state == "walk" and self.walking_allowed())):
-            return 15
+            return 16
         if (self.parts or self.wave_t > 0 or self.state in ("work", "dance") or self.speech
                 or self.dizzy_t > 0 or self.stretch_t > 0):
             return 30
@@ -2466,7 +2409,7 @@ class Pet:
                 round(math.sin(self.clock * 1.6) * 1.4) if chute else None,
                 (0, -1, 0, 1)[beat] if dancing else 0,
                 int(self.clock * 8) % 12 if anim and self.dizzy_t > 0 else None,
-                sleeping and int(self.clock / 1.4) % 2 == 1, self.accessory.get())
+                sleeping and int(self.clock / 1.4) % 2 == 1)
 
     def redraw(self):
         f = self.frame()
@@ -2495,8 +2438,7 @@ class Pet:
 
     def draw(self, f):
         (_, legs, eyes, eye_dir, sink_kind, arms, wand, warn, wiz, parts, segs, bars, err, show_bubble,
-         speech, rot, chute, shift, dizzy, breath, acc) = f
-        hat = {"party": PARTY, "crown": CROWN}.get(acc) if not wiz else None
+         speech, rot, chute, shift, dizzy, breath) = f
         c = self.canvas
         c.delete("all")
         s = self.s()
@@ -2537,8 +2479,7 @@ class Pet:
         side = round(30 * s)                               # room for z's, notes and sparks
         above = max((len(HAT) - 1) * pb if wiz else 0,     # room above the head: hat, parachute, stars
                     (len(CHUTE) + 10) * pb if chute is not None else 0,
-                    6 * pb if dizzy is not None else 0,
-                    len(hat) * pb if hat else 0)
+                    6 * pb if dizzy is not None else 0)
         # the window is ONE fixed size whatever the mascot is doing, and its middle always sits at the
         # same spot in it. resizing or shifting the window between frames made windows flash a dark box
         # or the mascot flicker, because moving and redrawing a window don't happen at the same instant.
@@ -2608,19 +2549,6 @@ class Pet:
         if eyes == "happy":
             for col in BLUSH:
                 block(col, 2, color=BLUSH_C)
-        if acc == "shades":
-            block(4, 1, 3, SHADES_C)
-            block(11, 1, 3, SHADES_C)
-            yb = bh + sink + bh // 4
-            emit(7 * bw, yb, 11 * bw, yb + max(1, bh // 6), SHADES_C)
-        elif acc == "scarf":
-            block(3, 3, 12, SCARF_C)
-            block(15, 3, 1, SCARF_D)
-        if hat and not rot:
-            gw = len(hat[0]) * pb
-            self.glyph(hat, px + 9 * bw - gw // 2, py + sink - len(hat) * pb + pb, pb,
-                       {"#": "#ff6fae", "y": "#ffe08a", "w": "#ffffff"} if acc == "party"
-                       else {"#": "#f2c14e", "r": "#e5534b", "b": "#5ea1ff"})
         if wiz and not rot:
             # wizard hat on the head, wand in the raised hand
             hx = px + 3 * bw + (12 * bw - len(HAT[0]) * pb) // 2
@@ -2737,93 +2665,6 @@ class Pet:
         self.rects = {"pet": body, "bubble": (bx, by, bx + bub_w, by + bub_h + tail) if show_bubble else None}
 
 
-# ---- menu tooltips ----
-
-class Tooltip:
-    BG, BORDER, FG, DIM = "#1f1e1d", "#3a3a3c", "#f2efe8", "#a8a8ad"
-    TAGS = {"On": "#7bd88f", "Off": "#8e8e93"}   # other tags (choices) are amber
-
-    def __init__(self, pet):
-        self.pet = pet
-        self.win = tk.Toplevel(pet.root)
-        self.win.overrideredirect(True)
-        self.win.attributes("-topmost", True)
-        self.win.configure(bg=self.BORDER)
-        self.win.geometry(f"10x10+{PARK}+{PARK}")   # parked off screen until needed
-        self.canvas = tk.Canvas(self.win, bg=self.BG, highlightthickness=0)
-        self.canvas.pack(padx=1, pady=1)
-        self.job, self.rounded, self.fonts = None, False, {}
-
-    def font(self, size, bold=False):
-        px = max(8, round(size * self.pet.dpi))
-        if (px, bold) not in self.fonts:
-            self.fonts[(px, bold)] = tkfont.Font(root=self.win, family="Segoe UI", size=-px,
-                                                 weight="bold" if bold else "normal")
-        return self.fonts[(px, bold)]
-
-    def hover(self, menu):
-        # the highlighted menu item changed: show its tooltip after a short pause
-        self.hide()
-        try:
-            i = menu.index("active")
-            label = menu.entrycget(i, "label").strip() if i is not None else ""
-        except tk.TclError:
-            label = ""   # a separator, or nothing highlighted
-        if label in TIPS:
-            try:
-                row_y = menu.yposition(i)   # where the item sits inside the menu
-            except tk.TclError:
-                row_y = 0
-            self.job = self.win.after(350, lambda: self.show(label, row_y))
-
-    def show(self, label, row_y=0):
-        self.job = None
-        desc, rows = TIPS[label]
-        s, c = self.pet.dpi, self.canvas
-        c.delete("all")
-        pad, width = round(10 * s), round(260 * s)
-        tag_w = max([self.font(12, True).measure(tag) for tag, _ in rows] or [0]) + round(8 * s)
-        item = c.create_text(pad, pad, anchor="nw", text=desc, fill=self.FG, font=self.font(12.5, True), width=width)
-        y = c.bbox(item)[3] + round(7 * s)
-        for tag, text in rows:
-            c.create_text(pad, y, anchor="nw", text=tag, fill=self.TAGS.get(tag, "#d9a441"), font=self.font(12, True))
-            item = c.create_text(pad + tag_w, y, anchor="nw", text=text, fill=self.DIM, font=self.font(12),
-                                 width=width - tag_w)
-            y = c.bbox(item)[3] + round(4 * s)
-        w, h = width + 2 * pad, y + pad - round(4 * s)
-        c.configure(width=w, height=h)
-        # next to the open menu: on its left (the right side is where submenus open), or right if no room
-        p = self.pet
-        mx, my = p.root.winfo_pointerxy()
-        rects = menu_rects()
-        on_menu = next((r for r in rects if r[0] <= mx < r[2] and r[1] <= my < r[3]), None)
-        r = on_menu or (rects[0] if rects else (mx, my, mx, my))
-        if not on_menu:   # using the keyboard: line up with the highlighted item instead of the mouse
-            my = r[1] + row_y + round(10 * s)
-        cx, cy = (r[0] + r[2]) // 2, (r[1] + r[3]) // 2
-        si = p.find_screen(cx, cy)
-        sc = p.screens[si if si is not None else p.nearest_screen(cx, cy)]
-        x = r[0] - w - 2 - round(6 * s)
-        if x < sc.wl:
-            x = r[2] + round(6 * s)
-        y = min(max(sc.wt, my - round(12 * s)), sc.wb - h - 2)
-        self.win.geometry(f"{w + 2}x{h + 2}+{x}+{y}")
-        self.win.update_idletasks()   # apply the move now: while a menu is open tk may hold it back
-        if (self.win.winfo_x(), self.win.winfo_y()) != (x, y):
-            hwnd = u32.GetParent(self.win.winfo_id()) or self.win.winfo_id()
-            u32.SetWindowPos(hwnd, None, x, y, w + 2, h + 2, 0x0014)   # SWP_NOZORDER | SWP_NOACTIVATE
-        self.win.lift()
-        if not self.rounded:
-            round_corners(self.win)
-            self.rounded = True
-
-    def hide(self):
-        if self.job:
-            self.win.after_cancel(self.job)
-            self.job = None
-        self.win.geometry(f"+{PARK}+{PARK}")
-
-
 # ---- details panel (hover the mascot) ----
 
 PANEL_W = 320
@@ -2849,6 +2690,7 @@ class Details:
         self.visible = self.pinned = self.rounded = False
         self.hits, self.rect, self.px_size, self.fonts = [], None, (10, 10), {}
         self.anchor_x = self.anchor_bottom = 0
+        self.avoid = (0, 0, 0, 0)
         self.s = 1.0
         self.curve_key, self.curve = None, []   # cached estimate for the plan chart
         self.fader = Fader(self.win, 0.0, 1.0, self.place)
@@ -2860,8 +2702,10 @@ class Details:
         if self.visible:
             return
         self.visible = True
-        self.anchor_x = p.x   # opens just above the bubble
+        self.anchor_x = p.x   # opens just above the bubble if there's room
         self.anchor_bottom = (p.geo[3] if p.geo else p.screens[p.si].wb) + p.top_margin - round(6 * p.dpi)
+        # the space the mascot and its bubble take up, which the panel must not cover
+        self.avoid = (round(p.x - p.half), self.anchor_bottom, round(p.x + p.half), round(p.y))
         self.draw()
         if not self.rounded:
             round_corners(self.win)
@@ -2878,16 +2722,24 @@ class Details:
     def place(self):
         p = self.pet
         if not self.visible and self.fader.alpha <= 0.001:
-            self.win.geometry(f"+{PARK}+{PARK}")
+            move_window(self.win, PARK, PARK)
             self.rect = None
             return
         pw, ph = self.px_size
         sc = p.screens[p.si]
+        gap = round(8 * p.dpi)
+        left, top, right, feet = self.avoid
         x = min(max(sc.wl + 4, round(self.anchor_x - pw / 2)), sc.wr - pw - 4)
-        y = max(sc.wt + 4, self.anchor_bottom - ph)
+        if self.anchor_bottom - ph >= sc.wt + 4:
+            y = self.anchor_bottom - ph            # above the bubble (the usual place)
+        elif feet + gap + ph <= sc.wb - 4:
+            y = feet + gap                         # high up (on a window): below the mascot instead
+        else:                                      # no room above or below: beside it
+            x = right + gap if right + gap + pw <= sc.wr - 4 else max(sc.wl + 4, left - gap - pw)
+            y = min(max(sc.wt + 4, feet - ph), sc.wb - ph - 4)
         self.rect = (x, y, x + pw, y + ph)
         y += round((1 - self.fader.alpha) * 10 * p.dpi)   # slides up a little as it fades in
-        self.win.geometry(f"{pw}x{ph}+{x}+{y}")
+        move_window(self.win, x, y, pw, ph)
 
     def click(self, e):
         p = self.pet
@@ -3176,109 +3028,319 @@ class Details:
         return f"About {fmt_money(r['cost'])} at API prices{extra}. Your plan covers this; it's for comparison."
 
 
-# ---- settings window (right-click > settings…) ----
+# ---- the right-click menu ----
 
-class SettingsWindow:
-    BG, FG, DIM, CARD, PICK = "#1c1c1e", "#f2f2f7", "#8e8e93", "#2c2c2e", "#d77757"
+class PopupMenu:
+    # a small menu drawn in the same style as the details panel
+    BG, FG = "#1c1c1e", "#f2f2f7"
+    ITEMS = (("Refresh now", "refresh"), ("Settings", "settings"), None, ("Quit", "quit"))
 
     def __init__(self, pet):
-        self.pet, self.win = pet, None
+        self.pet = pet
+        w = self.win = tk.Toplevel(pet.root)
+        w.overrideredirect(True)
+        w.attributes("-topmost", True)
+        w.attributes("-alpha", 0.0)
+        w.configure(bg=self.BG)
+        w.geometry(f"10x10+{PARK}+{PARK}")
+        self.canvas = tk.Canvas(w, bg=self.BG, highlightthickness=0)
+        self.canvas.pack()
+        self.canvas.bind("<Motion>", lambda e: self.set_hover(self.row_at(e.y)))
+        self.canvas.bind("<Leave>", lambda e: self.set_hover(None))
+        self.canvas.bind("<ButtonRelease-1>", self.click)
+        self.canvas.bind("<Button-3>", lambda e: self.hide())   # right-clicking the menu closes it too
+        w.bind("<Escape>", lambda e: self.hide())
+        self.visible, self.hover, self.rows, self.rect, self.rounded = False, None, [], None, False
+        self.opened_at, self.was_down, self.s, self.size = 0.0, True, 1.0, (10, 10)
+        self.fader = Fader(w, 0.0, 1.0, lambda: None)
+
+    def show(self, x, y, avoid=None):
+        p = self.pet
+        self.s, self.hover = p.dpi, None
+        self.draw()
+        w, h = self.size
+        si = p.find_screen(x, y)
+        sc = p.screens[si if si is not None else p.nearest_screen(x, y)]
+        gap = round(10 * self.s)
+        if avoid and (avoid[0] <= x <= avoid[2] and avoid[1] <= y <= avoid[3]):
+            # clicked on the mascot: open to its right (or left if there's no room), bottom level with its feet
+            x = avoid[2] + gap if avoid[2] + gap + w <= sc.wr - 4 else avoid[0] - gap - w
+            y = avoid[3] - h
+        elif y + h > sc.wb - 4:
+            y -= h   # near the taskbar it opens upward
+        x = min(max(sc.wl + 4, x), sc.wr - w - 4)
+        y = min(max(sc.wt + 4, y), sc.wb - h - 4)
+        move_window(self.win, x, y, w, h)
+        self.rect = (x, y, x + w, y + h)
+        if not self.rounded:
+            round_corners(self.win)
+            self.rounded = True
+        self.visible, self.opened_at, self.was_down = True, time.time(), True
+        self.fader.to(1.0, instant=not p.anim.get())
+        self.win.lift()
+        self.win.focus_force()
+
+    def hide(self):
+        if not self.visible:
+            return
+        self.visible = False
+        self.fader.to(0.0, instant=True)
+        move_window(self.win, PARK, PARK)
+
+    def watch(self):
+        # called 10 times a second: a click anywhere outside the menu closes it
+        if not self.visible:
+            return
+        down = any(u32.GetAsyncKeyState(k) & 0x8001 for k in (0x01, 0x02))
+        if down and not self.was_down and time.time() - self.opened_at > 0.15:
+            mx, my = self.pet.root.winfo_pointerxy()
+            r = self.rect
+            if not (r[0] <= mx < r[2] and r[1] <= my < r[3]):
+                self.hide()
+        self.was_down = down
+
+    def draw(self):
+        s, c = self.s, self.canvas
+        c.delete("all")
+        W, rh, pad = round(170 * s), round(30 * s), round(6 * s)
+        font = tkfont.Font(root=self.win, family="Segoe UI", size=-max(8, round(12 * s)))
+        y, self.rows = pad, []
+        for item in self.ITEMS:
+            if item is None:   # a thin divider
+                c.create_rectangle(round(12 * s), y + round(4 * s), W - round(12 * s), y + round(4 * s) + max(1, round(s)),
+                                   fill=TRACK, width=0)
+                y += round(9 * s)
+                continue
+            label, action = item
+            if self.hover == action:
+                round_rect(c, pad, y, W - pad, y + rh, round(5 * s), TRACK, self.BG, True)
+            c.create_text(round(16 * s), y + rh // 2, anchor="w", text=label, fill=self.FG, font=font)
+            self.rows.append((action, y, y + rh))
+            y += rh
+        self.size = (W, y + pad)
+        c.configure(width=W, height=y + pad)
+
+    def row_at(self, y):
+        return next((a for a, y0, y1 in self.rows if y0 <= y < y1), None)
+
+    def set_hover(self, action):
+        if action != self.hover:
+            self.hover = action
+            self.draw()
+
+    def click(self, e):
+        action = self.row_at(e.y)
+        if action:
+            self.hide()
+            p = self.pet
+            {"refresh": p.refresh, "settings": p.settings.open, "quit": p.quit}[action]()
+
+
+# ---- settings window (right-click > settings) ----
+
+class SettingsWindow:
+    # every option, in the same style as the details panel: tabs along the top, switches, pills, sliders.
+    BG, FG, DIM, ON, KNOB = "#1c1c1e", "#f2f2f7", "#8e8e93", "#d77757", "#f2efe8"
+    W = 390
+    TABS = (("behaviour", "Behaviour"), ("look", "Look"), ("sound", "Sound"), ("usage", "Usage"),
+            ("system", "System"))
+
+    def __init__(self, pet):
+        self.pet, self.win, self.tab, self.fonts = pet, None, "behaviour", {}
+        self.hits, self.drag, self.move_from, self.s = [], None, None, 1.0
+
+    def rows(self, tab):
+        # (kind, label, variable, command, extra) for each option on a tab
+        p = self.pet
+        if tab == "behaviour":
+            return [("toggle", "Walk around", p.walk, p.changed, None),
+                    ("toggle", "Jump now and then", p.jump, p.changed, None),
+                    ("toggle", "Take naps", p.naps, p.naps_changed, None),
+                    ("toggle", "Wizard when Claude works", p.wizard, p.changed, None),
+                    ("toggle", "Stand on windows", p.platforms, p.changed, None),
+                    ("toggle", "Animations", p.anim, p.anim_changed, None)]
+        if tab == "look":
+            return [("slider", "Size", p.size_var, p.set_scale, (MIN_SCALE, MAX_SCALE, 0.05, "{:.2f}x")),
+                    ("choice", "Bubble shows", p.bubble_mode, p.changed,
+                     (("both", "Both limits"), ("5h", "5-hour only"), ("hover", "On hover"))),
+                    ("choice", "Bubble style", p.bubble_style, p.changed, (("numbers", "Numbers"), ("bars", "Bars"))),
+                    ("toggle", "Keep details open", p.pin_var, p.pin_changed, None)]
+        if tab == "sound":
+            return [("choice", "Chatter", p.chatter, p.chatter_changed,
+                     (("off", "Off"), ("some", "Sometimes"), ("lots", "A lot"))),
+                    ("toggle", "Sound effects", p.sounds, p.changed, None),
+                    ("slider", "Volume", p.volume, None, (0, 100, 5, "{:.0f}%")),
+                    ("toggle", "Desktop notifications", p.notify_on, p.changed, None)]
+        if tab == "usage":
+            return [("choice", "Refresh every", p.poll, p.poll_changed, [(v, f"{v // 60} min") for v in POLL_CHOICES]),
+                    ("toggle", "Warn when nearly full", p.warn, p.changed, None),
+                    ("choice", "Yellow ring from", p.warn_at, p.changed, [(v, f"{v}%") for v in WARN_CHOICES]),
+                    ("choice", "Red ring from", p.panic_at, p.changed, [(v, f"{v}%") for v in PANIC_CHOICES]),
+                    ("toggle", "Count tokens like the Claude app", p.cc_app, p.cc_changed, None)]
+        return [("toggle", "Hide during full screen", p.hide_fs, p.hide_fs_changed, None),
+                ("toggle", "Stay on one monitor", p.one_monitor, p.changed, None),
+                ("toggle", "Start with Windows", p.startup_var, p.startup_changed, None),
+                ("toggle", "Keyboard shortcuts", p.hotkeys, p.hotkeys_changed, None)]
 
     def open(self):
         if self.win is not None and self.win.winfo_exists():
-            self.win.deiconify()
             self.win.lift()
             return
         p = self.pet
         w = self.win = tk.Toplevel(p.root)
-        w.title("Claude pet settings")
-        w.configure(bg=self.BG, padx=18, pady=14)
-        w.resizable(False, False)
+        w.overrideredirect(True)
         w.attributes("-topmost", True)
-        try:   # dark title bar on windows 10/11
-            w.update_idletasks()
-            hwnd = u32.GetParent(w.winfo_id()) or w.winfo_id()
-            on = ctypes.c_int(1)
-            dwm.DwmSetWindowAttribute(hwnd, 20, ctypes.byref(on), ctypes.sizeof(on))
-        except Exception:
-            pass
-        cols = [tk.Frame(w, bg=self.BG) for _ in range(2)]
-        for i, col in enumerate(cols):
-            col.grid(row=0, column=i, sticky="n", padx=(0, 26) if i == 0 else 0)
-        L, R = cols
-        self.section(L, "Behaviour")
-        self.check(L, "Walk around", p.walk, p.changed)
-        self.check(L, "Jump now and then", p.jump, p.changed)
-        self.check(L, "Take naps", p.naps, p.naps_changed)
-        self.check(L, "Wizard when Claude works", p.wizard, p.changed)
-        self.check(L, "Stand on windows", p.platforms, p.changed)
-        self.check(L, "Animations", p.anim, p.anim_changed)
-        self.section(L, "Look")
-        tk.Label(L, text="Size", bg=self.BG, fg=self.FG, font=("Segoe UI", 10), anchor="w").pack(fill="x")
-        tk.Scale(L, from_=MIN_SCALE, to=MAX_SCALE, resolution=0.05, orient="horizontal", variable=p.size_var,
-                 command=lambda v: p.set_scale(float(v)), bg=self.BG, fg=self.FG, troughcolor=self.CARD,
-                 highlightthickness=0, bd=0, length=300, showvalue=True).pack(anchor="w")
-        self.choice(L, "Bubble shows", p.bubble_mode, (("both", "Both limits"), ("5h", "5-hour"),
-                                                       ("hover", "On hover")), p.changed)
-        self.choice(L, "Bubble style", p.bubble_style, (("numbers", "Numbers"), ("bars", "Bars")), p.changed)
-        opts = [("none", "None")] + [(k, v[0]) for k, v in ACCESSORIES.items()]
-        self.choice(L, "Accessory", p.accessory, opts, p.changed, locked={k for k in ACCESSORIES if k not in p.unlocked})
-        self.note(L, TIPS["Accessory"][0])
-
-        self.section(R, "Talking and alerts")
-        self.choice(R, "Chatter", p.chatter, (("off", "Off"), ("some", "Sometimes"), ("lots", "A lot")),
-                    p.chatter_changed)
-        self.check(R, "Sound effects", p.sounds, p.changed)
-        self.check(R, "Desktop notifications", p.notify_on, p.changed)
-        self.section(R, "Usage")
-        self.choice(R, "Refresh every", p.poll, [(v, f"{v // 60} min") for v in POLL_CHOICES], p.poll_changed)
-        self.check(R, "Warn when nearly full", p.warn, p.changed)
-        self.choice(R, "Yellow ring from", p.warn_at, [(v, f"{v}%") for v in WARN_CHOICES], p.changed)
-        self.choice(R, "Red ring from", p.panic_at, [(v, f"{v}%") for v in PANIC_CHOICES], p.changed)
-        self.check(R, "Count tokens like the Claude app", p.cc_app, p.cc_changed)
-        self.section(R, "System")
-        self.check(R, "Hide during full screen", p.hide_fs, p.hide_fs_changed)
-        self.check(R, "Stay on one monitor", p.one_monitor, p.changed)
-        self.check(R, "Start with Windows", p.startup_var, p.startup_changed)
-        self.check(R, "Keyboard shortcuts", p.hotkeys, p.hotkeys_changed)
-        foot = tk.Frame(w, bg=self.BG)
-        foot.grid(row=1, column=0, columnspan=2, sticky="ew", pady=(14, 0))
-        tk.Label(foot, text="Changes apply straight away.", bg=self.BG, fg=self.DIM,
-                 font=("Segoe UI", 9)).pack(side="left")
-        tk.Button(foot, text="Close", command=w.destroy, bg=self.CARD, fg=self.FG, activebackground="#3a3a3c",
-                  activeforeground=self.FG, relief="flat", padx=16, pady=3, font=("Segoe UI", 9)).pack(side="right")
-        w.update_idletasks()   # open it near the mascot, on the same screen
+        w.configure(bg=self.BG)
+        self.canvas = tk.Canvas(w, bg=self.BG, highlightthickness=0)
+        self.canvas.pack()
+        self.canvas.bind("<ButtonPress-1>", self.press)
+        self.canvas.bind("<B1-Motion>", self.motion)
+        self.canvas.bind("<ButtonRelease-1>", self.release)
+        w.bind("<Escape>", lambda e: self.close())
+        self.s = p.dpi
+        self.draw()
+        pw, ph = self.size
         sc = p.screens[p.si]
-        x = min(max(sc.wl + 10, round(p.x - w.winfo_reqwidth() / 2)), sc.wr - w.winfo_reqwidth() - 10)
-        y = max(sc.wt + 10, sc.wb - w.winfo_reqheight() - 140)
-        w.geometry(f"+{x}+{y}")
+        x = min(max(sc.wl + 10, round(p.x - pw / 2)), sc.wr - pw - 10)
+        y = max(sc.wt + 10, sc.wb - ph - round(150 * self.s))
+        w.geometry(f"{pw}x{ph}+{x}+{y}")
+        round_corners(w)
+        w.focus_force()
 
-    def section(self, parent, title):
-        tk.Label(parent, text=title, bg=self.BG, fg=self.PICK, font=("Segoe UI", 11, "bold"),
-                 anchor="w").pack(fill="x", pady=(10, 2))
+    def close(self):
+        if self.win is not None:
+            self.win.destroy()
+            self.win = None
 
-    def note(self, parent, text):
-        tk.Label(parent, text=text, bg=self.BG, fg=self.DIM, font=("Segoe UI", 8), anchor="w", justify="left",
-                 wraplength=300).pack(fill="x", padx=(22, 0), pady=(0, 4))
+    # drawing helpers (same sizes and colours as the details panel). positions are in base units times s.
+    def font(self, size, bold=False):
+        px = max(8, round(size * 4 / 3 * self.s))
+        if (px, bold) not in self.fonts:
+            self.fonts[(px, bold)] = tkfont.Font(root=self.win, family="Segoe UI", size=-px,
+                                                 weight="bold" if bold else "normal")
+        return self.fonts[(px, bold)]
 
-    def check(self, parent, label, var, command):
-        tk.Checkbutton(parent, text=label, variable=var, command=command, bg=self.BG, fg=self.FG,
-                       selectcolor=self.CARD, activebackground=self.BG, activeforeground=self.FG,
-                       font=("Segoe UI", 10), anchor="w", bd=0, highlightthickness=0).pack(fill="x")
-        if label in TIPS:
-            self.note(parent, TIPS[label][0])
+    def text(self, x, y, text, fill, size, bold=False, anchor="nw", width=None):
+        kw = {"width": width * self.s} if width else {}
+        item = self.canvas.create_text(x * self.s, y * self.s, anchor=anchor, fill=fill, font=self.font(size, bold),
+                                       text=text, **kw)
+        return self.canvas.bbox(item)[3] / self.s
 
-    def choice(self, parent, label, var, options, command, locked=()):
-        tk.Label(parent, text=label, bg=self.BG, fg=self.FG, font=("Segoe UI", 10), anchor="w").pack(fill="x",
-                                                                                                    pady=(4, 2))
-        row = tk.Frame(parent, bg=self.BG)
-        row.pack(fill="x", pady=(0, 4))
-        for value, text in options:
-            tk.Radiobutton(row, text=text, variable=var, value=value, command=command, indicatoron=0,
-                           bg=self.CARD, fg=self.FG, selectcolor=self.PICK, activebackground="#3a3a3c",
-                           activeforeground=self.FG, disabledforeground="#55555a", relief="flat", bd=0,
-                           padx=9, pady=3, font=("Segoe UI", 9),
-                           state="disabled" if value in locked else "normal").pack(side="left", padx=(0, 4))
+    def pill(self, x, y, label, on, hit):
+        s = self.s
+        w = self.font(8, True).measure(label) / s + 14
+        if on:
+            round_rect(self.canvas, x * s, y * s, (x + w) * s, (y + 19) * s, 4 * s, TRACK, self.BG, True)
+        self.text(x + 7, y + 9.5, label, self.FG if on else self.DIM, 8, True, "w")
+        self.hits.append((hit, x * s, y * s, (x + w) * s, (y + 19) * s))
+        return w
+
+    def draw(self):
+        # every tab gets the same height, so the tabs never move when you switch
+        tallest = max(self.draw_tab(tab) for tab, _ in self.TABS) + 30
+        self.draw_tab(self.tab)
+        self.text(16, tallest - 26, "Changes apply straight away.", self.DIM, 7.5)   # always at the bottom
+        self.size = (round(self.W * self.s), round(tallest * self.s))
+        self.canvas.configure(width=self.size[0], height=self.size[1])
+
+    def draw_tab(self, tab):
+        s, W, c = self.s, self.W, self.canvas
+        c.delete("all")
+        self.hits = [(("move",), 0, 0, (W - 34) * s, 34 * s)]   # drag the title bar to move the window
+        self.text(16, 12, "Settings", self.FG, 10.5, True)
+        self.text(W - 16, 8, "\u00d7", self.DIM, 12, True, "n")
+        self.hits.append((("close",), (W - 34) * s, 0, W * s, 34 * s))
+        x = 12
+        for name, label in self.TABS:
+            x += self.pill(x, 40, label, tab == name, ("tab", name)) + 3
+        y = 76
+        for kind, label, var, cmd, extra in self.rows(tab):
+            top = y
+            desc = TIPS.get(label, ("",))[0]
+            if kind == "toggle":
+                self.text(16, y, label, self.FG, 9, True)
+                y = self.text(16, y + 18, desc, self.DIM, 8, width=W - 32 - 58) if desc else y + 18
+                on = bool(var.get())   # a little switch on the right
+                sx, sy, sw, sh = W - 16 - 38, top + 2, 38, 21
+                round_rect(c, sx * s, sy * s, (sx + sw) * s, (sy + sh) * s, sh / 2 * s, self.ON if on else TRACK,
+                           self.BG, True)
+                kx = sx + sw - sh + 3 if on else sx + 3
+                round_rect(c, kx * s, (sy + 3) * s, (kx + sh - 6) * s, (sy + sh - 3) * s, (sh - 6) / 2 * s, self.KNOB,
+                           self.ON if on else TRACK, True)
+                self.hits.append((("toggle", var, cmd), 0, top * s, W * s, (y + 6) * s))
+            elif kind == "choice":
+                self.text(16, y, label, self.FG, 9, True)
+                y = self.text(16, y + 18, desc, self.DIM, 8, width=W - 32) if desc else y + 18
+                x, y = 12, y + 6
+                for value, text in extra:
+                    x += self.pill(x, y, text, var.get() == value, ("pick", var, value, cmd)) + 3
+                y += 19
+            else:   # a slider
+                lo, hi, step, fmt = extra
+                self.text(16, y, label, self.FG, 9, True)
+                self.text(W - 16, y, fmt.format(var.get()), self.DIM, 9, True, "ne")
+                y = self.text(16, y + 18, desc, self.DIM, 8, width=W - 32) if desc else y + 18
+                x0, x1, ty = 16, W - 16, y + 14
+                frac = (float(var.get()) - lo) / (hi - lo)
+                round_rect(c, x0 * s, (ty - 2) * s, x1 * s, (ty + 2) * s, 2 * s, TRACK, self.BG, True)
+                round_rect(c, x0 * s, (ty - 2) * s, max(x0 + 4, x0 + (x1 - x0) * frac) * s, (ty + 2) * s, 2 * s,
+                           self.ON, self.BG, True)
+                kx = x0 + (x1 - x0) * frac
+                round_rect(c, (kx - 8) * s, (ty - 8) * s, (kx + 8) * s, (ty + 8) * s, 8 * s, self.KNOB, self.BG, True)
+                self.hits.append((("slide", var, cmd, lo, hi, step, x0, x1), 0, (ty - 12) * s, W * s, (ty + 12) * s))
+                y = ty + 10
+            y += 16
+        return y
+
+    def hit_at(self, x, y):
+        return next((h[0] for h in self.hits if h[1] <= x <= h[3] and h[2] <= y <= h[4]), None)
+
+    def press(self, e):
+        hit = self.hit_at(e.x, e.y)
+        if not hit:
+            return
+        kind = hit[0]
+        if kind == "close":
+            self.close()
+            return
+        if kind == "move":
+            self.move_from = (e.x_root - self.win.winfo_x(), e.y_root - self.win.winfo_y())
+        elif kind == "tab":
+            self.tab = hit[1]
+        elif kind == "toggle":
+            hit[1].set(not hit[1].get())
+            hit[2]()
+        elif kind == "pick":
+            hit[1].set(hit[2])
+            hit[3]()
+        elif kind == "slide":
+            self.drag = hit
+            self.slide_to(e.x)
+            return
+        if self.win is not None:
+            self.draw()
+
+    def motion(self, e):
+        if self.drag:
+            self.slide_to(e.x)
+        elif self.move_from:
+            self.win.geometry(f"+{e.x_root - self.move_from[0]}+{e.y_root - self.move_from[1]}")
+
+    def release(self, e):
+        if self.drag and self.drag[1] is self.pet.volume:
+            self.pet.volume_changed()   # play a sample at the new volume
+        self.drag = self.move_from = None
+
+    def slide_to(self, x):
+        _, var, cmd, lo, hi, step, x0, x1 = self.drag
+        frac = min(1.0, max(0.0, (x / self.s - x0) / (x1 - x0)))
+        v = round((lo + (hi - lo) * frac) / step) * step
+        v = round(v, 2) if isinstance(var, tk.DoubleVar) else int(v)
+        if v != var.get():
+            var.set(v)
+            if cmd:
+                cmd(v)
+            self.draw()
 
 
 if __name__ == "__main__":

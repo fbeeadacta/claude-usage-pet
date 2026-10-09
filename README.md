@@ -21,10 +21,9 @@ What it does:
 - Dances now and then, gets bored, and asks for attention when you ignore it.
 - Falls asleep when you're away, rings its bubble yellow, then red, as you near a limit, and remembers its moods across restarts.
 - Hides while something is full-screen, and can land on top of your windows when it falls.
-- Unlockable accessories (party hat, sunglasses, crown, scarf), optional sound effects and desktop notifications.
+- Optional sound effects (with a volume slider) and desktop notifications.
 - Keyboard shortcuts: Ctrl + Alt + P hides or shows it, and Ctrl + Alt + D pins the details panel.
-- A settings window (right-click → Settings…) with every option and what it does.
-- Everything can be switched off from the right-click menu, including all animations.
+- Right-click it for Refresh now, Settings and Quit. The settings window has every option and what it does, and everything can be switched off, including all animations.
 
 ## Requirements
 
@@ -38,7 +37,7 @@ What it does:
 py claude_pet.py
 ```
 
-Use `pyw claude_pet.py` (or `pythonw`) to run it without a console window. To start it when you sign in to Windows, right-click the mascot and choose **Start with Windows**.
+Use `pyw claude_pet.py` (or `pythonw`) to run it without a console window. To start it when you sign in to Windows, right-click the mascot, open **Settings → System** and turn on **Start with Windows**.
 
 ## Privacy
 

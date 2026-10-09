@@ -2,7 +2,7 @@
 
 A small Claude mascot that walks along the top of the Windows taskbar. A bubble above its head shows Claude plan usage. If any file here gets lost or corrupted, this note has enough detail to rebuild it. You can give this file to Claude and ask it to rebuild the project.
 
-Last updated: 2026-10-09 (version 5)
+Last updated: 2026-10-09 (version 5.3)
 
 ## Files in this folder
 
@@ -34,33 +34,14 @@ Last updated: 2026-10-09 (version 5)
 4. **Click** the mascot to poke it. It squishes, hops, makes a happy face and pops a heart.
 5. **Drag** the mascot to pick it up. It hangs from the spot you grabbed and swings as you move. Its legs wiggle.
    - **Throw it** by letting go while moving. It keeps your speed, screams, bounces off screen edges and the floor, and slides to a stop. From high up it opens a parachute. A hard landing leaves it dizzy.
-6. **Right-click** the mascot to open the menu. **Settings…** at the top opens a window with every option and a short description of each. The menu has:
-   - Refresh now
-   - Refresh every (2, 3, 4 or 5 minutes; 2 is the default. Faster settings got "slow down" answers, so they were removed.)
-   - Keep details open (the panel stays until you close it with ×)
-   - Count tokens like the Claude app (on by default; off shows the real count, see below)
-   - Walk around (on/off)
-   - Jump now and then (on/off)
-   - Take naps (on/off)
-   - Wizard when Claude works (on/off)
-   - Warn when nearly full (on/off; the coloured ring around the usage bubble)
-   - Warning levels (yellow ring from 70/75/80/85%, red ring from 85/90/95%)
-   - Animations (on/off; off makes it completely still and switches off the fades and typing)
-   - Chatter (off, sometimes, or a lot)
-   - Size (0.75x to 3x)
-   - Bubble (both limits, 5-hour only, or only when you hover; and show numbers or show bars)
-   - Accessory (the ones you've unlocked; locked ones say how to get them)
-   - Stand on windows (on/off)
-   - Sound effects (off by default)
-   - Desktop notifications (on/off)
-   - Keyboard shortcuts (on/off: Ctrl + Alt + P hides or shows the pet, Ctrl + Alt + D pins or closes the details panel)
-   - Hide during full screen (on/off)
-   - Stay on one monitor (on/off)
-   - Start with Windows (on/off)
-   - Quit
-
-   Hover any menu item for a tooltip: what it does, then what happens when it's on or off (or its choices).
-7. **Ctrl + mouse wheel** over the mascot fine-tunes its size. This may only work after you've clicked the mascot once.
+6. **Right-click** the mascot for a small menu with **Refresh now**, **Settings** and **Quit**. It opens beside the mascot (not on top of it). A click anywhere else, or right-clicking the mascot again, closes it.
+7. **Settings** opens a window in the same style as the details panel, with five tabs. Every option has a switch, buttons or a slider, plus a one-line description underneath. Changes apply straight away. Drag the title to move the window, and close it with × or Esc.
+   - **Behaviour:** Walk around, Jump now and then, Take naps, Wizard when Claude works, Stand on windows, Animations
+   - **Look:** Size (slider, 0.5x–4x), Bubble shows (both limits / 5-hour only / on hover), Bubble style (numbers / bars), Keep details open
+   - **Sound:** Chatter (off / sometimes / a lot), Sound effects, Volume (slider, 0–100%; plays a sample when you let go), Desktop notifications
+   - **Usage:** Refresh every (2, 3, 4 or 5 minutes), Warn when nearly full, Yellow ring from (70–85%), Red ring from (85–95%), Count tokens like the Claude app
+   - **System:** Hide during full screen, Stay on one monitor, Start with Windows, Keyboard shortcuts (Ctrl + Alt + P hides or shows the pet, Ctrl + Alt + D pins or closes the details panel)
+8. **Ctrl + mouse wheel** over the mascot fine-tunes its size. This may only work after you've clicked the mascot once.
 
 ### Things it does on its own
 
@@ -87,12 +68,11 @@ Last updated: 2026-10-09 (version 5)
 - **Standing on windows:** when it falls past the top of a window (dropped, thrown, or walking off an edge), it lands there. It rides along if you move the window, and falls off when the window closes, minimizes or maximizes. At a window's edge it either turns around or walks off (50/50).
 - **Time of day:** a "good morning" the first time you're at the computer after 5 AM. After midnight, a gentle "it's late, maybe wrap up?" about every 40–60 minutes. Between 11 PM and 6 AM it naps three times as often and walks slower.
 - **Tool errors:** when a Claude Code tool call fails, it looks worried (raised eyebrows) for 3 seconds and sometimes says "oops".
-- **Accessories:** a party hat at 10 pokes, sunglasses at 50, a crown at 100, and a scarf the first time a limit reaches 100%. Pick one in Settings or right-click → Accessory.
 - **Old numbers:** if the last successful check is more than 10 minutes old (and more than 3 refreshes), the bubble turns grey and says how old the numbers are, for example "15m old".
 - **Login renewals:** it watches Claude Code's login file. When Claude Code renews your login after it expired, the pet checks again straight away.
-- **Notifications** (if on): at 90% and 100% of a limit, when a nearly-used limit resets, when your login expires, and when you unlock an accessory.
+- **Notifications** (if on): at 90% and 100% of a limit, when a nearly-used limit resets, and when your login expires.
 - **Sounds** (if on): a pop when poked, a scream when thrown, a chime at milestones and resets.
-- **Memory:** it remembers when each limit last moved, which milestones it has already announced, your poke count, unlocked accessories, and when it last said good morning, even after a restart.
+- **Memory:** it remembers when each limit last moved, which milestones it has already announced, your poke count, and when it last said good morning, even after a restart.
 
 Only one pet runs at a time. Starting it again while it's already running does nothing, so **quit the old one first** (right-click → Quit) after updating the file.
 
@@ -106,7 +86,7 @@ Only one pet runs at a time. Starting it again while it's already running does n
 - **Something seems broken:** look in `pet_errors.log` in this folder, or send it to Claude. It never contains your login token.
 - **A keyboard shortcut does nothing:** another app may already use Ctrl + Alt + P or D. `pet_errors.log` will say so. Turn "Keyboard shortcuts" off, or change `HOTKEY_PET` / `HOTKEY_DETAILS` near the top of `claude_pet.py`.
 - **The bubble says "no login":** Claude Code isn't signed in on this computer. Run `claude` once and sign in.
-- **It hides when it shouldn't, or doesn't hide during full screen:** turn off "Hide during full screen" in the menu, then tell Claude which app caused it.
+- **It hides when it shouldn't, or doesn't hide during full screen:** turn off "Hide during full screen" (Settings → System), then tell Claude which app caused it.
 - **The double-click shortcut stops working after a Python update:** the shortcut points to one specific Python version's `pythonw.exe`. Rebuild it using the settings in `LOCAL_NOTES.md`, or ask Claude to fix it.
 - **Two pets start with Windows:** the old widget may have its own startup shortcut. Run `py usage_widget.py --no-startup` once to remove it.
 
@@ -122,7 +102,7 @@ Only one pet runs at a time. Starting it again while it's already running does n
 - **Token rule:** the token is never printed, logged or saved. It's only ever sent to `https://api.anthropic.com`.
 - **Response:** `five_hour`, `seven_day`, `seven_day_sonnet` and so on, each shaped like `{utilization, resets_at}`. Unknown extra fields also appear (for example `iguana_necktie`). They're hidden unless they're a 5-hour or 7-day window (setting: `ONLY_KNOWN_LIMITS`).
 - **What the numbers cover:** they're for the whole plan, so they include claude.ai chat, the desktop app and Claude Code together.
-- **Polling:** every 2 minutes by default (menu: Refresh every, 2 to 5 min). After a 429 ("slow down") it waits 3 minutes, doubling each time it repeats (up to 30 minutes), or the service's `Retry-After` if that's longer.
+- **Polling:** every 2 minutes by default (Settings → Usage → Refresh every, 2 to 5 min). After a 429 ("slow down") it waits 3 minutes, doubling each time it repeats (up to 30 minutes), or the service's `Retry-After` if that's longer.
 
 **Claude Code token counts** come from its local logs:
 - Files: `~/.claude/projects/**/*.jsonl`, one JSON object per line.
@@ -175,7 +155,7 @@ Only one pet runs at a time. Starting it again while it's already running does n
 - A hop is 34 px high, about once every 30 seconds. Gravity is 1150 px/s². All of these are multiplied by the size.
 - The air curve uses the exact formula (`y += vy·dt + ½·g·dt²`), so the height is right at any frame rate.
 - Every jump starts with a 0.08 s crouch. A hard landing gives a 0.07 s squish. Holding the mouse button down squishes it too.
-- Frame rate: about 60 fps while moving, 33 fps while waving or showing hearts or z's, 12 fps while standing, and 2 fps while hidden. The canvas is only redrawn when something visible changes. Walking just moves the window.
+- Frame rate: a steady 60 fps while moving (`FPS`). Each frame is aimed at the next 1/60 s mark, and while moving the pet asks Windows for a 1 ms timer (`timeBeginPeriod(1)`), handing it back when it stops. Windows' normal 15.6 ms clock made some frames take 31 ms, and that was the jitter in throws. Otherwise: 33 fps while waving or showing hearts or z's, 12 fps while standing, and 2 fps while hidden. The canvas is only redrawn when something visible changes. Walking just moves the window.
 
 **Monitor edges:**
 - A neighbour is a screen whose edge touches this one and overlaps it vertically. It doesn't count if "Stay on one monitor" is on, or if that screen is showing something full-screen.
@@ -292,7 +272,7 @@ There's also 30 px of side space for z's and sparks.
 
 **Memory file (`pet_state.json`):**
 - Holds `seen` (per limit: %, when it last changed, `resets_at`), `last_5h`, `pokes`, `milestones`, `last_usage` and `history`.
-- Also `unlocked` (accessories) and `greeted` (the date of the last "good morning").
+- Also `greeted` (the date of the last "good morning").
 - `history` is `[time, 5-hour %, weekly %]` from each successful check: every check for the last 6 hours, then one per 10 minutes, kept for 8 days.
 - Saved every 60 s and when you quit.
 - Bad values are ignored.
@@ -308,7 +288,7 @@ There's also 30 px of side space for z's and sparks.
 - The panel opens after 0.3 s of hovering. It closes 0.35 s after the mouse leaves the mascot, bubble and panel, unless it's pinned.
 
 **Details panel:**
-- 320 base units wide, opened just above the bubble, with two tabs.
+- 320 base units wide, with two tabs. It opens just above the bubble. If there isn't room (the mascot is high up on a window), it opens below the mascot, and if there's no room there either, beside it. It never covers the mascot or its bubble.
 - Its height is the tallest of Plan, Claude Code Overview and Claude Code Models (each is drawn once to measure it), so the tab buttons stay put. Shorter tabs leave space at the bottom.
 - The **Plan** tab is the old widget's panel: bars, a pace tick, reset times and pace messages, plus "Claude Code today".
 - The **Claude Code** tab has "Overview" and "Models" views, and "All", "30d" and "7d" ranges. The selected tab, view and range are remembered.
@@ -328,10 +308,9 @@ There's also 30 px of side space for z's and sparks.
 - Tilted, every block is drawn as a turned square (polygon) around the turning point. The usage bubble steps aside, and speech sits just above the body.
 - **The mascot's window is one fixed size in every state** (worked out from the size setting only, with room for the parachute, bubbles, 4 lines of speech and a fully tilted body). It's always placed by the body: window x = body centre − `center_x`, window y = feet − `feet_win`. Resizing or shifting the window when switching states (tilted, standing, parachute) made Windows flash a dark box or the mascot flicker for a frame, because moving a window and redrawing it don't happen at the same instant. Tilting turns the body around its middle.
 - The window reaches about 20 px below its feet into the taskbar area. That part is see-through and click-through, so it doesn't get in the way.
-- On release, the speed comes from the mouse movement over the last 0.1 s (capped at 2600 px/s at 1x). It keeps that speed, with air drag of 60% per second.
+- On release, the speed comes from the mouse movement over the last 0.12 s. It's heavy: mouse speeds under 250 px/s (`THROW_MIN`) just drop it, and faster ones keep 38% (`THROW_KEEP`) of the mouse speed, up to 1500 px/s (`THROW_MAX`). Air drag is 150% per second (`THROW_DRAG`) and ground friction is 1600 px/s² (`GROUND_FRICTION`). Measured: a quick 70 px flick travels about 120 px, and a big 300 px throw about 670 px.
   - It bounces off screen edges, losing half its speed each time.
   - It bounces once off the floor if it lands faster than 700 px/s (35% bounce).
-  - It slides with friction of 900 px/s² until it stops.
   - It bonks on the top of the screen.
   - The tilt springs back upright the short way.
 - Thrown faster than 900 px/s: a scream. Landing faster than 1100 px/s: dizzy for 2.4 s (stars circle its head).
@@ -343,8 +322,6 @@ There's also 30 px of side space for z's and sparks.
 - While falling, if it passes a window's top edge with its middle more than 12 px inside the window (and nothing in front covers that spot), that window becomes its floor (`plat`, `plat_box`). Each refresh moves it with the window. If the window is gone, or it walks or slides past the edge, it falls.
 - The parachute decision measures to the next ledge below, not the taskbar.
 
-**Accessories:** `ACCESSORIES` and the `PARTY` / `CROWN` pictures in the code. The sunglasses and scarf are body blocks, so they turn with it when it's tilted. Hats are drawn on the head (not while tilted, not in wizard mode).
-
 **Worried face:** open eyes plus two short slanted eyebrows on the lower half of row 0.
 
 **Per-monitor scaling:** `GetDpiForMonitor` gives each screen's scaling (`Screen.dpi`), and the size used is `scale × that screen's dpi`. Moving to a monitor with different scaling resizes it once.
@@ -353,15 +330,21 @@ There's also 30 px of side space for z's and sparks.
 
 **Notifications:** a Windows toast sent through PowerShell (`Windows.UI.Notifications`), in the background, with no console window.
 
-**Sounds:** made the first time they're needed, using maths (sine sweeps, a wobbly sawtooth scream, a noise whoosh), into `%TEMP%\claude_pet_sounds\*.wav`. Played with `winsound`, asynchronously.
+**Sounds:** made the first time they're needed, using maths (sine sweeps, a wobbly sawtooth scream, a noise whoosh), into `%TEMP%\claude_pet_sounds\<sound>_<volume>.wav`. Played with `winsound`, asynchronously. Windows' simple player has no volume control, so each volume level gets its own quieter copy of the file.
 
 **Error log:** `log_error()` appends a time stamp and traceback to `pet_errors.log`, trimming to the newest half when it's over `ERROR_LOG_KB`. Tk callback errors, log-reading errors, notification and sound errors, and crashes all go there.
 
-**Settings window:** a normal window (dark title bar via `DwmSetWindowAttribute` 20) with two columns. Each option uses the same Tk variables and commands as the menu, so both stay in sync. The descriptions come from `TIPS`.
+**Settings window:** a borderless window drawn on one canvas, in the details panel's style (same colours, Segoe UI sizes, pill buttons, rounded corners).
+- Five tabs; every tab gets the height of the tallest one, so the tabs never move. The "Changes apply straight away" note sits at the bottom.
+- Each option is a row from `rows()`:
+  - **Switches** are a pill-shaped track (orange when on) with a round knob; the whole row is clickable.
+  - **Choices** are pill buttons.
+  - **Sliders** have an orange fill and a round knob you drag.
+- The descriptions come from `TIPS`. The window moves when you drag its title.
+
+**Right-click menu:** a small borderless window drawn the same way (`PopupMenu`): Refresh now, Settings, a divider, Quit. It highlights the row under the mouse. When you right-click the mascot, it opens to the mascot's right (or left if there's no room), level with its feet, so it never covers the mascot. Opening it closes an unpinned details panel, and hovering doesn't open the panel while the menu is open (the panel used to pop up over the menu and catch its clicks). It's moved with `move_window()`, which checks the window really arrived and uses `SetWindowPos` if Tk held the move back (that was why the menu only worked once). Ten times a second it checks for a mouse press outside itself (`GetAsyncKeyState`) and closes if it finds one. Esc closes it too.
 
 **Dancing:** a 5% chance whenever it stops walking (or when it's bored). It lasts 3.5–6 s. The beat is 0.25 s: arms up left, down, up right, both up. It bops down on beats 2 and 4 and sways half a block, with music notes floating up.
-
-**Menu tooltips:** Windows draws the right-click menu itself, so tooltips use `<<MenuSelect>>` (which item is highlighted). It then finds the open menu's position (window class `#32768`) and shows a small dark window beside it, on the left, or on the right when there's no room, after 0.35 s. The texts are in `TIPS` in the code. The tooltip is moved with `SetWindowPos` if Tk holds the move back while the menu is open.
 
 **Single instance:** a named mutex, `claude-usage-pet`.
 
@@ -370,7 +353,7 @@ There's also 30 px of side space for z's and sparks.
   - `scale`, `x` and `y`
   - on/off switches: `walk`, `jump`, `naps`, `anim`, `wizard`, `warn`, `cc_app`, `hide_fs`, `one_monitor`
   - `poll`, the refresh time in seconds (120/180/240/300)
-  - `notify`, `sounds`, `hotkeys`, `platforms` (on/off) and `accessory` ("none" or an unlocked one)
+  - `notify`, `sounds`, `hotkeys`, `platforms` (on/off) and `volume` (0–100)
   - `warn_at` (70/75/80/85) and `panic_at` (85/90/95), the yellow and red ring levels
   - `bubble` ("both" / "5h" / "hover") and `bubble_style` ("numbers" / "bars")
   - `chatter` ("off" / "some" / "lots")
@@ -447,8 +430,6 @@ There's also 30 px of side space for z's and sparks.
 **Version 5, tested on 2026-10-09** (left monitor):
 - Landing on a real window from another program, riding it when it moved, and falling when it closed.
 - The parachute only on long drops.
-- All four accessories.
-- Unlocking the party hat at 10 pokes.
 - Worried face after a tool error.
 - Faded "15m old" bubble.
 - An immediate re-check when the login file changes.
@@ -461,13 +442,16 @@ There's also 30 px of side space for z's and sparks.
 - Both monitors read as 100% scaling.
 - The earlier throw, parachute, monitor, speech, wizard and memory tests still pass.
 
+**Version 5.1, tested on 2026-10-09:**
+- The new right-click menu: opening upward, hover highlight, "Settings" opening the window, closing on an outside click.
+- All five settings tabs.
+- A switch, a choice button and the volume slider, each changed and saved, with the sample file made at 25%.
+
 **Not tested yet:**
 - Real API data inside the pet.
 - Wizard mode triggered by real Claude Code activity (it was tested by calling it directly).
 - The quiet-time comments and random quotes on their real timers.
-- Right-click menu clicks.
 - Real mouse hover, click, drag and throw. These were tested with pretend mouse events.
-- Hovering the menu tooltips with the mouse (they were tested with the keyboard).
 - Sounds actually playing, the "good morning" and late-night lines (time-dependent), and a monitor at a different scaling.
 - Ctrl + mouse wheel.
 - Start with Windows.
@@ -486,6 +470,20 @@ There's also 30 px of side space for z's and sparks.
 - Dim the bubble when the data is stale.
 
 ## Change log
+
+- **2026-10-09 (version 5.3):**
+  - The details panel opens below or beside the mascot when there's no room above it.
+  - Smooth, steady 60 fps while moving (fixed jittery throws).
+
+- **2026-10-09 (version 5.2):**
+  - Fixed the right-click menu only working once.
+  - The menu opens beside the mascot, and right-clicking again closes it.
+  - Throws are heavier: small flicks just drop it, and big throws keep 38% of the mouse speed.
+
+- **2026-10-09 (version 5.1):**
+  - Removed accessories.
+  - The right-click menu is now a small dark menu in the panel's style, with just Refresh now, Settings and Quit (it replaces the long Windows menu and its tooltips).
+  - New settings window: panel style, five tabs, switches, pills and sliders, and a sound volume slider.
 
 - **2026-10-09 (version 5):**
   - Error log.
