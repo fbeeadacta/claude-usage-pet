@@ -1,0 +1,12 @@
+# this computer only
+LOCAL_NOTES.md
+*.lnk
+
+# made by the pet while it runs
+pet_settings.json
+pet_settings.tmp
+usage_widget_pos.json
+
+# python
+__pycache__/
+*.pyc
