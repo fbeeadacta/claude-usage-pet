@@ -21,6 +21,7 @@
 import os
 import sys
 import json
+import collections
 import math
 import time
 import queue
@@ -55,6 +56,29 @@ USER_AGENT = "usage-widget/0.1"  # if the api refuses this, try "claude-code/2.1
 WALK_SPEED = 28            # pixels per second
 JUMP_EVERY = 30            # on average one hop every this many seconds
 HOP_HEIGHT = 34            # pixels
+LEAP_EVERY = 25            # on average, looks for another window to jump to this often (seconds)
+LEAP_POWER = 300           # how high its legs can really take it (pixels). it sometimes thinks more.
+LEAP_REACH = 520           # how far sideways a window can be before it won't bother
+DIVE_MIN = 150             # the leap of faith needs at least this much drop below a window's edge
+HAY_TIME = 1.3             # seconds it sits in the hay pile before popping out
+# personalities (menu: personality). keep = chance it keeps walking when a walk ends, idle / walk_t = how
+# long it stands about / walks (seconds), speed = walking speed, hop / leap = average seconds between random
+# hops / jumps to another window, nap = nap chance multiplier. at a window's edge: edge_leap = chance it looks
+# for another window to jump to, dive = chance of a leap of faith, turn = chance it turns around (else walks off).
+PROFILES = {
+    "parkour": {"keep": 0.6, "idle": (0.5, 2.5), "walk_t": (3, 7), "speed": 1.7, "hop": 10, "leap": 6,
+                "nap": 0.1, "edge_leap": 0.9, "dive": 0.8, "turn": 0.2},
+    "lively": {"keep": 0.4, "idle": (1.5, 4.5), "walk_t": (3, 6), "speed": 1.3, "hop": 18, "leap": 12,
+               "nap": 0.3, "edge_leap": 0.7, "dive": 0.5, "turn": 0.4},
+    "normal": {"keep": 0.0, "idle": (3, 8), "walk_t": (2, 5), "speed": 1.0, "hop": JUMP_EVERY, "leap": LEAP_EVERY,
+               "nap": 1.0, "edge_leap": 0.3, "dive": 0.15, "turn": 0.5},
+    "chill": {"keep": 0.0, "idle": (8, 18), "walk_t": (1.5, 3.5), "speed": 0.75, "hop": 60, "leap": 90,
+              "nap": 2.0, "edge_leap": 0.1, "dive": 0.0, "turn": 0.8},
+    "statue": {"keep": 0.0, "idle": (5, 10), "walk_t": (2, 5), "speed": 1.0, "hop": 10 ** 9, "leap": 10 ** 9,
+               "nap": 1.0, "edge_leap": 0.0, "dive": 0.0, "turn": 1.0},
+}
+PROFILE_NAMES = (("parkour", "Parkour!"), ("lively", "Lively"), ("normal", "Normal"), ("chill", "Chill"),
+                 ("statue", "Statue"))
 GRAVITY = 1150             # pixels per second per second
 FPS = 60                   # frames a second while it moves (falls back to slower frames when idle)
 MAX_STEP_UP = 400          # tallest ledge (onto a higher monitor) it will jump up
@@ -72,6 +96,7 @@ CC_SCAN_SECONDS = 3        # how often to look at claude code's logs for new act
 WORK_HOLD = 20             # keeps casting this long after the last sign of claude code working
 IDLE_TALK_MIN = 30         # starts commenting after this long with no token usage at all
 CHATTER = {"off": 0, "some": 1.0, "lots": 2.5}   # how often it talks (menu: chatter)
+CHAT_GAP = (45, 120)       # seconds between bits of small talk (at "some"; "lots" divides by 2.5)
 SPEAK_CPS = 30             # typing speed of speech bubbles, letters per second
 ATTENTION_MIN = 20         # asks for a little attention after this long without a hover, poke or drag
 # throwing, parachutes, dancing (pixels are at 1x size)
@@ -117,31 +142,85 @@ QUOTES = [
     "blink twice if you need a break.", "I like it here on the taskbar.",
     "if it works, don't touch it. (touch it a little)", "today's forecast: 100% chance of shipping.",
     "I'd make you coffee but I'm 40 pixels tall.", "remember to eat something!",
+    "you look like someone who writes great commit messages.", "fun fact: I have never once read the docs.",
+    "tabs or spaces? careful, this is a test.", "every bug you fix makes me 1% prouder.",
+    "I'm not saying you're a genius, but I'm not NOT saying it.", "keep going. I'm cheering quietly.",
+    "your code is like me: small, orange and full of surprises.", "deep breath. you've got this.",
 ]
 WORK_START = ["*thinking*", "ooh, a new job!", "on it!", "let me cook.", "time for some magic.",
-              "summoning tokens..."]
+              "summoning tokens...", "wizard hat: on.", "a quest!"]
 WORKING = ["*thinking really hard*", "this is quite the job you got for me.",
            "abracadabra... *writes code*", "tokens go brrr.", "hmm, interesting...",
            "casting a big spell here.", "don't look, I'm concentrating.", "almost... maybe...",
-           "my wand is getting warm."]
-WORK_DONE = ["phew! done.", "that was a good one.", "*wipes forehead*", "ta-da!", "magic complete."]
+           "my wand is getting warm.", "so many tokens. so little time.",
+           "reading your files. no judging. ok, a little judging.", "*furious wand waving*",
+           "if this works, I'm taking credit."]
+WORK_DONE = ["phew! done.", "that was a good one.", "*wipes forehead*", "ta-da!", "magic complete.", "another one bites the dust.",
+             "done! that wand needs a nap."]
 IDLE_LINES = ["it's quiet... too quiet.", "need anything? I'm just standing here.",
               "I could be useful, you know.", "my wand is getting dusty.", "*taps foot*",
-              "zero tokens. a peaceful day.", "anyone? hello?", "I'm on standby. very professional."]
-POKE_LINES = ["hey!", "hehe", "that tickles!", "boop.", "yes?", "I'm awake, I'm awake!"]
+              "zero tokens. a peaceful day.", "anyone? hello?", "I'm on standby. very professional.",
+              "I alphabetised your desktop icons. in my head.", "nothing to do. this is fine."]
+POKE_LINES = ["hey!", "hehe", "that tickles!", "boop.", "yes?", "I'm awake, I'm awake!", "beep!",
+              "do that again. no, wait.", "you rang?", "*giggles in pixels*", "personal space! (just kidding)",
+              "that's my good side.", "poke detected. responding with joy.", "ow. (not really)"]
 POKE_COUNT = {10: "that's 10 pokes. we're friends now.", 50: "poke #50! I'm keeping count.",
               100: "100 pokes. a true bond.", 500: "500 pokes?! are you okay?"}
-DRAG_LINES = ["wheee!", "where are we going?", "put me down! (actually this is fun)"]
-WAKE_LINES = ["welcome back!", "oh hi! I wasn't sleeping.", "you're back!"]
+DRAG_LINES = ["wheee!", "where are we going?", "put me down! (actually this is fun)", "is this a kidnapping?",
+              "my legs are dangling!", "first class, please.", "careful, I'm fragile. ish.", "taxi!"]
+WAKE_LINES = ["welcome back!", "oh hi! I wasn't sleeping.", "you're back!",
+              "I missed you! (I counted pixels.)", "there you are!"]
 RESET_LINES = ["fresh limits! let's go!", "5-hour limit reset. I feel brand new."]
-THROW_LINES = ["AAAAAAAAA!", "WHEEEEEEEE—", "I'M FLYIIIING!", "not the face, not the face!",
+THROW_LINES = ["AAAAAAAAA!", "WHEEEEEEEE—", "I'M FLYIIIING!", "not the face, not the face!", "I CAN SEE MY HOUSE!", "TELL MY TOKENS I LOVE THEM!",
                "this is NOT in my job description!", "I regret nothing!"]
 DIZZY_LINES = ["@_@ everything is spinning...", "I see stars. pixel stars.", "who moved the taskbar?",
-               "I'm fine. I'm fine. which way is up?"]
+               "I'm fine. I'm fine. which way is up?", "why are there three of you?",
+               "*wobbles*"]
 CHUTE_LINES = ["good thing I packed a parachute.", "safety first!", "*floats majestically*",
-               "enjoying the view up here."]
+               "enjoying the view up here.", "gently does it...", "*parachute noises*"]
+FALL_LINES = ["geronimo!", "whoops—", "I meant to do that!", "taking the stairs. the fast way.",
+              "bye-bye window!", "jumping is just falling with confidence."]
+DIVE_LINES = ["leap of faith!", "*eagle screech*", "I saw this in a game once.", "there'd better be hay down there.",
+              "trust me, I'm a professional.", "swan dive!", "no stairs? no problem.", "see you at the bottom!"]
+HAY_LINES = ["hay! right where I left it.", "*pfft* straw in my mouth.", "perfectly safe. totally planned.",
+             "who leaves hay lying around? thank you, whoever you are.", "nailed it. itchy, but nailed it.",
+             "10/10. would dive again.", "*emerges majestically*"]
+SLAP_LINES = ["*splat*", "WALL.", "ow, my face.", "that window is harder than it looks.", "I'm ok!",
+              "who put a wall there?", "*slides down slowly*", "nobody saw that. right?"]
 SQUISH_LINES = ["hey! I was standing there!", "no room! going down!", "squished! see you on the taskbar.",
-                "ok ok, I'll move. downstairs."]
+                "ok ok, I'll move. downstairs.", "rude. I had a lease on that spot.", "evicted!"]
+# jumping to another window: before, after a good landing, after a bad one
+LEAP_TRY = ["I can make that.", "hold my tokens.", "parkour!", "trust the process.", "3... 2... 1...",
+            "ok. big jump. no big deal.", "calculating trajectory... roughly.", "watch this!",
+            "I've done this before. in my dreams.", "yolo.", "for science!", "this is a terrible idea. here goes!"]
+LEAP_OK = ["nailed it.", "did you see that?!", "10/10 landing.", "and the crowd goes wild!", "too easy.",
+           "*bows*", "gold medal, please.", "new personal best!", "smooth. like butter.", "I'm basically a ninja."]
+LEAP_FAIL = ["that window moved. I swear.", "nobody saw that.", "I meant to do that.", "gravity: 1, me: 0.",
+             "ow. my pixels.", "the floor came out of nowhere.", "practice run. it was a practice run.",
+             "who put that gap there?", "I underestimated the distance. and overestimated me.",
+             "still a 7/10 for style.", "let's never speak of this."]
+# things it says now and then, depending on what it's up to
+WALK_LINES = ["going for a walk. don't wait up.", "left foot, right foot, left foot...", "on patrol.",
+              "where am I going? no idea. very exciting.", "*whistles*", "inspecting the taskbar. looks solid.",
+              "exploring! what's over here?", "these legs were made for walking. all four of them.",
+              "daily steps: 37.", "just stretching my legs.", "I wonder what's on the other side of the screen.",
+              "hey, is that a new icon?"]
+HIGH_LINES = ["the view from up here is amazing.", "king of the window!", "I can see my taskbar from here!",
+              "this window is comfy. I'm staying.", "don't close this one, ok? I live here now.",
+              "it's windy up here. metaphorically.", "I'm on top of things. literally.",
+              "*sits on your window* hope you don't mind.", "ooh, high ground."]
+DANCE_LINES = ["*dances*", "can't stop, won't stop.", "this is my jam!", "busting a move!", "feel the rhythm!",
+               "watch my legs go!", "♪ tokens, tokens, everywhere ♪", "dance break!"]
+SLEEP_LINES = ["zzz... five more tokens...", "zzz...", "*snore*", "mmm... rate limits... no...",
+               "zzz... I'm a big model now...", "*mumbles about semicolons*", "zzz... the cache is warm..."]
+CURIOUS_LINES = ["what does this button do? (I don't have buttons.)", "do windows dream of electric sheep?",
+                 "I wonder how many tokens a hug costs.", "what's your favourite colour? mine's orange. obviously.",
+                 "is the cursor alive? it moves on its own...", "if I jump high enough, can I reach the tabs?",
+                 "why is it called a taskbar if there are no snacks?", "what happens if I walk off the screen? (please don't let me)",
+                 "I've been thinking. mostly about rectangles.", "how many pixels tall are you?",
+                 "what are we building today?", "does the mouse ever get tired?", "I heard there's a recycle bin. spooky.",
+                 "can I have a window of my own one day?", "sometimes I count the windows. you have a lot.",
+                 "what's the wifi password? asking for a friend.", "beep boop. I'm not a robot. I'm a crab. sort of."]
 ATTENTION_LINES = ["psst... hey. got a minute?", "*polite cough*", "I'm still here, by the way!",
                    "a little poke would be nice. no pressure.", "hello? it's me, your tiny assistant.",
                    "I did a cool jump earlier. you missed it."]
@@ -178,11 +257,19 @@ TIPS = {
         ("On", "Matches the Claude desktop app: every logged copy of an answer is added up, and peak hour "
                "is when your sessions start."),
         ("Off", "Real numbers: each answer is counted once (about 3× lower), and peak hour is your busiest hour.")]),
+    "Personality": ("How much the mascot moves about.", [
+        ("Parkour!", "Always on the move: runs about, jumps from window to window, and takes leaps of faith "
+                     "off window edges into a pile of hay. Hardly ever naps."),
+        ("Lively", "Walks a lot, jumps to windows nearby, and sometimes dives off edges."),
+        ("Normal", "A bit of walking, a bit of standing about, the odd jump and nap."),
+        ("Chill", "Mostly hangs out. Short strolls, rare jumps, plenty of naps."),
+        ("Statue", "Stays in one spot. It still blinks, reacts, hops when poked and talks.")]),
     "Walk around": ("Lets the mascot wander along the taskbar.", [
         ("On", "It walks left and right, and across to your other monitors."),
         ("Off", "It stays in one spot, but still blinks, hops and reacts.")]),
     "Jump now and then": ("Random little hops.", [
-        ("On", "It hops about every 30 seconds."),
+        ("On", "It hops about every 30 seconds, and now and then jumps over to a window nearby (if Stand on "
+               "windows is on). It doesn't always make it."),
         ("Off", "No random hops. It still hops when you poke it or a limit resets.")]),
     "Take naps": ("Lets the mascot fall asleep.", [
         ("On", "It sleeps after 5 minutes away from the computer, wakes when you're back, and takes "
@@ -203,7 +290,7 @@ TIPS = {
         ("Off", "A completely still mascot, instant panels and no typing. Lightest on your computer.")]),
     "Chatter": ("How often the mascot talks in speech bubbles.", [
         ("Off", "It never talks."),
-        ("Sometimes", "A line every 4–10 minutes, plus reactions to what's happening."),
+        ("Sometimes", "A line every minute or two about whatever it's up to, plus reactions to what's happening."),
         ("A lot", "About 2.5× more often.")]),
     "Size": ("How big the mascot is, from 0.75x to 3x.", [
         ("Tip", "Ctrl + mouse wheel over the mascot fine-tunes the size.")]),
@@ -220,14 +307,15 @@ TIPS = {
         ("On", "It starts when you sign in to Windows."),
         ("Off", "Start it yourself with the Start Claude Pet shortcut.")]),
     "Settings…": ("Opens a window with every option in one place, each with a short description.", []),
-    "Stand on windows": ("Lets the mascot land on top of your windows.", [
+    "Stand on windows": ("Lets the mascot land on top of your windows, and makes windows solid.", [
         ("On", "When it falls (dropped, thrown or walking off an edge) past the top of a window, it lands there, "
                "rides along if you move the window, and falls off when it closes. Windows in front push it "
-               "aside, and if it's cornered it drops down to the taskbar."),
+               "aside, and if it's cornered it drops down to the taskbar. On the taskbar, windows push it aside too."),
         ("Off", "It only ever stands on the taskbar.")]),
-    "Sound effects": ("Little sounds: a pop when poked, a scream when thrown, a boing, a chime at milestones.", [
-        ("On", "Plays them (quietly, through Windows' normal sound output)."),
-        ("Off", "Silent. This is the default.")]),
+    "Sound effects": ("Little sounds: a pop when poked, a scream when thrown, an eagle cry on a leap of faith, "
+                      "a splat into walls, magic while it works, music while it dances, a chime at milestones.", [
+        ("On", "Plays them (quietly, through Windows' normal sound output). This is the default."),
+        ("Off", "Silent.")]),
     "Desktop notifications": ("Windows notifications for the important moments.", [
         ("On", "A notification at 90% and 100% of a limit, when a nearly-used limit resets, and when your login "
                "expires. Shows even while the mascot is hidden."),
@@ -324,6 +412,7 @@ HEART_C, ZZZ_C, SHADOW = "#ff6f8a", "#f2efe8", "#2b1a14"
 WARN_C, PANIC_C = "#f2c14e", "#e5534b"
 FULL_C, FULL_EDGE = "#0d0d0d", "#c8c8cd"   # the ring at 100%: black with a silver edge
 NOTE_C = ["#ff9ad5", "#8be9fd", "#ffe08a"]
+HAY_C = ["#e3b54a", "#f4d77c", "#b8862c"]   # hay: base, light straw, dark straw
 CHUTE_R, CHUTE_W, STRING_C = "#e5534b", "#f2efe8", "#d9d4c7"
 HAT_C, BAND_C, STAR_C, WAND_C = "#6c4ab6", "#f2c14e", "#ffe08a", "#8b5a2b"
 SPARK_C = ["#ffe08a", "#8be9fd", "#ff9ad5", "#ffffff"]
@@ -688,13 +777,13 @@ def log_error(what, exc=None):
 
 # ---- settings and memory files ----
 
-DEFAULTS = {"scale": DEFAULT_SCALE, "walk": True, "jump": True, "naps": True, "anim": True,
-            "bubble": "both", "bubble_style": "numbers", "chatter": "some", "wizard": True, "warn": True, "cc_app": True, "notify": True, "sounds": False, "hotkeys": True,
+DEFAULTS = {"scale": DEFAULT_SCALE, "energy": "normal", "walk": True, "jump": True, "naps": True, "anim": True,
+            "bubble": "both", "bubble_style": "numbers", "chatter": "some", "wizard": True, "warn": True, "cc_app": True, "notify": True, "sounds": True, "hotkeys": True,
             "platforms": True, "volume": 60,
             "warn_at": WARN_AT, "panic_at": PANIC_AT, "poll": POLL_SECONDS,
             "hide_fs": True, "one_monitor": False, "panel_tab": "plan", "plan_chart": "5h", "cc_view": "overview",
             "cc_range": "all", "x": None, "y": None}
-CHOICES = {"bubble": ("both", "5h", "hover"), "bubble_style": ("numbers", "bars"),
+CHOICES = {"energy": tuple(PROFILES), "bubble": ("both", "5h", "hover"), "bubble_style": ("numbers", "bars"),
            "chatter": tuple(CHATTER), "panel_tab": ("plan", "cc"), "plan_chart": ("5h", "7d"), "cc_view": ("overview", "models", "projects"),
            "cc_range": ("all", "30d", "7d"),
            }
@@ -732,6 +821,8 @@ def load_settings():
     for k, ok in CHOICES.items():
         if st[k] not in ok:
             st[k] = DEFAULTS[k]
+    if "energy" not in saved and saved.get("walk") is False:
+        st["energy"] = "statue"   # from before personalities: walking was switched off
     if isinstance(st["volume"], bool) or not isinstance(st["volume"], int) or not 0 <= st["volume"] <= 100:
         st["volume"] = DEFAULTS["volume"]
     for k, ok in (("warn_at", WARN_CHOICES), ("panic_at", PANIC_CHOICES), ("poll", POLL_CHOICES)):
@@ -996,43 +1087,127 @@ def hotkey_thread(inbox):
 SOUND_DIR = Path(tempfile.gettempdir()) / "claude_pet_sounds"
 
 
+SOUND_VERSION = 2   # bump this when a sound changes, so old saved copies aren't used
+SOUNDS = ("pop", "boing", "scream", "chime", "whoosh", "eagle", "splat", "spell", "hay", "dance")
+
+
 def make_sound(kind, volume=100):
     # little sound effects, made from maths the first time they're needed (no sound files to ship).
     # windows' simple sound player has no volume knob, so each volume gets its own quieter copy.
     volume = max(0, min(100, int(volume)))
-    path = SOUND_DIR / f"{kind}_{volume}.wav"
+    path = SOUND_DIR / f"{kind}_{volume}_v{SOUND_VERSION}.wav"   # a new version = fresh files
     if path.exists():
         return path
-    rate, frames = 22050, []
+    rate, buf, at = 22050, [], [0.0]
+    rng = random.Random(kind)   # the same sound every time it's made
 
-    def tone(dur, f0, f1, vol=0.5, wobble=0.0, saw=False, noise=False):
-        n = int(rate * dur)
-        phase = 0.0
+    def wav(dur, f0, f1, vol=0.5, wobble=0.0, shape="sine", attack=0.01, decay=1.5, vib=7):
+        # one note: a pitch slide from f0 to f1, a wave shape, a quick fade in and a fade out
+        n, out, phase = int(rate * dur), [], 0.0
         for i in range(n):
             k = i / n
-            f = f0 + (f1 - f0) * k + (math.sin(i / rate * 2 * math.pi * 7) * wobble if wobble else 0)
+            f = f0 + (f1 - f0) * k + (math.sin(i / rate * 2 * math.pi * vib) * wobble if wobble else 0)
             phase += 2 * math.pi * f / rate
-            v = random.uniform(-1, 1) if noise else (((phase / math.pi) % 2) - 1 if saw else math.sin(phase))
-            env = min(1.0, i / (rate * 0.01)) * (1 - k) ** 1.5
-            frames.append(int(v * env * vol * volume / 100 * 32767))
+            if shape == "noise":
+                v = rng.uniform(-1, 1)
+            elif shape == "saw":
+                v = ((phase / math.pi) % 2) - 1
+            elif shape == "square":
+                v = 0.6 if math.sin(phase) >= 0 else -0.6
+            elif shape == "tri":
+                v = 2 * abs(((phase / math.pi) % 2) - 1) - 1
+            else:
+                v = math.sin(phase)
+            out.append(v * min(1.0, i / (rate * attack)) * (1 - k) ** decay * vol)
+        return out
+
+    def soft(samples, a=0.2):
+        # takes the hiss off noise (a simple low-pass), for thuds and rustles
+        y, out = 0.0, []
+        for x in samples:
+            y += a * (x - y)
+            out.append(y * 2)
+        return out
+
+    def mix(when, samples):
+        i0 = int(when * rate)
+        if len(buf) < i0 + len(samples):
+            buf.extend([0.0] * (i0 + len(samples) - len(buf)))
+        for j, v in enumerate(samples):
+            buf[i0 + j] += v
+
+    def tone(dur, f0, f1, **kw):   # one after another
+        mix(at[0], wav(dur, f0, f1, **kw))
+        at[0] += dur
 
     if kind == "pop":
         tone(0.09, 700, 1400)
     elif kind == "boing":
         tone(0.35, 160, 520, wobble=60)
     elif kind == "scream":
-        tone(0.75, 950, 480, vol=0.35, wobble=40, saw=True)
+        tone(0.75, 950, 480, vol=0.35, wobble=40, shape="saw")
     elif kind == "chime":
         tone(0.16, 880, 880)
         tone(0.28, 1320, 1320)
+    elif kind == "eagle":   # a long raspy hawk cry as it leaps off: a short rising "kee", a long falling
+        # "eeeeeerrr" that holds before it trails away, a breathy edge, and an echo off the mountains
+        cry = [0.0] * int(2.6 * rate)
+
+        def put(when, samples):
+            i0 = int(when * rate)
+            for j, v in enumerate(samples[:len(cry) - i0]):
+                cry[i0 + j] += v
+
+        put(0.0, wav(0.16, 2100, 2900, 0.22, wobble=140, shape="saw", attack=0.02, decay=0.6, vib=42))
+        put(0.13, wav(0.55, 3050, 2600, 0.3, wobble=220, shape="saw", attack=0.03, decay=0.15, vib=34))
+        put(0.66, wav(1.25, 2600, 1300, 0.3, wobble=240, shape="saw", attack=0.002, decay=1.6, vib=30))
+        put(0.13, soft(wav(1.6, 0, 0, 0.13, shape="noise", attack=0.05, decay=1.4), 0.55))
+        for delay, gain in ((0.0, 1.0), (0.22, 0.32), (0.45, 0.14)):   # the echo
+            mix(delay, [v * gain for v in cry[:int(2.15 * rate)]])
+    elif kind == "splat":   # face meets window: a dull thud and a wet slap
+        mix(0.0, wav(0.2, 150, 45, 0.5, attack=0.002, decay=2.0))
+        mix(0.0, soft(wav(0.22, 0, 0, 0.5, shape="noise", attack=0.001, decay=2.5), 0.25))
+        mix(0.03, wav(0.1, 700, 250, 0.12, shape="saw", attack=0.002, decay=2.5))
+    elif kind == "spell":   # magic: a quick sparkly run up the scale with a shimmer
+        for i, note in enumerate((1047, 1319, 1568, 2093, 2637, 3136)):
+            mix(i * 0.05, wav(0.4, note, note, 0.16, wobble=note * 0.012, attack=0.003, decay=2.2, vib=9))
+        mix(0.0, soft(wav(0.6, 0, 0, 0.05, shape="noise", attack=0.1, decay=1.2), 0.6))
+    elif kind == "hay":   # landing in a haystack: a soft "tsssshh" of straw, a faint thump under it
+        hiss = wav(0.75, 0, 0, 0.55, shape="noise", attack=0.008, decay=2.2)
+        low = soft(hiss, 0.35)
+        mix(0.0, [(h - l) * 0.65 for h, l in zip(hiss, low)])   # keeps only the hissy top end: tsss
+        mix(0.0, soft(wav(0.3, 0, 0, 0.25, shape="noise", attack=0.004, decay=2.5), 0.25))   # body of the straw
+        mix(0.0, wav(0.1, 90, 50, 0.18, attack=0.002, decay=2.0))
+    elif kind == "dance":   # a bouncy little chiptune that loops while it dances (2 bars at 150 bpm)
+        step = 0.2   # one eighth note
+        c5 = 523.25
+        tune = (0, None, 7, 4, 9, 7, 4, None, 2, 4, 7, None, 12, 9, 7, 4)
+        bass = (-24, -24, -29, -29, -27, -27, -31, -29)   # C C G G A A F G, a quarter note each
+        for i, n in enumerate(tune):
+            if n is not None:
+                f_ = c5 * 2 ** (n / 12)
+                mix(i * step, wav(step * 0.9, f_, f_, 0.12, shape="square", attack=0.005, decay=1.2))
+        for i, n in enumerate(bass):
+            f_ = c5 * 2 ** (n / 12)
+            mix(i * 2 * step, wav(step * 1.8, f_, f_, 0.2, shape="tri", attack=0.005, decay=0.8))
+        for i in range(16):   # drums: a kick on the beat, a hi-hat in between
+            if i % 2 == 0:
+                mix(i * step, wav(0.1, 120, 50, 0.28, attack=0.002, decay=2.0))
+            else:
+                mix(i * step, soft(wav(0.04, 0, 0, 0.1, shape="noise", attack=0.001, decay=2.0), 0.9))
+        loop = int(16 * step * rate)
+        buf[:] = (buf + [0.0] * loop)[:loop]   # exactly two bars, so the loop doesn't stumble
     else:   # whoosh: the parachute opening
-        tone(0.4, 0, 0, vol=0.25, noise=True)
+        tone(0.4, 0, 0, vol=0.25, shape="noise")
+    frames = [int(max(-1.0, min(1.0, v)) * volume / 100 * 32767) for v in buf]
     SOUND_DIR.mkdir(exist_ok=True)
-    with wave.open(str(path), "wb") as w:
+    tmp = path.with_name(f"{path.stem}_{threading.get_ident()}.tmp")
+    with wave.open(str(tmp), "wb") as w:
         w.setnchannels(1)
         w.setsampwidth(2)
         w.setframerate(rate)
         w.writeframes(struct.pack(f"<{len(frames)}h", *frames))
+    os.replace(tmp, path)   # (written aside first, so a half-made file never gets played)
     return path
 
 
@@ -1199,8 +1374,9 @@ class Pet:
 
         st = load_settings()
         self.scale = st["scale"]
-        self.walk = tk.BooleanVar(value=st["walk"])
-        self.jump = tk.BooleanVar(value=st["jump"])
+        self.energy = tk.StringVar(value=st["energy"])   # personality: how much it moves
+        self.walk = tk.BooleanVar(value=st["energy"] != "statue")
+        self.jump = tk.BooleanVar(value=st["energy"] != "statue")
         self.naps = tk.BooleanVar(value=st["naps"])
         self.anim = tk.BooleanVar(value=st["anim"])
         self.wizard = tk.BooleanVar(value=st["wizard"])
@@ -1257,8 +1433,9 @@ class Pet:
         self.working_until = 0.0
         self.was_working, self.work_started = False, 0.0
         self.next_work_line = self.next_idle_line = 0.0
-        self.next_quote = time.time() + random.uniform(60, 180)
+        self.next_chat = time.time() + random.uniform(15, 45)
         self.speech, self.quiet_until = None, 0.0
+        self.recent = collections.deque(maxlen=25)   # lines it said lately, so it doesn't repeat itself
         self.last_touch = time.time()             # last hover, poke or drag
         self.next_attention = self.next_full_line = self.next_late_line = 0.0
         self.error_seen, self.worried_t = time.time(), 0.0
@@ -1284,6 +1461,12 @@ class Pet:
         self.chute, self.bounces = False, 0
         self.plat, self.plat_box, self.plats, self.plats_at = None, None, [], 0.0   # standing on a window
         self.ride_until, self.through = 0.0, False   # its window just moved / dropping through to the taskbar
+        self.leap_plan, self.leaping = None, None   # jumping over to another window
+        self.diving, self.hay_t = False, 0.0          # leap of faith, then sitting in the hay
+        self.music, self.next_spell = False, 0.0      # dance music playing / when the wizard next goes zing
+        self.root.after(3000, self.warm_sounds)       # make the sound files early, in the background
+        self.slapped = False                          # hit a window's side, on the way down
+        self.near = []                                # windows near it while it's on the taskbar
         self.edge_turn = None
         self.dizzy_t = self.stretch_t = self.dance_t = 0.0
         self.center_x, self.feet_win, self.body_at, self.pet_px = 0, 0, (0, 0), (72, 40)
@@ -1343,7 +1526,7 @@ class Pet:
 
     def save(self):
         st = {k: (v.get() if isinstance(v, tk.Variable) else v) for k, v in (
-            ("scale", self.scale), ("walk", self.walk), ("jump", self.jump), ("naps", self.naps),
+            ("scale", self.scale), ("energy", self.energy), ("walk", self.walk), ("jump", self.jump), ("naps", self.naps),
             ("anim", self.anim), ("bubble", self.bubble_mode), ("bubble_style", self.bubble_style),
             ("chatter", self.chatter), ("wizard", self.wizard), ("warn", self.warn), ("cc_app", self.cc_app), ("warn_at", self.warn_at), ("panic_at", self.panic_at), ("poll", self.poll),
             ("notify", self.notify_on), ("sounds", self.sounds), ("hotkeys", self.hotkeys),
@@ -1398,6 +1581,17 @@ class Pet:
 
     def poll_changed(self):
         self.next_at = min(self.next_at, time.time() + self.poll.get())
+        self.changed()
+
+    def prof(self):
+        return PROFILES[self.energy.get()]
+
+    def energy_changed(self):
+        moving = self.energy.get() != "statue"
+        self.walk.set(moving)
+        self.jump.set(moving)
+        if not moving and self.state == "walk":
+            self.state, self.state_t = "idle", 2.0
         self.changed()
 
     def naps_changed(self):
@@ -1535,6 +1729,8 @@ class Pet:
         if not self.moved and abs(e.x_root - self.press_at[0]) + abs(e.y_root - self.press_at[1]) > 4:
             self.moved, self.held, self.pressed = True, True, False
             self.vx = self.vy = self.squash_t = self.pending_v = 0.0
+            self.leap_plan = self.leaping = None
+            self.diving, self.hay_t = False, 0.0
             self.chute, self.bounces, self.last_touch = False, 0, time.time()
             if self.state == "dance":
                 self.state = "idle"
@@ -1542,7 +1738,7 @@ class Pet:
             self.details.hide()
             self.hang = self.hang_angle() if self.anim.get() else 0.0
             if random.random() < 0.5:
-                self.say(random.choice(DRAG_LINES), force=True)
+                self.say(self.pick(DRAG_LINES), force=True)
         if self.held:
             first, last = self.trail[0], self.trail[-1]
             if last[0] - first[0] > 0.01:
@@ -1586,7 +1782,7 @@ class Pet:
                 vx, vy = vx * k, vy * k
             self.follow_grip()
             self.angle = (self.angle + math.pi) % (2 * math.pi) - math.pi   # rights itself the short way
-            self.plat, self.through = None, False
+            self.plat, self.through, self.leaping, self.diving = None, False, None, False
             i = self.floor_below(self.x, self.y)
             self.si = i if i is not None else self.nearest_screen(self.x, self.y)
             sc = self.screens[self.si]
@@ -1596,7 +1792,8 @@ class Pet:
                 self.vx, self.vy, self.bounces = vx, vy, 0
                 self.spin += vx * 0.003 / s
                 if math.hypot(vx, vy) > 650 * s:
-                    self.say(random.choice(THROW_LINES), force=True)
+                    self.play("scream")
+                    self.say(self.pick(THROW_LINES), force=True)
             else:
                 self.y, self.angle, self.spin = sc.wb, 0.0, 0.0
             self.state, self.state_t = "idle", 2.0
@@ -1644,21 +1841,51 @@ class Pet:
         now = time.time()
         if rate == 0 or self.hidden or (not force and now < self.quiet_until):
             return False
+        self.recent.append(text)
         self.speech = {"text": text, "start": now,
                        "until": now + 2.6 + len(text) / SPEAK_CPS + 0.03 * len(text)}
-        self.quiet_until = now + 25
+        self.quiet_until = now + 20 / max(rate, 1)   # a short breather between lines
         return True
 
-    def play(self, kind, preview=False):
+    def pick(self, lines):
+        # a random line it hasn't said lately (if there is one)
+        fresh = [l for l in lines if l not in self.recent]
+        return random.choice(fresh or lines)
+
+    def play(self, kind, preview=False, loop=False):
+        # windows plays one sound at a time, so a new one cuts off the last (music included)
         if (self.sounds.get() or preview) and not self.hidden and self.volume.get() > 0:
             try:
                 winsound.PlaySound(str(make_sound(kind, self.volume.get())),
-                                   winsound.SND_FILENAME | winsound.SND_ASYNC | winsound.SND_NODEFAULT)
+                                   winsound.SND_FILENAME | winsound.SND_ASYNC | winsound.SND_NODEFAULT
+                                   | (winsound.SND_LOOP if loop else 0))
+                self.music = loop
             except Exception:
                 log_error(f"playing the {kind} sound")
 
+    def stop_music(self):
+        if self.music:
+            self.music = False
+            try:
+                winsound.PlaySound(None, 0)
+            except Exception:
+                pass
+
+    def warm_sounds(self):
+        # makes the sound files in the background, so the first time one plays there's no hiccup
+        if self.sounds.get() and self.volume.get() > 0:
+            vol = self.volume.get()
+            threading.Thread(target=lambda: [make_sound(k, vol) for k in SOUNDS], daemon=True).start()
+
+    def sounds_changed(self):
+        if not self.sounds.get():
+            self.stop_music()
+        self.warm_sounds()
+        self.changed()
+
     def volume_changed(self):
         self.play("pop", preview=True)   # a little sample at the new volume
+        self.warm_sounds()
         self.save()
 
     def toast(self, title, body):
@@ -1687,49 +1914,65 @@ class Pet:
             self.work_started = now
             if self.state == "sleep":
                 self.wake()
-            self.say(random.choice(WORK_START), force=True)
+            self.say(self.pick(WORK_START), force=True)
             self.next_work_line = now + random.uniform(90, 180) / rate
         elif working and now >= self.next_work_line:
-            self.say(random.choice(WORKING))
+            self.say(self.pick(WORKING))
             self.next_work_line = now + random.uniform(90, 180) / rate
         elif not working and self.was_working and now - self.work_started > 45:
-            self.say(random.choice(WORK_DONE), force=True)
+            self.say(self.pick(WORK_DONE), force=True)
         self.was_working = working
         if self.cc.last_error > self.error_seen:   # a claude code tool call just failed
             self.error_seen = self.cc.last_error
             if self.anim.get() and self.state != "sleep":
                 self.worried_t = 3.0
                 if random.random() < 0.6:
-                    self.say(random.choice(OOPS_LINES))
+                    self.say(self.pick(OOPS_LINES))
         hour = datetime.datetime.now().hour
         present = idle_seconds() < 60
         today = datetime.date.today().isoformat()
         if present and 5 <= hour < 12 and self.greeted != today and self.state != "sleep":
             self.greeted = today   # first time at the computer this morning
-            if self.say(random.choice(MORNING_LINES), force=True):
+            if self.say(self.pick(MORNING_LINES), force=True):
                 self.wave_t = 1.4
         if present and hour < 5 and now >= self.next_late_line and not working:
-            if self.say(random.choice(LATE_LINES)):
+            if self.say(self.pick(LATE_LINES)):
                 self.next_late_line = now + random.uniform(40, 60) * 60
+        if self.state == "sleep" and present and now >= self.next_chat:   # talks in its sleep
+            if random.random() < 0.5:
+                self.say(self.pick(SLEEP_LINES))
+            self.next_chat = now + random.uniform(*CHAT_GAP) / rate
         if working or self.state == "sleep" or self.details.visible or not present:
             return   # busy, asleep, or nobody's there to listen
         if self.full():
-            if now >= self.next_full_line and self.say(random.choice(FULL_LINES)):
+            if now >= self.next_full_line and self.say(self.pick(FULL_LINES)):
                 self.next_full_line = now + random.uniform(8, 15) * 60 / rate
             return
         if now - self.last_touch > ATTENTION_MIN * 60 and now >= self.next_attention:
-            if self.say(random.choice(ATTENTION_LINES)):
+            if self.say(self.pick(ATTENTION_LINES)):
                 self.wave_t = 1.4
                 self.next_attention = now + random.uniform(15, 25) * 60 / rate
             return
-        if now - self.last_usage > IDLE_TALK_MIN * 60:
-            if now >= self.next_idle_line and self.say(random.choice(IDLE_LINES + BORED_LINES)):
-                self.next_idle_line = now + random.uniform(15, 25) * 60 / rate
+        if now - self.last_usage > IDLE_TALK_MIN * 60 and now >= self.next_idle_line:
+            if self.say(self.pick(IDLE_LINES + BORED_LINES)):
+                self.next_idle_line = now + random.uniform(8, 15) * 60 / rate
+                self.next_chat = now + random.uniform(*CHAT_GAP) / rate
                 if random.random() < 0.4 and self.state == "idle" and self.grounded():
                     self.start_dance()   # bored. might as well dance.
-        elif now >= self.next_quote:
-            self.say(random.choice(QUOTES))
-            self.next_quote = now + random.uniform(4, 10) * 60 / rate
+                return
+        if now >= self.next_chat and self.grounded() and not self.held:
+            if self.say(self.pick(self.small_talk())):
+                self.next_chat = now + random.uniform(*CHAT_GAP) / rate
+
+    def small_talk(self):
+        # something to say about whatever it's up to right now
+        if self.state == "dance":
+            return DANCE_LINES
+        if self.plat is not None and random.random() < 0.5:
+            return HIGH_LINES
+        if self.state == "walk" and self.walking_allowed() and random.random() < 0.6:
+            return WALK_LINES
+        return random.choice((QUOTES, CURIOUS_LINES))
 
     # reactions
     def greet(self):
@@ -1751,8 +1994,8 @@ class Pet:
         self.play("pop")
         if self.pokes in POKE_COUNT:
             self.say(POKE_COUNT[self.pokes], force=True)
-        elif random.random() < 0.35:
-            self.say(random.choice(POKE_LINES), force=True)
+        elif random.random() < 0.6:
+            self.say(self.pick(POKE_LINES), force=True)
         if not self.anim.get():
             return
         self.wake()
@@ -1787,7 +2030,7 @@ class Pet:
             if self.sleep_reason == "away" and away < 2:
                 self.wake()          # you're back
                 self.wave_t = 1.4
-                self.say(random.choice(WAKE_LINES), force=True)
+                self.say(self.pick(WAKE_LINES), force=True)
         elif (away >= SLEEP_AFTER_MIN * 60 and self.grounded() and not self.held and not self.details.visible
               and self.state != "work"):
             self.fall_asleep("away")
@@ -1822,6 +2065,10 @@ class Pet:
             self.parts.append({"kind": "spark", "x": 17 * bw + 4 * pb, "y": self.hand() * bh - 8 * pb,
                                "vx": random.uniform(-25, 35) * s, "vy": random.uniform(-45, -5) * s,
                                "life": random.uniform(0.4, 0.8), "c": random.randrange(len(SPARK_C))})
+        elif kind == "straw":   # flying out of the hay pile
+            self.parts.append({"kind": "straw", "x": random.uniform(0, 17) * bw, "y": 4 * bh,
+                               "vx": random.uniform(-70, 70) * s, "vy": random.uniform(-150, -50) * s,
+                               "life": random.uniform(0.35, 0.7), "c": random.randrange(len(HAY_C))})
         else:
             big = sum(p["kind"] == "Z" for p in self.parts) <= sum(p["kind"] == "z" for p in self.parts)
             self.parts.append({"kind": "Z" if big else "z", "x": 15 * bw, "y": bh - 4 * pb,
@@ -1851,7 +2098,7 @@ class Pet:
                 if r["key"] == "five_hour":
                     if self.last_5h is not None and self.last_5h >= 15 and r["pct"] <= self.last_5h - 15:
                         self.celebrate = 3    # the 5-hour limit just reset. party.
-                        self.say(random.choice(RESET_LINES), force=True)
+                        self.say(self.pick(RESET_LINES), force=True)
                         self.play("chime")
                         if self.last_5h >= 90:
                             self.toast("Claude usage: 5-hour limit reset", "Fresh limits. Back to work!")
@@ -1963,15 +2210,18 @@ class Pet:
         now = time.time()
         self.check_keys()
         self.popup.watch()
+        if self.music and (self.state != "dance" or not self.sounds.get() or self.hidden):
+            self.stop_music()
         self.check_hover(now)
         if now >= self.next_fs_check:
             self.next_fs_check = now + 0.5
             self.check_fullscreen()
-        if self.platforms.get() and (self.plat is not None or not self.grounded() or self.held):
-            if now - self.plats_at >= 0.2:
+        if self.platforms.get():   # quicker while it's up on a window, flying, or has windows close by
+            busy = self.plat is not None or not self.grounded() or self.held or self.near
+            if now - self.plats_at >= (0.2 if busy else 0.5):
                 self.update_platforms()
-        elif self.plat is not None:
-            self.plat = None
+        elif self.plat is not None or self.near:
+            self.plat, self.near = None, []
         if now >= self.next_slow_check:
             self.next_slow_check = now + 1
             self.check_away()
@@ -2037,7 +2287,14 @@ class Pet:
         # and falls when the window closes, minimizes, maximizes or slides out from under it.
         self.plats, self.plats_at = list_platforms(), time.time()
         if self.plat is None:
+            # on the taskbar: the windows that reach down near it, which can push it about
+            sc, reach = self.screens[self.si], self.half + 400 * self.s()
+            # a window that goes down behind the taskbar is behind its floor, so it stands in front of it.
+            # one that ends on or above the taskbar is in its way.
+            self.near = [w[0] for w in self.plats if w[1] < self.x + reach and w[3] > self.x - reach
+                         and sc.wb - self.pet_px[1] - 40 < w[4] <= sc.wb + 2 and w[2] < sc.wb]
             return
+        self.near = []
         box = next((w for w in self.plats if w[0] == self.plat), None)
         if self.held:
             self.plat = None
@@ -2093,18 +2350,27 @@ class Pet:
         else:
             self.push_out(s, dt)
 
-    def push_out(self, s, dt):
+    def push_floor(self, s, dt):
+        # on the taskbar, windows that come down to the floor push it aside as well
+        front = [b for b in (window_box(h) for h in self.near) if b]
+        if front:
+            self.push_out(s, dt, front)
+
+    def push_out(self, s, dt, front=None):
         # windows in front of the one it stands on are solid: it scoots out the nearer side. pushed past
         # the edge of its window, it falls off. cornered (screen edge or more windows), it drops to the taskbar.
-        front = []
-        for w in self.plats:   # front to back, so everything before its own window is in front of it
-            if w[0] == self.plat:
-                break
-            box = window_box(w[0])   # fresh, so a window sliding over pushes smoothly
-            if box:
-                front.append(box)
-        else:
-            return   # its window isn't in the list yet
+        # on the taskbar (`front` = the windows near it) there's nowhere lower, so cornered there it stays put.
+        on_window = front is None
+        if on_window:
+            front = []
+            for w in self.plats:   # front to back, so everything before its own window is in front of it
+                if w[0] == self.plat:
+                    break
+                box = window_box(w[0])   # fresh, so a window sliding over pushes smoothly
+                if box:
+                    front.append(box)
+            else:
+                return   # its window isn't in the list yet
         pw, ph = self.pet_px
         half, top, bottom = pw / 2, self.y - ph, self.y
 
@@ -2125,14 +2391,17 @@ class Pet:
                 break
             target = min(o[0] for o in h) - half - 1 if side < 0 else max(o[2] for o in h) + half + 1
         if hits(target) or not lo <= target <= hi:
+            if not on_window:
+                return   # boxed in on the taskbar (a maximized window, say): it just carries on
             self.drop_off(through=True)   # cornered: nowhere to go but down
             self.vy = max(self.vy, 0.0)
             if random.random() < 0.5:
-                self.say(random.choice(SQUISH_LINES))
+                self.say(self.pick(SQUISH_LINES))
             return
         self.x += side * min(abs(target - self.x), 2000 * s * dt)   # a quick scoot, not a teleport
         self.dir = side
-        if not self.plat_box[1] <= self.x <= self.plat_box[3]:
+        self.ride_until = time.perf_counter() + 0.4   # smooth frames while it's being shoved
+        if on_window and not self.plat_box[1] <= self.x <= self.plat_box[3]:
             self.plat = None   # shoved off the edge of its window
 
     def drop_left(self):
@@ -2144,18 +2413,19 @@ class Pet:
                 floor = ledge[2]
         return floor - self.y
 
-    def platform_under(self, y0, y1):
-        # the first window top it passes while falling from y0 to y1, if its middle is over that window
-        # and nothing in front of the window is covering that spot
+    def platform_under(self, y0, y1, x=None):
+        # the first window top it passes while falling from y0 to y1, if its middle (or x) is over that
+        # window and nothing in front of the window is covering that spot
         s = self.s()
+        x = self.x if x is None else x
         for i, w in enumerate(self.plats):
             _, left, top, right, _ = w
-            if not (y0 - 1 <= top <= y1 + 1 and left + 12 * s <= self.x <= right - 12 * s):
+            if not (y0 - 1 <= top <= y1 + 1 and left + 12 * s <= x <= right - 12 * s):
                 continue
             sc = self.screens[self.si]
             if top < sc.mt + self.pet_px[1] or top > sc.wb - 30 * s:
                 continue
-            if any(o[1] <= self.x < o[3] and o[2] <= top - 2 < o[4] for o in self.plats[:i]):
+            if any(o[1] <= x < o[3] and o[2] <= top - 2 < o[4] for o in self.plats[:i]):
                 continue
             return w
         return None
@@ -2164,8 +2434,115 @@ class Pet:
         # crouch for a moment, then jump high enough to rise `height` pixels
         if not self.anim.get():
             return
-        self.squash_t = 0.08
+        self.squash_t, self.leap_plan = 0.08, None
         self.pending_v = math.sqrt(2 * GRAVITY * self.s() * height)
+
+    def try_leap(self, prefer=0):
+        # looks for another window nearby and goes for it. it's confident. it's not always right.
+        # prefer = -1 / 1: rather a window that way (it's at the edge of one, walking that way)
+        if not self.anim.get():
+            return False
+        s = self.s()
+        self.update_platforms()
+        sc = self.screens[self.si]
+        here = self.floor()
+        lo, hi = self.x_limits()
+        options = []
+        for i, w in enumerate(self.plats):
+            hwnd, left, top, right, _ = w
+            if hwnd == self.plat:
+                continue
+            a, b = max(left + 30 * s, lo), min(right - 30 * s, hi)
+            if a > b:
+                continue
+            tx = min(max(self.x, a), b)
+            if tx in (a, b) and b - a > 80 * s:   # aim a little way in from the edge
+                tx += 40 * s if tx == a else -40 * s
+            dx, rise = tx - self.x, here - top
+            if abs(dx) > LEAP_REACH * s or not -LEAP_POWER * s < rise < LEAP_POWER * 1.4 * s:
+                continue   # too far, or way too high even for its ego
+            if abs(rise) < 25 * s and abs(dx) < 60 * s:
+                continue   # that's basically where it already is
+            if top < sc.mt + self.pet_px[1] + 20 * s or top > sc.wb - 40 * s:
+                continue
+            if any(o[1] <= tx < o[3] and o[2] <= top - 2 < o[4] for o in self.plats[:i]):
+                continue   # that spot is under another window
+            options.append((hwnd, top, dx, rise, left, right))
+        if prefer:
+            options = [o for o in options if o[2] * prefer > 0] or options
+        if not options:
+            return False
+        hwnd, top, dx, rise, left, right = random.choice(options)
+        g = GRAVITY * s
+        apex = max(rise, 0) + random.uniform(30, 70) * s           # how high it means to go
+        apex = min(apex, LEAP_POWER * s * random.uniform(0.9, 1.1))  # how high its legs actually go
+        vy0 = math.sqrt(2 * g * apex)
+        fall = apex - rise   # from the top of the jump down to the window's top (negative: falls short)
+        t = vy0 / g + (math.sqrt(2 * fall / g) if fall > 0 else 0)
+        vx = dx / max(t, 0.15)
+        # starting off to the side of a higher window: don't reach its side before its feet are above the top,
+        # or it hits the wall. (if that would make it land short of the window anyway, it just goes for it.)
+        half = self.pet_px[0] / 2
+        to_side = (left - self.x if dx > 0 else self.x - right) - half
+        if rise > 0 and to_side > 0 and vx and vy0 * vy0 > 2 * g * rise:
+            t_up = (vy0 - math.sqrt(vy0 * vy0 - 2 * g * rise)) / g   # when its feet pass the top
+            slower = to_side / t_up
+            if to_side / abs(vx) < t_up and slower * t > to_side + half + 20 * s:
+                vx = math.copysign(slower, vx)
+        aim = random.uniform(0.85, 1.2) if random.random() > 0.15 else random.choice((0.55, 1.6))
+        vx *= aim   # eyeballed. now and then it really misjudges it.
+        if dx:
+            self.dir = 1 if dx > 0 else -1
+        self.state, self.state_t = "idle", 2.0
+        self.leap_plan = (hwnd, vx)
+        self.squash_t, self.pending_v = 0.14, vy0   # a big crouch first
+        if random.random() < 0.6:
+            self.say(self.pick(LEAP_TRY), force=True)
+        return True
+
+    def leap_wall(self, x_before, s):
+        # a jump that comes up short slaps into the side of the window, like a wall, and slides down it
+        box = window_box(self.leaping)
+        if not box:
+            return
+        left, top, right, bottom = box
+        half = self.pet_px[0] / 2
+        if self.y <= top + 1 or self.y - self.pet_px[1] >= bottom:
+            return   # its feet are above the top (it can land there), or it's below the window
+        if x_before + half <= left < self.x + half:
+            self.x, side = left - half, -1
+        elif x_before - half >= right > self.x - half:
+            self.x, side = right + half, 1
+        else:
+            return   # it was already in front of the window, not beside it
+        self.vx = side * min(abs(self.vx) * 0.25, 120 * s)   # bounces back a little
+        self.spin += side * 5
+        self.leaping, self.slapped = None, True   # (no parachute: it slides down the wall)
+        self.dizzy_t = max(self.dizzy_t, 1.2)
+        self.play("splat")
+        if random.random() < 0.8:
+            self.say(self.pick(SLAP_LINES), force=True)
+
+    def start_dive(self):
+        # the leap of faith: off the edge of its window in a swan dive, into a pile of hay at the bottom
+        if not self.anim.get() or self.plat is None:
+            return False
+        s = self.s()
+        sc = self.screens[self.si]
+        x = (self.plat_box[3] if self.dir > 0 else self.plat_box[1]) + self.dir * 60 * s
+        lo, hi = self.x_limits()
+        if not lo <= x <= hi:
+            return False   # the screen edge is right there
+        below = self.platform_under(self.y + 2, sc.wb, x)
+        if (below[2] if below else sc.wb) - self.y < DIVE_MIN * s:
+            return False   # not much of a drop. it'll just walk off.
+        self.plat, self.through, self.diving = None, False, True
+        self.vy, self.vx = -math.sqrt(2 * GRAVITY * s * 45 * s), self.dir * 160 * s   # a little spring off the edge
+        self.state, self.state_t = "idle", 2.0
+        self.play("eagle")
+        if random.random() < 0.75:
+            self.say(self.pick(DIVE_LINES), force=True)
+        return True
 
     def move_x(self, dx):
         # sideways. crosses onto the next screen when it may, otherwise turns around.
@@ -2233,7 +2610,7 @@ class Pet:
                 or (self.state == "walk" and self.walking_allowed())
                 or (self.plat is not None and time.perf_counter() < self.ride_until)):
             return 16
-        if (self.plat is not None or self.parts or self.wave_t > 0 or self.state in ("work", "dance") or self.speech
+        if (self.plat is not None or self.near or self.hay_t > 0 or self.parts or self.wave_t > 0 or self.state in ("work", "dance") or self.speech
                 or self.dizzy_t > 0 or self.stretch_t > 0):
             return 30
         return 80
@@ -2258,21 +2635,34 @@ class Pet:
             return
         if self.plat is not None:
             self.ride(s, dt)
+        elif self.near and self.grounded() and self.leaping is None and not self.diving:
+            self.push_floor(s, dt)
         if self.squash_t > 0:   # crouching or squished: hold still for a moment
             self.squash_t -= dt
             if self.squash_t <= 0 and self.pending_v:
                 self.vy, self.pending_v = -self.pending_v, 0.0
+                if self.leap_plan:   # off it goes, towards the other window
+                    self.leaping, self.vx = self.leap_plan
+                    self.leap_plan, self.plat, self.through = None, None, False
+            return
+        if self.hay_t > 0:   # sitting in the hay pile for a moment, then out it pops
+            self.hay_t -= dt
+            if self.hay_t <= 0:
+                for _ in range(8):
+                    self.spawn("straw")
+                self.jump_now(HOP_HEIGHT * 1.2 * s)
             return
         walking = self.state == "walk" and self.walking_allowed()
         sc = self.screens[self.si]
         if not self.grounded():   # in the air
             g = GRAVITY * s
-            y_before = self.y
+            y_before, x_before = self.y, self.x
             if (not self.chute and self.vy > 150 * s and self.drop_left() > CHUTE_HEIGHT * s
-                    and abs(self.angle) < 0.4):
+                    and abs(self.angle) < 0.4 and self.leaping is None and not self.diving and not self.slapped):   # a failed jump just plops
                 self.chute = True   # a long way down: open the parachute
+                self.play("whoosh")
                 if random.random() < 0.6:
-                    self.say(random.choice(CHUTE_LINES), force=True)
+                    self.say(self.pick(CHUTE_LINES), force=True)
             if self.chute:
                 self.vy = min(self.vy + g * dt, CHUTE_SPEED * s)
                 self.y += self.vy * dt
@@ -2281,13 +2671,16 @@ class Pet:
             else:   # a proper curve, the same whatever the frame rate
                 self.y += self.vy * dt + 0.5 * g * dt * dt
                 self.vy += g * dt
-                self.vx *= max(0.0, 1 - THROW_DRAG * dt)
+                if self.leaping is None and not self.diving:   # a jump keeps its aim; a throw slows down
+                    self.vx *= max(0.0, 1 - THROW_DRAG * dt)
             if self.y - self.pet_px[1] < sc.mt:   # bonk on the top of the screen
                 self.y, self.vy = sc.mt + self.pet_px[1], abs(self.vy) * 0.3
             if abs(self.vx) > 1:
                 self.slide(dt)
             elif walking:
-                self.move_x(self.dir * WALK_SPEED * s * dt)
+                self.move_x(self.dir * WALK_SPEED * self.prof()["speed"] * s * dt)
+            if self.leaping is not None:
+                self.leap_wall(x_before, s)
             if self.platforms.get() and self.plat is None and self.vy > 0 and self.plats and not self.through:
                 hit = self.platform_under(y_before, self.y)
                 if hit:
@@ -2320,11 +2713,14 @@ class Pet:
             return
         casting = self.wizard.get() and time.time() < self.working_until
         if casting and self.state in ("idle", "walk", "dance"):
-            self.state, self.cast_t = "work", 0.0
+            self.state, self.cast_t, self.next_spell = "work", 0.0, 0.0
         if self.state == "work":
             if not casting:
                 self.state, self.state_t = "idle", 2.0
             else:   # stand still, wave the wand, make sparkles
+                if self.cast_t >= self.next_spell:   # and a bit of magic now and then
+                    self.play("spell")
+                    self.next_spell = self.cast_t + random.uniform(12, 25)
                 self.cast_t += dt
                 self.part_t -= dt
                 if self.part_t <= 0:
@@ -2349,44 +2745,65 @@ class Pet:
             if left <= near <= right:
                 self.edge_turn = None
             else:
-                if self.edge_turn is None:
-                    self.edge_turn = random.random() < 0.5
+                if self.edge_turn is None:   # just got to the edge: another window? a leap of faith? or not
+                    pr = self.prof()
+                    if self.jump.get() and random.random() < pr["edge_leap"] and self.try_leap(prefer=self.dir):
+                        return
+                    if self.jump.get() and random.random() < pr["dive"] and self.start_dive():
+                        return
+                    self.edge_turn = random.random() < pr["turn"]
                 if self.edge_turn:
                     self.dir, self.edge_turn = -self.dir, None
         if walking:
             night = not 6 <= datetime.datetime.now().hour < 23
-            self.move_x(self.dir * WALK_SPEED * (0.7 if night else 1) * s * dt)
+            self.move_x(self.dir * WALK_SPEED * self.prof()["speed"] * (0.7 if night else 1) * s * dt)
             if self.plat is not None and not self.plat_box[1] <= self.x <= self.plat_box[3]:
                 self.plat = None   # walked off the edge
+                if random.random() < 0.5:
+                    self.say(self.pick(FALL_LINES))
             self.step_t += dt
             if self.step_t >= 0.18:
                 self.step_t, self.step = 0.0, self.step + 1
-        if self.jump.get() and not self.full() and random.random() < dt / JUMP_EVERY:
+        if (self.jump.get() and self.walk.get() and self.platforms.get() and not self.full()
+                and not self.details.visible and random.random() < dt / self.prof()["leap"] and self.try_leap()):
+            return
+        if self.jump.get() and not self.full() and random.random() < dt / self.prof()["hop"]:
             self.jump_now(HOP_HEIGHT * s)
         if self.state_t <= 0:
+            pr = self.prof()
             if random.random() < DANCE_CHANCE and not self.full():
                 self.start_dance()
+            elif self.state == "walk" and self.walking_allowed() and random.random() < pr["keep"]:
+                self.state_t = random.uniform(*pr["walk_t"])   # keeps going, maybe the other way
+                if random.random() < 0.3:
+                    self.dir = -self.dir
             elif self.state == "walk" or not self.walking_allowed():
                 night = not 6 <= datetime.datetime.now().hour < 23
-                if self.naps.get() and random.random() < NAP_CHANCE * (3 if night else 1) and not self.details.visible:
+                if (self.naps.get() and random.random() < NAP_CHANCE * pr["nap"] * (3 if night else 1)
+                        and not self.details.visible):
                     self.fall_asleep("nap")
                 else:
-                    self.state, self.state_t = "idle", random.uniform(3, 8)
+                    self.state, self.state_t = "idle", random.uniform(*pr["idle"])
             else:
-                self.state, self.state_t = "walk", random.uniform(2, 5)
+                self.state, self.state_t = "walk", random.uniform(*pr["walk_t"])
                 self.dir = random.choice((-1, 1))
         if self.state == "idle" and self.look_t <= 0 and random.random() < dt / 4:
             self.look_d, self.look_t = random.choice((-1, 1)), random.uniform(0.6, 1.4)
 
     def start_dance(self):
         if self.anim.get():
-            self.state, self.state_t, self.dance_t, self.part_t = "dance", random.uniform(3.5, 6), 0.0, 0.2
+            self.state, self.state_t, self.dance_t, self.part_t = "dance", random.uniform(8, 12), 0.0, 0.2
+            self.play("dance", loop=True)
+            if random.random() < 0.4:
+                self.say(self.pick(DANCE_LINES))
 
     def turn(self, dt, s):
         # tilting: hangs from where you grabbed it and swings as you move, then rights itself
         if self.held:
             self.drag_vx *= max(0.0, 1 - 5 * dt)
             target, k, damp = self.hang + max(-0.7, min(0.7, -self.drag_vx * 0.0011 / s)), 40, 6
+        elif self.diving:
+            target, k, damp = self.dir * 2.3, 16, 5   # tips over head first: a swan dive
         elif self.angle or self.spin:
             target, k, damp = 0.0, 22, 5
         else:
@@ -2408,12 +2825,31 @@ class Pet:
     def land(self, s):
         impact = self.vy
         self.y = self.floor()
-        self.through = False
+        self.through = self.slapped = False
+        if self.diving:   # the leap of faith ends in a pile of hay. no bounce, no dizziness.
+            self.diving, self.chute = False, False
+            self.vx = self.vy = self.angle = self.spin = 0.0
+            self.hay_t, self.bounces = HAY_TIME, 0
+            for _ in range(10):
+                self.spawn("straw")
+            self.play("hay")
+            if random.random() < 0.7:
+                self.say(self.pick(HAY_LINES), force=True)
+            return
+        if self.leaping is not None:   # how did that jump go?
+            made_it = self.plat == self.leaping
+            self.leaping = None
+            if made_it:
+                self.happy_t = 1.0
+            if random.random() < 0.75:
+                self.say(random.choice(LEAP_OK if made_it else LEAP_FAIL), force=True)
+            self.vx = 0.0
         if self.chute:
             self.chute, self.vy, self.squash_t = False, 0.0, 0.07
             return
         if impact > 700 * s and self.bounces < 1:
             self.bounces += 1
+            self.play("boing")
             self.vy = -impact * 0.35   # boing
         else:
             self.vy = 0.0
@@ -2422,7 +2858,7 @@ class Pet:
         if impact > 1100 * s and self.dizzy_t <= 0:
             self.dizzy_t = 2.4   # that was a hard landing: seeing stars
             if random.random() < 0.7:
-                self.say(random.choice(DIZZY_LINES), force=True)
+                self.say(self.pick(DIZZY_LINES), force=True)
         self.vx *= 0.6
 
     # drawing. only redraws when something visible changed; moving is just moving the window.
@@ -2439,7 +2875,8 @@ class Pet:
         walking = anim and self.state == "walk" and self.walking_allowed() and grounded and not squash
         beat = int(self.dance_t / 0.25) % 4 if dancing else 0
         chute = anim and self.chute and not grounded
-        if sleeping:
+        hay = anim and self.hay_t > 0
+        if sleeping or hay:
             legs = ()
         elif self.held:
             legs = LEGS_STEP if int(self.clock / 0.12) % 2 else LEGS_AIR   # wiggling
@@ -2465,8 +2902,8 @@ class Pet:
             eye_dir = 1   # watching the wand
         else:
             eye_dir = self.dir if walking else (self.look_d if anim and self.look_t > 0 and not sleeping else 0)
-        if sleeping:
-            sink = "lie"
+        if sleeping or hay:
+            sink = "lie"   # lying down, or sat in the hay
         elif squash or (dancing and beat in (1, 3)) or (full and grounded and self.state == "idle"):
             sink = "half"   # squished, bopping to the beat, or slumped because the limit is full
         else:
@@ -2505,7 +2942,7 @@ class Pet:
                 round(math.sin(self.clock * 1.6) * 1.4) if chute else None,
                 (0, -1, 0, 1)[beat] if dancing else 0,
                 int(self.clock * 8) % 12 if anim and self.dizzy_t > 0 else None,
-                sleeping and int(self.clock / 1.4) % 2 == 1)
+                sleeping and int(self.clock / 1.4) % 2 == 1, hay)
 
     def redraw(self):
         f = self.frame()
@@ -2534,7 +2971,7 @@ class Pet:
 
     def draw(self, f):
         (_, legs, eyes, eye_dir, sink_kind, arms, wand, warn, wiz, parts, segs, bars, err, show_bubble,
-         speech, rot, chute, shift, dizzy, breath) = f
+         speech, rot, chute, shift, dizzy, breath, hay) = f
         c = self.canvas
         c.delete("all")
         s = self.s()
@@ -2674,6 +3111,26 @@ class Pet:
                 self.glyph(SPARK, cx + math.cos(a) * 7 * bw - 1.5 * pb, cy + math.sin(a) * 2 * pb - 1.5 * pb,
                            pb, STAR_C)
 
+        if hay and not rot:
+            # a pile of hay round its middle: rows of straw, wider at the bottom (no outline, like the mascot)
+            mid, base = px + pet_w // 2, py + pet_h
+            half_w, rows = pet_w // 2 + 3 * bw, max(3, round(1.8 * bh / pb))
+            for row in range(rows):
+                w2 = round(half_w * (1 - 0.6 * (row / rows) ** 2) / pb) * pb
+                y2 = base - row * pb
+                c.create_rectangle(mid - w2, y2 - pb, mid + w2, y2, fill=HAY_C[0], outline="")
+                for i in range(-w2 // pb, w2 // pb):   # streaks of lighter and darker straw
+                    k = (i * 7 + row * 3) % 9
+                    if k < 3:
+                        c.create_rectangle(mid + i * pb, y2 - pb, mid + (i + 1) * pb, y2,
+                                           fill=HAY_C[1 + k % 2], outline="")
+            top = base - rows * pb
+            for i, (dx, lean) in enumerate(((-0.5, -1), (-0.2, 0), (0.15, 1), (0.45, 1), (-0.35, 1))):
+                x0 = mid + round(dx * half_w / pb) * pb   # stray straws poking out of the top
+                for j in range(3):
+                    c.create_rectangle(x0 + lean * j * pb, top - (j + 1) * pb, x0 + lean * j * pb + pb, top - j * pb,
+                                       fill=HAY_C[1 + i % 2], outline="")
+
         # z's, notes and sparkles drift up behind the bubbles, so they never cover the words
         for kind, x, y, ci in parts:
             if kind in ("z", "Z"):
@@ -2682,6 +3139,8 @@ class Pet:
                 self.glyph(SPARK, px + x, py + y, pb, SPARK_C[ci], shadow=False)
             elif kind == "note":
                 self.glyph(NOTE, px + x, py + y, pb, NOTE_C[ci])
+            elif kind == "straw":
+                c.create_rectangle(px + x, py + y, px + x + 2 * pb, py + y + pb, fill=HAY_C[ci], outline="")
 
         # the usage bubble. text only ever sits on solid bubbles, so there's no fuzzy edge
         # against the see-through colour.
@@ -3249,8 +3708,7 @@ class SettingsWindow:
         # (kind, label, variable, command, extra) for each option on a tab
         p = self.pet
         if tab == "behaviour":
-            return [("toggle", "Walk around", p.walk, p.changed, None),
-                    ("toggle", "Jump now and then", p.jump, p.changed, None),
+            return [("choice", "Personality", p.energy, p.energy_changed, PROFILE_NAMES),
                     ("toggle", "Take naps", p.naps, p.naps_changed, None),
                     ("toggle", "Wizard when Claude works", p.wizard, p.changed, None),
                     ("toggle", "Stand on windows", p.platforms, p.changed, None),
@@ -3264,7 +3722,7 @@ class SettingsWindow:
         if tab == "sound":
             return [("choice", "Chatter", p.chatter, p.chatter_changed,
                      (("off", "Off"), ("some", "Sometimes"), ("lots", "A lot"))),
-                    ("toggle", "Sound effects", p.sounds, p.changed, None),
+                    ("toggle", "Sound effects", p.sounds, p.sounds_changed, None),
                     ("slider", "Volume", p.volume, None, (0, 100, 5, "{:.0f}%")),
                     ("toggle", "Desktop notifications", p.notify_on, p.changed, None)]
         if tab == "usage":

@@ -2,7 +2,7 @@
 
 A small Claude mascot that walks along the top of the Windows taskbar. A bubble above its head shows Claude plan usage. If any file here gets lost or corrupted, this note has enough detail to rebuild it. You can give this file to Claude and ask it to rebuild the project.
 
-Last updated: 2026-10-09 (version 5.4)
+Last updated: 2026-10-10 (version 5.9)
 
 ## Files in this folder
 
@@ -66,7 +66,11 @@ Last updated: 2026-10-09 (version 5.4)
   - "wheee!" when you pick it up, a yawn before sleeping, and a hello when you come back
   - a warning if your login expires
 - **Standing on windows:** when it falls past the top of a window (dropped, thrown, or walking off an edge), it lands there. It follows the window smoothly if you drag it (its window is checked every frame), and falls off when the window closes, minimizes or maximizes. At a window's edge it either turns around or walks off (50/50).
-- **Windows are solid:** a window in front of the one it stands on can't cover it. When one slides over it or is brought to the front, the pet gets pushed out the side it's nearer to (a quick scoot, not a jump). Pushed past the edge of its own window, it falls off. Cornered against the screen edge or another window, it drops straight through to the taskbar. The screen edges are hard walls, even when a window is dragged past them. Maximized windows count as walls too. On the taskbar, windows don't push it (that's its normal floor).
+- **Personality** (Settings → Behaviour; replaces the old "Walk around" and "Jump now and then" switches): Parkour! / Lively / Normal / Chill / Statue. Each is a row in `PROFILES`: how often it keeps walking, how long it stands about or walks, walking speed, how often it hops and jumps to windows, nap chance, and what it does at a window's edge. In a 3-minute simulation it walked 73% / 64% / 41% / 24% / 0% of the time. Statue = no walking, hops or jumps (it still reacts and talks). Old settings with walking off become Statue.
+- **Coming up short:** a jump whose feet are still below a window's top when it reaches the window's side slaps into the side like a wall (`leap_wall`): a boing, a little bounce back and a tumble, dizzy stars, a line (`SLAP_LINES`), then it slides down beside the window with no parachute. Jumping straight up from in front of a window can't hit its side, so a failed one just lands back in front. The jump plan also slows down if it would otherwise reach the side of a higher window before its feet clear the top.
+- **Leap of faith:** walking to the edge of a window, it may first look for another window that way to jump to (`edge_leap`), else take a leap of faith (`dive`) if the drop is at least `DIVE_MIN` (150 px): a little spring off the edge, it tips head first into a swan dive (no parachute), and lands in a pile of hay with straw flying. It sits in the hay for `HAY_TIME` (1.3 s), eyes peeking out, then pops out. Otherwise it turns around (`turn`) or walks off.
+- **Jumping between windows:** about every 25 seconds (with Jump, Walk and Stand on windows all on) it looks for a window top it could reach: up to ~520 px sideways, from a bit below it to ~420 px above it, not covered by another window. It crouches, says something brave, and jumps. Its legs really manage about 300 px up, so higher targets always fail; it also eyeballs the sideways push (85–120%, and 15% of the time it badly misjudges it). Misses just plop down (no parachute), with an excuse. Settings: `LEAP_EVERY`, `LEAP_POWER`, `LEAP_REACH`.
+- **Windows are solid:** a window in front of the one it stands on can't cover it. When one slides over it or is brought to the front, the pet gets pushed out the side it's nearer to (a quick scoot, not a jump). Pushed past the edge of its own window, it falls off. Cornered against the screen edge or another window, it drops straight through to the taskbar. The screen edges are hard walls, even when a window is dragged past them. Maximized windows count as walls too. On the taskbar, windows whose bottom edge ends on or above the taskbar push it aside too (it checks the windows within ~400 px of it). A window that goes down behind the taskbar is behind its floor, so it stands in front of it and isn't pushed; boxed in on the taskbar (a maximized window, say) it just carries on, since there's nowhere lower to go.
 - **Time of day:** a "good morning" the first time you're at the computer after 5 AM. After midnight, a gentle "it's late, maybe wrap up?" about every 40–60 minutes. Between 11 PM and 6 AM it naps three times as often and walks slower.
 - **Tool errors:** when a Claude Code tool call fails, it looks worried (raised eyebrows) for 3 seconds and sometimes says "oops".
 - **Old numbers:** if the last successful check is more than 10 minutes old (and more than 3 refreshes), the bubble turns grey and says how old the numbers are, for example "15m old".
@@ -251,11 +255,13 @@ There's also 30 px of side space for z's and sparks.
 
 **Talking:**
 - Speech is wrapped to 190 px at 1x and types out at 30 letters a second. It stays up for 2.6 s + typing time + 0.03 s per letter.
-- `say()` has a 25 s cooldown for chit-chat. Lines about something that just happened skip the cooldown.
+- `say()` has a 20 s cooldown for chit-chat (8 s on "a lot"). Lines about something that just happened skip the cooldown.
+- Small talk comes every 45–120 s (`CHAT_GAP`, divided by the chatter rate), picked by `small_talk()` from what it's doing: walking, dancing, standing on a window, or quotes and curious questions. While napping it sometimes talks in its sleep.
+- `pick()` avoids the last 25 lines it said.
 - No talking when chatter is off or the pet is hidden.
 - Random lines and quiet-time comments only happen when someone has touched the mouse or keyboard in the last minute, and not while it's working, asleep or showing the panel.
 - "Chatter" changes how often: sometimes = ×1, a lot = ×2.5.
-- All the lines are lists near the top of `claude_pet.py` (`QUOTES`, `WORK_START`, `WORKING`, `WORK_DONE`, `IDLE_LINES`, `POKE_LINES`, `POKE_COUNT`, `DRAG_LINES`, `WAKE_LINES`, `RESET_LINES`, `MILESTONES`).
+- All the lines are lists near the top of `claude_pet.py` (`QUOTES`, `CURIOUS_LINES`, `WALK_LINES`, `HIGH_LINES`, `DANCE_LINES`, `SLEEP_LINES`, `FALL_LINES`, `LEAP_TRY`, `LEAP_OK`, `LEAP_FAIL`, `SQUISH_LINES`, `WORK_START`, `WORKING`, `WORK_DONE`, `IDLE_LINES`, `POKE_LINES`, `POKE_COUNT`, `DRAG_LINES`, `WAKE_LINES`, `RESET_LINES`, `MILESTONES` and more).
 
 **Working (wizard) detection:**
 - A background thread reads only the new bytes of each log file every 3 s.
@@ -455,6 +461,25 @@ There's also 30 px of side space for z's and sparks.
 - A window suddenly brought to the front over it: scooted out the nearer side within 0.4 s.
 - Not tested: dragging a real app's window by its title bar with the mouse (the test moved windows by code).
 
+**Version 5.5, tested on 2026-10-09** (left monitor, real windows):
+- Jumps from the taskbar: easy window (150 px up) 5/6 made it, medium (280 up) 5/6, too high (390 up) 0/6, each with a line before and an excuse or a brag after.
+- Window to window (220 px up): 4/5 made it.
+- Small talk over 20 simulated minutes at "Sometimes": about 16 lines, matching what it's doing (walking, dancing, standing on a window, idle), with no repeats.
+- The version 5.4 window tests still pass.
+
+**Version 5.6, tested on 2026-10-09** (left monitor, real windows):
+- Taskbar: a window sliding in pushed it from x −1220 to −1450 (at most 17 px overlap for a frame); squeezed into the screen edge it stayed put on the floor.
+- Leap of faith off a window 520 px up: dove head first, landed in hay, popped out onto the floor (screenshots checked).
+- Personalities over 3 simulated minutes: Parkour! 73% walking / 15 hops / 0 naps, Lively 64% / 10 / 0, Normal 41% / 7 / 3, Chill 24% / 4 / 6, Statue 0% / 0.
+- Settings: the Personality row (five pills) fits and switches.
+- The 5.4 and 5.5 window and jump tests still pass.
+
+**Version 5.7, tested on 2026-10-09** (left monitor, real windows):
+- Jumping for a window that's too high, from beside it: hit the side every time (8/8), for windows that end above the taskbar and ones that go behind it, then landed beside it with no overlap.
+- The same jump from in front of a window that goes behind the taskbar: landed back in front and stayed (not pushed).
+- A window ending exactly at the taskbar slid over it: pushed. One that goes behind the taskbar: not pushed.
+- Success rates now that the side counts: 150 px up 10/10, 280 px up 7/12, 390 px up 0/6. Window to window 5/5.
+
 **Not tested yet:**
 - Real API data inside the pet.
 - Wizard mode triggered by real Claude Code activity (it was tested by calling it directly).
@@ -478,6 +503,40 @@ There's also 30 px of side space for z's and sparks.
 - Dim the bubble when the data is stale.
 
 ## Change log
+
+- **2026-10-10 (version 5.9):**
+  - Sound effects are on by default. A settings file saved earlier with them off keeps them off until switched on in Settings → Sound.
+  - The eagle cry is longer (about 2.2 s, plus an echo): a rising "kee", a held cry, then a long falling, raspy tail.
+  - Landing in hay is now a soft "tsss" of straw instead of a thump and rustle.
+  - Dances last 8–12 s (were 3.5–6 s); the music loops for the whole dance.
+  - Sound files now carry a version number (`SOUND_VERSION`), so changed sounds are remade instead of reusing old saved copies.
+  - Note: Windows plays one sound at a time, so on a short drop the hay "tsss" cuts the eagle cry off when it lands.
+
+- **2026-10-10 (version 5.8):**
+  - New sounds, all made from maths in `make_sound` (no sound files), which now mixes several notes at once:
+    - `eagle`: a raspy hawk-like screech when it takes a leap of faith.
+    - `hay`: a whump and rustle when it lands in the hay.
+    - `splat`: a thud and slap when it hits a window's side.
+    - `spell`: a sparkly run of notes when wizard mode starts, then every 12–25 s.
+    - `dance`: a 3.2 s chiptune loop (C major, 150 bpm, lead + bass + drums) that plays while it dances and stops when the dance ends.
+  - The scream when thrown hard, the whoosh when the parachute opens and the boing on a bouncy landing were made but never played; they play now.
+  - Sound files are made in the background at start-up and when the volume changes, so there's no hiccup the first time.
+  - Windows plays one sound at a time, so any new sound cuts off the dance music.
+  - Tested: every sound generated with nothing clipping (levels balanced, 24–81% peak), the dance loop starting and stopping with the dance, and the spell sound on wizard start. Not listened to by Claude.
+
+- **2026-10-09 (version 5.7):**
+  - Jumps that come up short slap into the side of the window and slide down it, instead of passing through.
+  - Windows that go down behind the taskbar don't push it; it stands in front of them. Windows ending on or above the taskbar still do.
+
+- **2026-10-09 (version 5.6):**
+  - Personalities: Parkour!, Lively, Normal, Chill, Statue.
+  - Livelier personalities walk more, nap less, and jump to nearby windows more often.
+  - Leap of faith off window edges, landing in a pile of hay.
+  - Windows push it aside on the taskbar too.
+
+- **2026-10-09 (version 5.5):**
+  - Jumps over to windows nearby. It's brave, and not always right.
+  - Much chattier: small talk every minute or two at "Sometimes" (it was every 4–10 minutes), about whatever it's doing. New lines for walking, dancing, standing on windows, sleep-talking, falling off edges, jumps, plus curious questions. More lines everywhere else too, and it doesn't repeat its last 25 lines.
 
 - **2026-10-09 (version 5.4):**
   - It follows a dragged window smoothly instead of jumping every few frames.
