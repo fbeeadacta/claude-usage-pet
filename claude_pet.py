@@ -140,6 +140,8 @@ DIZZY_LINES = ["@_@ everything is spinning...", "I see stars. pixel stars.", "wh
                "I'm fine. I'm fine. which way is up?"]
 CHUTE_LINES = ["good thing I packed a parachute.", "safety first!", "*floats majestically*",
                "enjoying the view up here."]
+SQUISH_LINES = ["hey! I was standing there!", "no room! going down!", "squished! see you on the taskbar.",
+                "ok ok, I'll move. downstairs."]
 ATTENTION_LINES = ["psst... hey. got a minute?", "*polite cough*", "I'm still here, by the way!",
                    "a little poke would be nice. no pressure.", "hello? it's me, your tiny assistant.",
                    "I did a cool jump earlier. you missed it."]
@@ -220,7 +222,8 @@ TIPS = {
     "Settings…": ("Opens a window with every option in one place, each with a short description.", []),
     "Stand on windows": ("Lets the mascot land on top of your windows.", [
         ("On", "When it falls (dropped, thrown or walking off an edge) past the top of a window, it lands there, "
-               "rides along if you move the window, and falls off when it closes."),
+               "rides along if you move the window, and falls off when it closes. Windows in front push it "
+               "aside, and if it's cornered it drops down to the taskbar."),
         ("Off", "It only ever stands on the taskbar.")]),
     "Sound effects": ("Little sounds: a pop when poked, a scream when thrown, a boing, a chime at milestones.", [
         ("On", "Plays them (quietly, through Windows' normal sound output)."),
@@ -923,7 +926,9 @@ def list_platforms():
 
     def cb(hwnd, lp):
         try:
-            if not u32.IsWindowVisible(hwnd) or u32.IsIconic(hwnd) or u32.IsZoomed(hwnd):
+            # maximized windows stay in the list: they're never ledges (their top is the screen top),
+            # but they still count as walls that shove the pet off a window behind them
+            if not u32.IsWindowVisible(hwnd) or u32.IsIconic(hwnd):
                 return True
             pid = wintypes.DWORD()
             u32.GetWindowThreadProcessId(hwnd, ctypes.byref(pid))
@@ -1278,6 +1283,7 @@ class Pet:
         self.grab_local, self.grip, self.trail, self.drag_vx = (0, 0), (0, 0), [], 0.0
         self.chute, self.bounces = False, 0
         self.plat, self.plat_box, self.plats, self.plats_at = None, None, [], 0.0   # standing on a window
+        self.ride_until, self.through = 0.0, False   # its window just moved / dropping through to the taskbar
         self.edge_turn = None
         self.dizzy_t = self.stretch_t = self.dance_t = 0.0
         self.center_x, self.feet_win, self.body_at, self.pet_px = 0, 0, (0, 0), (72, 40)
@@ -1580,7 +1586,7 @@ class Pet:
                 vx, vy = vx * k, vy * k
             self.follow_grip()
             self.angle = (self.angle + math.pi) % (2 * math.pi) - math.pi   # rights itself the short way
-            self.plat = None
+            self.plat, self.through = None, False
             i = self.floor_below(self.x, self.y)
             self.si = i if i is not None else self.nearest_screen(self.x, self.y)
             sc = self.screens[self.si]
@@ -2033,8 +2039,11 @@ class Pet:
         if self.plat is None:
             return
         box = next((w for w in self.plats if w[0] == self.plat), None)
-        if box is None or self.held:
+        if self.held:
             self.plat = None
+            return
+        if box is None or u32.IsZoomed(self.plat):
+            self.drop_off()
             return
         dx, dy = box[1] - self.plat_box[1], box[2] - self.plat_box[2]
         self.plat_box = box
@@ -2043,10 +2052,93 @@ class Pet:
         if not box[1] <= self.x <= box[3]:
             self.plat = None
 
+    def drop_off(self, through=False):
+        # off its window. `through` = squeezed out with nowhere to go: falls past every ledge to the taskbar
+        self.plat, self.through = None, through
+        self.y = min(self.y, self.screens[self.si].wb)
+
+    def x_limits(self):
+        # how far left and right it may go: this screen, plus a screen right next to it if it may cross
+        sc = self.screens[self.si]
+        l, r = self.neighbour(-1), self.neighbour(1)
+        return ((self.screens[l].wl if l is not None else sc.wl) + self.half,
+                (self.screens[r].wr if r is not None else sc.wr) - self.half)
+
+    def ride(self, s, dt):
+        # every frame while it's on a window: follows that window smoothly when you drag it, and gets
+        # shoved aside by windows in front of it (the window list itself only refreshes 5 times a second)
+        hwnd = self.plat
+        ok = u32.IsWindowVisible(hwnd) and not u32.IsIconic(hwnd) and not u32.IsZoomed(hwnd)
+        box = window_box(hwnd) if ok else None
+        if box is None:
+            self.drop_off()
+            return
+        box = (hwnd,) + box
+        if box != self.plat_box:
+            on = self.grounded()
+            self.x += box[1] - self.plat_box[1]
+            self.plat_box, self.ride_until = box, time.perf_counter() + 0.4
+            if on:
+                self.y = box[2]
+        lo, hi = self.x_limits()
+        self.x = min(max(self.x, lo), hi)   # the screen edges are hard walls, even if the window goes past them
+        i = self.find_screen(self.x, self.y - 1)
+        if i is not None:
+            self.si = i
+        sc = self.screens[self.si]
+        if box[2] < sc.mt + self.pet_px[1] or box[2] > sc.wb:
+            self.drop_off()   # dragged too high to fit under the top of the screen, or down past the taskbar
+        elif not box[1] <= self.x <= box[3]:
+            self.plat = None   # the window slid out from under it (or it got pinned at the screen edge)
+        else:
+            self.push_out(s, dt)
+
+    def push_out(self, s, dt):
+        # windows in front of the one it stands on are solid: it scoots out the nearer side. pushed past
+        # the edge of its window, it falls off. cornered (screen edge or more windows), it drops to the taskbar.
+        front = []
+        for w in self.plats:   # front to back, so everything before its own window is in front of it
+            if w[0] == self.plat:
+                break
+            box = window_box(w[0])   # fresh, so a window sliding over pushes smoothly
+            if box:
+                front.append(box)
+        else:
+            return   # its window isn't in the list yet
+        pw, ph = self.pet_px
+        half, top, bottom = pw / 2, self.y - ph, self.y
+
+        def hits(x):
+            return [o for o in front if o[0] < x + half - 1 and o[2] > x - half + 1
+                    and o[1] < bottom - 1 and o[3] > top + 1]
+
+        h = hits(self.x)
+        if not h:
+            return
+        lo, hi = self.x_limits()
+        # out the side it's nearer to, never through the window to the far side
+        side = -1 if self.x < (min(o[0] for o in h) + max(o[2] for o in h)) / 2 else 1
+        target = self.x
+        for _ in range(12):
+            h = hits(target)
+            if not h:
+                break
+            target = min(o[0] for o in h) - half - 1 if side < 0 else max(o[2] for o in h) + half + 1
+        if hits(target) or not lo <= target <= hi:
+            self.drop_off(through=True)   # cornered: nowhere to go but down
+            self.vy = max(self.vy, 0.0)
+            if random.random() < 0.5:
+                self.say(random.choice(SQUISH_LINES))
+            return
+        self.x += side * min(abs(target - self.x), 2000 * s * dt)   # a quick scoot, not a teleport
+        self.dir = side
+        if not self.plat_box[1] <= self.x <= self.plat_box[3]:
+            self.plat = None   # shoved off the edge of its window
+
     def drop_left(self):
         # how far it still has to fall: to the next window top below it, or the taskbar
         floor = self.floor()
-        if self.platforms.get() and self.plat is None and self.plats:
+        if self.platforms.get() and self.plat is None and self.plats and not self.through:
             ledge = self.platform_under(self.y, floor)
             if ledge:
                 floor = ledge[2]
@@ -2138,9 +2230,10 @@ class Pet:
         if self.hidden:
             return 500
         if (self.held or self.pressed or self.squash_t > 0 or not self.grounded() or self.angle or self.vx
-                or (self.state == "walk" and self.walking_allowed())):
+                or (self.state == "walk" and self.walking_allowed())
+                or (self.plat is not None and time.perf_counter() < self.ride_until)):
             return 16
-        if (self.parts or self.wave_t > 0 or self.state in ("work", "dance") or self.speech
+        if (self.plat is not None or self.parts or self.wave_t > 0 or self.state in ("work", "dance") or self.speech
                 or self.dizzy_t > 0 or self.stretch_t > 0):
             return 30
         return 80
@@ -2163,6 +2256,8 @@ class Pet:
         self.turn(dt, s)
         if self.held or self.hidden or self.pressed:
             return
+        if self.plat is not None:
+            self.ride(s, dt)
         if self.squash_t > 0:   # crouching or squished: hold still for a moment
             self.squash_t -= dt
             if self.squash_t <= 0 and self.pending_v:
@@ -2193,7 +2288,7 @@ class Pet:
                 self.slide(dt)
             elif walking:
                 self.move_x(self.dir * WALK_SPEED * s * dt)
-            if self.platforms.get() and self.plat is None and self.vy > 0 and self.plats:
+            if self.platforms.get() and self.plat is None and self.vy > 0 and self.plats and not self.through:
                 hit = self.platform_under(y_before, self.y)
                 if hit:
                     self.plat, self.plat_box = hit[0], hit
@@ -2313,6 +2408,7 @@ class Pet:
     def land(self, s):
         impact = self.vy
         self.y = self.floor()
+        self.through = False
         if self.chute:
             self.chute, self.vy, self.squash_t = False, 0.0, 0.07
             return

@@ -2,7 +2,7 @@
 
 A small Claude mascot that walks along the top of the Windows taskbar. A bubble above its head shows Claude plan usage. If any file here gets lost or corrupted, this note has enough detail to rebuild it. You can give this file to Claude and ask it to rebuild the project.
 
-Last updated: 2026-10-09 (version 5.3)
+Last updated: 2026-10-09 (version 5.4)
 
 ## Files in this folder
 
@@ -65,7 +65,8 @@ Last updated: 2026-10-09 (version 5.3)
   - replies to some pokes, plus poke-count milestones (10, 50, 100, 500)
   - "wheee!" when you pick it up, a yawn before sleeping, and a hello when you come back
   - a warning if your login expires
-- **Standing on windows:** when it falls past the top of a window (dropped, thrown, or walking off an edge), it lands there. It rides along if you move the window, and falls off when the window closes, minimizes or maximizes. At a window's edge it either turns around or walks off (50/50).
+- **Standing on windows:** when it falls past the top of a window (dropped, thrown, or walking off an edge), it lands there. It follows the window smoothly if you drag it (its window is checked every frame), and falls off when the window closes, minimizes or maximizes. At a window's edge it either turns around or walks off (50/50).
+- **Windows are solid:** a window in front of the one it stands on can't cover it. When one slides over it or is brought to the front, the pet gets pushed out the side it's nearer to (a quick scoot, not a jump). Pushed past the edge of its own window, it falls off. Cornered against the screen edge or another window, it drops straight through to the taskbar. The screen edges are hard walls, even when a window is dragged past them. Maximized windows count as walls too. On the taskbar, windows don't push it (that's its normal floor).
 - **Time of day:** a "good morning" the first time you're at the computer after 5 AM. After midnight, a gentle "it's late, maybe wrap up?" about every 40–60 minutes. Between 11 PM and 6 AM it naps three times as often and walks slower.
 - **Tool errors:** when a Claude Code tool call fails, it looks worried (raised eyebrows) for 3 seconds and sometimes says "oops".
 - **Old numbers:** if the last successful check is more than 10 minutes old (and more than 3 refreshes), the bubble turns grey and says how old the numbers are, for example "15m old".
@@ -447,6 +448,13 @@ There's also 30 px of side space for z's and sparks.
 - All five settings tabs.
 - A switch, a choice button and the volume slider, each changed and saved, with the sample file made at 25%.
 
+**Version 5.4, tested on 2026-10-09** (left monitor, real windows from a second program):
+- Dragging the window it stands on: it stayed exactly in place on the window, 0 px drift per frame.
+- A window sliding over it: pushed along, at most 4 px overlap for a frame.
+- Cornered at the screen edge: dropped through to the taskbar.
+- A window suddenly brought to the front over it: scooted out the nearer side within 0.4 s.
+- Not tested: dragging a real app's window by its title bar with the mouse (the test moved windows by code).
+
 **Not tested yet:**
 - Real API data inside the pet.
 - Wizard mode triggered by real Claude Code activity (it was tested by calling it directly).
@@ -470,6 +478,11 @@ There's also 30 px of side space for z's and sparks.
 - Dim the bubble when the data is stale.
 
 ## Change log
+
+- **2026-10-09 (version 5.4):**
+  - It follows a dragged window smoothly instead of jumping every few frames.
+  - Windows in front of it are solid: they push it aside, and if it's cornered it drops through to the taskbar.
+  - The screen edges are hard limits while it's riding a window.
 
 - **2026-10-09 (version 5.3):**
   - The details panel opens below or beside the mascot when there's no room above it.
