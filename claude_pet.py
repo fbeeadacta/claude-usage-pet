@@ -44,7 +44,7 @@ SIZES = [0.75, 1.0, 1.25, 1.5, 2.0, 3.0]   # choices in the right-click size men
 MIN_SCALE, MAX_SCALE = 0.5, 4.0            # limits for ctrl + mouse wheel
 POLL_SECONDS = 120         # how often to ask the api
 ONLY_KNOWN_LIMITS = True   # show only the 5-hour and weekly limits. False shows everything the api lists.
-RATE_LIMITED_SECONDS = 180 # wait this long after the api says "slow down"
+RATE_LIMITED_SECONDS = 180 # wait at least this long after the api says "slow down" (longer if it repeats)
 USER_AGENT = "usage-widget/0.1"  # if the api refuses this, try "claude-code/2.1.204"
 # how it moves (pixels are at 1x size)
 WALK_SPEED = 28            # pixels per second
@@ -67,6 +67,14 @@ WORK_HOLD = 20             # keeps casting this long after the last sign of clau
 IDLE_TALK_MIN = 30         # starts commenting after this long with no token usage at all
 CHATTER = {"off": 0, "some": 1.0, "lots": 2.5}   # how often it talks (menu: chatter)
 SPEAK_CPS = 30             # typing speed of speech bubbles, letters per second
+ATTENTION_MIN = 20         # asks for a little attention after this long without a hover, poke or drag
+# throwing, parachutes, dancing (pixels are at 1x size)
+THROW_DRAG = 0.6           # air slows a throw by this fraction per second
+GROUND_FRICTION = 900      # how fast it stops sliding after landing, pixels per second per second
+CHUTE_HEIGHT = 260         # opens a parachute when falling from higher than this above the floor
+CHUTE_SPEED = 110          # falling speed with the parachute open, pixels per second
+DANCE_CHANCE = 0.05        # chance of a little dance whenever it stops walking
+POLL_CHOICES = (120, 180, 240, 300)   # menu: refresh every (faster ones got "slow down" answers)
 # pace messages (details panel)
 AHEAD_BY = 10          # used% this far above the clock = "ahead of pace"
 SLOW_BELOW = 0.5       # used under half of what the clock says = "way under pace"
@@ -114,12 +122,86 @@ POKE_COUNT = {10: "that's 10 pokes. we're friends now.", 50: "poke #50! I'm keep
 DRAG_LINES = ["wheee!", "where are we going?", "put me down! (actually this is fun)"]
 WAKE_LINES = ["welcome back!", "oh hi! I wasn't sleeping.", "you're back!"]
 RESET_LINES = ["fresh limits! let's go!", "5-hour limit reset. I feel brand new."]
+THROW_LINES = ["AAAAAAAAA!", "WHEEEEEEEE—", "I'M FLYIIIING!", "not the face, not the face!",
+               "this is NOT in my job description!", "I regret nothing!"]
+DIZZY_LINES = ["@_@ everything is spinning...", "I see stars. pixel stars.", "who moved the taskbar?",
+               "I'm fine. I'm fine. which way is up?"]
+CHUTE_LINES = ["good thing I packed a parachute.", "safety first!", "*floats majestically*",
+               "enjoying the view up here."]
+ATTENTION_LINES = ["psst... hey. got a minute?", "*polite cough*", "I'm still here, by the way!",
+                   "a little poke would be nice. no pressure.", "hello? it's me, your tiny assistant.",
+                   "I did a cool jump earlier. you missed it."]
+BORED_LINES = ["I counted all the pixels on your taskbar. twice.", "bored. so bored.",
+               "should I take up a hobby? knitting, maybe.", "no tokens today? I'll just... stand here.",
+               "I've been practising my dance moves.", "is it home time yet?"]
+FULL_LINES = ["100%. that's what I call a hard day's work.", "we used ALL of it. I'm so proud.",
+              "the tank is empty. see you after the reset!", "*collapses dramatically*",
+              "I'm exhausted. clocking out until the reset.", "not a single token left. legendary."]
 MILESTONES = {
     "five_hour": {50: "halfway through your 5-hour limit!", 75: "75% of the 5-hour limit used. pace yourself!",
-                  90: "90%! almost out of 5-hour juice."},
+                  90: "90%! almost out of 5-hour juice.",
+                  100: "100% of the 5-hour limit. what a shift. time for a break."},
     "seven_day": {50: "halfway through the weekly limit.", 75: "75% of the weekly limit is gone.",
-                  90: "90% of the week used. careful!"},
+                  90: "90% of the week used. careful!",
+                  100: "the whole week's limit. legendary effort."},
 }
+# menu tooltips: what each option does, then what happens when it's on or off (or its choices)
+TIPS = {
+    "Refresh now": ("Checks your plan usage right away, instead of waiting for the next automatic check.", []),
+    "Refresh every": ("How often the mascot checks your plan usage on its own.", [
+        ("2 min", "The default. Fresh numbers without asking the usage service too often."),
+        ("3–5 min", "Fewer requests and slightly older numbers. Handy if you ever see \"slow down\".")]),
+    "Keep details open": ("Pins the details panel above the mascot.", [
+        ("On", "The panel stays open until you close it with ×."),
+        ("Off", "The panel opens when you hover the mascot and fades away when you move off.")]),
+    "Count tokens like the Claude app": ("Chooses how the Claude Code tab counts tokens and picks the peak hour.", [
+        ("On", "Matches the Claude desktop app: every logged copy of an answer is added up, and peak hour "
+               "is when your sessions start."),
+        ("Off", "Real numbers: each answer is counted once (about 3× lower), and peak hour is your busiest hour.")]),
+    "Walk around": ("Lets the mascot wander along the taskbar.", [
+        ("On", "It walks left and right, and across to your other monitors."),
+        ("Off", "It stays in one spot, but still blinks, hops and reacts.")]),
+    "Jump now and then": ("Random little hops.", [
+        ("On", "It hops about every 30 seconds."),
+        ("Off", "No random hops. It still hops when you poke it or a limit resets.")]),
+    "Take naps": ("Lets the mascot fall asleep.", [
+        ("On", "It sleeps after 5 minutes away from the computer, wakes when you're back, and takes "
+               "short naps now and then."),
+        ("Off", "It always stays awake.")]),
+    "Wizard when Claude works": ("Wizard mode while your tokens are going up.", [
+        ("On", "It puts on a wizard hat and casts sparkles while Claude is working."),
+        ("Off", "It carries on as usual while Claude works.")]),
+    "Warn when nearly full": ("A coloured ring around the usage bubble when a limit is nearly used up.", [
+        ("On", "Yellow ring from your yellow level, red from your red level (see Warning levels), and "
+               "black once a limit is completely used up."),
+        ("Off", "No ring. The red dot in the bubble and the 90% speech line still show.")]),
+    "Warning levels": ("Sets when the warning ring turns yellow and when it turns red.", [
+        ("Yellow", "From 70, 75, 80 or 85%."),
+        ("Red", "From 85, 90 or 95%.")]),
+    "Animations": ("All of the mascot's movement and effects.", [
+        ("On", "It walks, hops, blinks, fades and types out its speech."),
+        ("Off", "A completely still mascot, instant panels and no typing. Lightest on your computer.")]),
+    "Chatter": ("How often the mascot talks in speech bubbles.", [
+        ("Off", "It never talks."),
+        ("Sometimes", "A line every 4–10 minutes, plus reactions to what's happening."),
+        ("A lot", "About 2.5× more often.")]),
+    "Size": ("How big the mascot is, from 0.75x to 3x.", [
+        ("Tip", "Ctrl + mouse wheel over the mascot fine-tunes the size.")]),
+    "Bubble": ("What the bubble above its head shows.", [
+        ("Limits", "Both limits, the 5-hour limit only, or only while you hover."),
+        ("Style", "Numbers, or two small bars.")]),
+    "Hide during full screen": ("Gets out of the way of videos and games.", [
+        ("On", "It fades away while something is full screen on its monitor, and won't walk onto that monitor."),
+        ("Off", "It always stays visible.")]),
+    "Stay on one monitor": ("Keeps the mascot on one screen.", [
+        ("On", "It turns around at the screen's edges. You can still drag it to another screen."),
+        ("Off", "It walks across to your other monitors.")]),
+    "Start with Windows": ("Starts the mascot automatically.", [
+        ("On", "It starts when you sign in to Windows."),
+        ("Off", "Start it yourself with the Start Claude Pet shortcut.")]),
+    "Quit": ("Closes the mascot. Your settings and its memory are saved first.", []),
+}
+
 # rough book sizes in tokens, for the fun comparison in the claude code tab
 BOOKS = [("The Little Prince", 22_000), ("The Great Gatsby", 61_000), ("The Hobbit", 124_000),
          ("Pride and Prejudice", 156_000), ("Moby-Dick", 270_000), ("The Lord of the Rings", 625_000),
@@ -164,11 +246,20 @@ HAT = [                    # the wizard hat. # = hat, y = gold band, * = star
     "....###################.",
 ]
 
+LEFT_WAVE = (((2, 1), (1, 1)), ((2, 1), (1, 0)))   # the left arm, mirror of WAVE
+NOTE = ["..##", "..#.", "..#.", "###.", "###."]   # a music note, for dancing
+# the parachute: a dome with red and white stripes
+CHUTE = ["".join(("r" if (i // 4) % 2 == 0 else "w") if abs(i - 17.5) < w / 2 else "." for i in range(36))
+         for w in (12, 20, 26, 30, 34, 36)]
+
 ORANGE, EYE, BLUSH_C = "#d77757", "#2b1a14", "#f4a08f"
 BUBBLE, BUBBLE_TEXT = "#1f1e1d", "#f2efe8"
 SPEECH, SPEECH_TEXT = "#f2efe8", "#2b1a14"
 HEART_C, ZZZ_C, SHADOW = "#ff6f8a", "#f2efe8", "#2b1a14"
 WARN_C, PANIC_C = "#f2c14e", "#e5534b"
+FULL_C, FULL_EDGE = "#0d0d0d", "#c8c8cd"   # the ring at 100%: black with a silver edge
+NOTE_C = ["#ff9ad5", "#8be9fd", "#ffe08a"]
+CHUTE_R, CHUTE_W, STRING_C = "#e5534b", "#f2efe8", "#d9d4c7"
 HAT_C, BAND_C, STAR_C, WAND_C = "#6c4ab6", "#f2c14e", "#ffe08a", "#8b5a2b"
 SPARK_C = ["#ffe08a", "#8be9fd", "#ff9ad5", "#ffffff"]
 DIM, RED, TRACK = "#8e8e93", "#e5534b", "#3a3a3c"
@@ -204,10 +295,18 @@ def fetch_usage():
         if e.code == 401:
             return None, "login expired. open claude code to refresh it."
         if e.code == 429:
-            return None, "rate limited. will retry."
+            global RETRY_AFTER
+            try:
+                RETRY_AFTER = int(e.headers.get("Retry-After") or 0)   # the service's own "try again in"
+            except (TypeError, ValueError):
+                RETRY_AFTER = 0
+            return None, "rate limited."
         return None, f"api error {e.code}."
     except Exception as e:
         return None, f"no connection ({type(e).__name__})."
+
+
+RETRY_AFTER = 0   # seconds the usage service asked us to wait, from its last "slow down"
 
 
 def short_error(err):
@@ -334,8 +433,9 @@ def compare_line(tokens):
     return f"That's {100 * tokens / BOOKS[0][1]:.0f}% of {BOOKS[0][0]} so far."
 
 
-def build_stats(answers, lines):
-    # the claude code tab's numbers, for all time, 30 days and 7 days
+def build_stats(answers, lines, starts=None):
+    # the claude code tab's numbers, for all time, 30 days and 7 days.
+    # starts (session -> first time) = peak hour is when sessions start, like the claude app.
     today = datetime.date.today()
     by_day = Counter()
     for a in answers:
@@ -352,6 +452,9 @@ def build_stats(answers, lines):
             if not a[2].startswith("<"):   # skip claude code's made-up "<synthetic>" entries
                 models[a[2]] += a[3] + a[4] + a[5] + a[6]
         hours = Counter(ln[0].hour for ln in L)
+        if starts:
+            began = Counter(t.hour for t in starts.values() if since is None or t.date() >= since)
+            hours = began or hours
         out["ranges"][name] = {
             "sessions": len({ln[1] for ln in L}), "messages": len(L), "tokens": sum(parts),
             "parts": parts, "days": len({ln[0].date() for ln in L}),
@@ -368,6 +471,8 @@ class ClaudeCodeLog:
         self.seen_answers = set() # (message id, request id). each answer is logged several times.
         self.seen_lines = set()   # line ids, so nothing is counted twice
         self.answers = []         # (local time, session, model, input, output, cache write, cache read)
+        self.copies = []          # the extra logged copies of those answers (the claude app counts them too)
+        self.starts = {}          # session -> its first line's time
         self.lines = []           # (local time, session) for every user and assistant line
         self.stats = None         # summary for the panel
         self.last_growth = 0.0    # when new output tokens last appeared
@@ -416,9 +521,22 @@ class ClaudeCodeLog:
         if new_output and self.ready:
             self.last_growth = time.time()
         if self.stats is None or (changed and time.time() - self.built_at > 10):
-            self.stats = build_stats(self.answers, self.lines)
+            self.stats = {"real": build_stats(self.answers, self.lines),
+                          "app": build_stats(self.answers + self.copies, self.lines, self.starts)}
             self.built_at = time.time()
         self.ready = True
+
+    def usage_curve(self, start, end):
+        # claude code's token use between two times as a running total, roughly weighted by what each
+        # kind of token costs (output most, cache reads least), for estimating the chart's early part
+        pts = sorted((a[0].timestamp(), a[3] + 5 * a[4] + 1.25 * a[5] + 0.1 * a[6])
+                     for a in list(self.answers) if start <= a[0].timestamp() <= end)
+        out, total = [], 0.0
+        for ts, w in pts:
+            total += w
+            out.append((ts, total))
+        step = max(1, len(out) // 150)   # no need for more than ~150 points
+        return out[::step] + out[-1:] if out else []
 
     def take(self, raw):
         # one log line -> output tokens it added (None if it was nothing new)
@@ -439,28 +557,33 @@ class ClaudeCodeLog:
             self.seen_lines.add(uid)
         session = d.get("sessionId") or "?"
         self.lines.append((when, session))
+        if session not in self.starts or when < self.starts[session]:
+            self.starts[session] = when
         m = d.get("message")
         if d["type"] == "assistant" and isinstance(m, dict) and isinstance(m.get("usage"), dict):
+            u = m["usage"]
+            n = [int(u.get(k) or 0) for k in ("input_tokens", "output_tokens",
+                                              "cache_creation_input_tokens", "cache_read_input_tokens")]
+            row = (when, session, str(m.get("model") or "unknown"), *n)
             key = (m.get("id"), d.get("requestId"))
-            if key not in self.seen_answers:
-                self.seen_answers.add(key)
-                u = m["usage"]
-                n = [int(u.get(k) or 0) for k in ("input_tokens", "output_tokens",
-                                                  "cache_creation_input_tokens", "cache_read_input_tokens")]
-                self.answers.append((when, session, str(m.get("model") or "unknown"), *n))
-                return n[1]
+            if key in self.seen_answers:
+                self.copies.append(row)   # same answer, logged again
+                return 0
+            self.seen_answers.add(key)
+            self.answers.append(row)
+            return n[1]
         return 0
 
 
 # ---- settings and memory files ----
 
 DEFAULTS = {"scale": DEFAULT_SCALE, "walk": True, "jump": True, "naps": True, "anim": True,
-            "bubble": "both", "bubble_style": "numbers", "chatter": "some", "wizard": True, "warn": True,
-            "warn_at": WARN_AT, "panic_at": PANIC_AT,
-            "hide_fs": True, "one_monitor": False, "panel_tab": "plan", "cc_view": "overview",
+            "bubble": "both", "bubble_style": "numbers", "chatter": "some", "wizard": True, "warn": True, "cc_app": True,
+            "warn_at": WARN_AT, "panic_at": PANIC_AT, "poll": POLL_SECONDS,
+            "hide_fs": True, "one_monitor": False, "panel_tab": "plan", "plan_chart": "5h", "cc_view": "overview",
             "cc_range": "all", "x": None, "y": None}
 CHOICES = {"bubble": ("both", "5h", "hover"), "bubble_style": ("numbers", "bars"),
-           "chatter": tuple(CHATTER), "panel_tab": ("plan", "cc"), "cc_view": ("overview", "models"),
+           "chatter": tuple(CHATTER), "panel_tab": ("plan", "cc"), "plan_chart": ("5h", "7d"), "cc_view": ("overview", "models"),
            "cc_range": ("all", "30d", "7d")}
 
 
@@ -490,12 +613,12 @@ def load_settings():
         st["scale"] = min(MAX_SCALE, max(MIN_SCALE, float(st["scale"])))
     except (TypeError, ValueError):
         st["scale"] = DEFAULT_SCALE
-    for k in ("walk", "jump", "naps", "anim", "wizard", "warn", "hide_fs", "one_monitor"):
+    for k in ("walk", "jump", "naps", "anim", "wizard", "warn", "cc_app", "hide_fs", "one_monitor"):
         st[k] = st[k] if isinstance(st[k], bool) else DEFAULTS[k]
     for k, ok in CHOICES.items():
         if st[k] not in ok:
             st[k] = DEFAULTS[k]
-    for k, ok in (("warn_at", WARN_CHOICES), ("panic_at", PANIC_CHOICES)):
+    for k, ok in (("warn_at", WARN_CHOICES), ("panic_at", PANIC_CHOICES), ("poll", POLL_CHOICES)):
         if st[k] not in ok or isinstance(st[k], bool):
             st[k] = DEFAULTS[k]
     for k in ("x", "y"):
@@ -507,7 +630,12 @@ def load_settings():
 def load_memory():
     # moods that survive a restart: when each limit last moved, pokes, milestones already said
     m = read_json(STATE_FILE)
-    out = {"seen": {}, "last_5h": None, "pokes": 0, "milestones": {}, "last_usage": time.time()}
+    out = {"seen": {}, "last_5h": None, "pokes": 0, "milestones": {}, "last_usage": time.time(), "history": []}
+    try:
+        num = lambda v: None if v is None else float(v)
+        out["history"] = [(float(h[0]), num(h[1]), num(h[2])) for h in m.get("history", [])]
+    except (TypeError, ValueError, IndexError):
+        pass
     try:
         out["seen"] = {k: (float(v[0]), float(v[1]), str(v[2])) for k, v in m.get("seen", {}).items()}
     except (TypeError, ValueError, IndexError, AttributeError):
@@ -562,6 +690,7 @@ u32.GetWindowThreadProcessId.restype = wintypes.DWORD
 u32.GetLastInputInfo.argtypes = [ctypes.POINTER(LASTINPUTINFO)]
 u32.GetParent.argtypes = [wintypes.HWND]
 u32.GetParent.restype = wintypes.HWND
+u32.SetWindowPos.argtypes = [wintypes.HWND, wintypes.HWND, ctypes.c_int, ctypes.c_int, ctypes.c_int, ctypes.c_int, wintypes.UINT]
 k32.GetTickCount.restype = wintypes.DWORD
 
 # a screen: its full rectangle (m...) and the part not covered by the taskbar (w...).
@@ -658,6 +787,22 @@ def idle_seconds():
     if not u32.GetLastInputInfo(ctypes.byref(lii)):
         return 0.0
     return ((k32.GetTickCount() - lii.dwTime) & 0xFFFFFFFF) / 1000
+
+
+def menu_rects():
+    # where windows has drawn the open popup menus (their window class is "#32768")
+    found = []
+
+    def cb(hwnd, lp):
+        name = ctypes.create_unicode_buffer(16)
+        u32.GetClassNameW(hwnd, name, 16)
+        r = wintypes.RECT()
+        if name.value == "#32768" and u32.IsWindowVisible(hwnd) and u32.GetWindowRect(hwnd, ctypes.byref(r)):
+            found.append((r.left, r.top, r.right, r.bottom))
+        return True
+
+    u32.EnumWindows(WNDENUMPROC(cb), 0)
+    return found
 
 
 def round_corners(win):
@@ -817,8 +962,10 @@ class Pet:
         self.anim = tk.BooleanVar(value=st["anim"])
         self.wizard = tk.BooleanVar(value=st["wizard"])
         self.warn = tk.BooleanVar(value=st["warn"])
+        self.cc_app = tk.BooleanVar(value=st["cc_app"])
         self.warn_at = tk.IntVar(value=st["warn_at"])
         self.panic_at = tk.IntVar(value=st["panic_at"])
+        self.poll = tk.IntVar(value=st["poll"])
         self.hide_fs = tk.BooleanVar(value=st["hide_fs"])
         self.one_monitor = tk.BooleanVar(value=st["one_monitor"])
         self.bubble_mode = tk.StringVar(value=st["bubble"])
@@ -827,6 +974,7 @@ class Pet:
         self.panel_tab = tk.StringVar(value=st["panel_tab"])
         self.cc_view = tk.StringVar(value=st["cc_view"])
         self.cc_range = tk.StringVar(value=st["cc_range"])
+        self.plan_chart = tk.StringVar(value=st["plan_chart"])
         self.size_var = tk.DoubleVar(value=self.scale)
         self.pin_var = tk.BooleanVar(value=False)
         self.startup_var = tk.BooleanVar(value=startup_path().exists())
@@ -843,6 +991,8 @@ class Pet:
         self.milestones = mem["milestones"]   # key -> [resets_at, levels already announced]
         self.last_usage = mem["last_usage"]   # when tokens last went up anywhere
         self.first_result = True
+        self.history = mem["history"]   # [(time, 5-hour %, weekly %)] for the plan tab's chart
+        self.limited = 0                # "slow down" answers in a row
 
         # claude code's logs, read in the background
         self.cc = ClaudeCodeLog()
@@ -853,6 +1003,8 @@ class Pet:
         self.next_work_line = self.next_idle_line = 0.0
         self.next_quote = time.time() + random.uniform(60, 180)
         self.speech, self.quiet_until = None, 0.0
+        self.last_touch = time.time()             # last hover, poke or drag
+        self.next_attention = self.next_full_line = 0.0
 
         # screens. x is the pet's centre and y its feet, both in screen pixels.
         self.screens = self.get_screens()
@@ -869,9 +1021,14 @@ class Pet:
         self.screens_at = time.time()
 
         # what it's doing
-        self.vy = 0.0
+        self.vx, self.vy = 0.0, 0.0               # speed (vx is only for throws)
+        self.angle, self.spin, self.hang = 0.0, 0.0, 0.0   # tilt while dragged or tumbling
+        self.grab_local, self.grip, self.trail, self.drag_vx = (0, 0), (0, 0), [], 0.0
+        self.chute, self.bounces = False, 0
+        self.dizzy_t = self.stretch_t = self.dance_t = 0.0
+        self.center_x, self.feet_win, self.body_at, self.pet_px = 0, 0, (0, 0), (72, 40)
         self.dir = random.choice((-1, 1))
-        self.state, self.state_t = "idle", 2.0    # idle, walk, sleep or work
+        self.state, self.state_t = "idle", 2.0    # idle, walk, sleep, work or dance
         self.sleep_reason = None
         self.step, self.step_t = 0, 0.0
         self.blink_t, self.next_blink = 0.0, 3.0
@@ -891,6 +1048,7 @@ class Pet:
 
         self.fader = Fader(self.root, 1.0, 1.0, self.place)
         self.details = Details(self)
+        self.tip = Tooltip(self)
         self.build_menu()
         c = self.canvas
         c.bind("<Button-1>", self.press)
@@ -908,7 +1066,13 @@ class Pet:
     def build_menu(self):
         m = self.menu = tk.Menu(self.root, tearoff=0)
         m.add_command(label="Refresh now", command=self.refresh)
+        rf = tk.Menu(m, tearoff=0)
+        for v in POLL_CHOICES:
+            rf.add_radiobutton(label=f"{v} seconds" if v < 60 else f"{v // 60} minute{'s' if v > 60 else ''}",
+                               variable=self.poll, value=v, command=self.poll_changed)
+        m.add_cascade(label="Refresh every", menu=rf)
         m.add_checkbutton(label="Keep details open", variable=self.pin_var, command=self.pin_changed)
+        m.add_checkbutton(label="Count tokens like the Claude app", variable=self.cc_app, command=self.cc_changed)
         m.add_separator()
         m.add_checkbutton(label="Walk around", variable=self.walk, command=self.changed)
         m.add_checkbutton(label="Jump now and then", variable=self.jump, command=self.changed)
@@ -947,12 +1111,14 @@ class Pet:
         m.add_checkbutton(label="Start with Windows", variable=self.startup_var, command=self.startup_changed)
         m.add_separator()
         m.add_command(label="Quit", command=self.quit)
+        m.bind("<<MenuSelect>>", lambda e: self.tip.hover(m))
 
     def show_menu(self, e):
         try:
             self.menu.tk_popup(e.x_root, e.y_root)
         finally:
             self.menu.grab_release()
+            self.tip.hide()
 
     # settings
     def s(self):
@@ -962,11 +1128,12 @@ class Pet:
         st = {k: (v.get() if isinstance(v, tk.Variable) else v) for k, v in (
             ("scale", self.scale), ("walk", self.walk), ("jump", self.jump), ("naps", self.naps),
             ("anim", self.anim), ("bubble", self.bubble_mode), ("bubble_style", self.bubble_style),
-            ("chatter", self.chatter), ("wizard", self.wizard), ("warn", self.warn), ("warn_at", self.warn_at), ("panic_at", self.panic_at), ("hide_fs", self.hide_fs),
+            ("chatter", self.chatter), ("wizard", self.wizard), ("warn", self.warn), ("cc_app", self.cc_app), ("warn_at", self.warn_at), ("panic_at", self.panic_at), ("poll", self.poll), ("hide_fs", self.hide_fs),
             ("one_monitor", self.one_monitor), ("panel_tab", self.panel_tab), ("cc_view", self.cc_view),
-            ("cc_range", self.cc_range), ("x", round(self.x)), ("y", round(self.y)))}
+            ("cc_range", self.cc_range), ("plan_chart", self.plan_chart), ("x", round(self.x)), ("y", round(self.y)))}
         write_json(SETTINGS_FILE, st)
         write_json(STATE_FILE, {"seen": self.seen, "last_5h": self.last_5h, "pokes": self.pokes,
+                                "history": self.history,
                                 "milestones": self.milestones, "last_usage": self.last_usage})
         self.saved_at = time.time()
 
@@ -997,6 +1164,20 @@ class Pet:
             self.state, self.squash_t, self.pending_v, self.parts = "idle", 0.0, 0.0, []
             self.happy_t = self.wave_t = self.look_t = 0.0
             self.celebrate = 0
+        self.changed()
+
+    def cc_stats(self):
+        # the claude code numbers, counted like the claude app or for real
+        st = self.cc.stats
+        return st and st["app" if self.cc_app.get() else "real"]
+
+    def cc_changed(self):
+        if self.details.visible:
+            self.details.draw()
+        self.save()
+
+    def poll_changed(self):
+        self.next_at = min(self.next_at, time.time() + self.poll.get())
         self.changed()
 
     def naps_changed(self):
@@ -1096,10 +1277,10 @@ class Pet:
         w, h = self.size
         if self.hidden and self.fader.alpha <= 0.001:
             geo = (w, h, PARK, PARK)
-        else:
+        else:   # always placed by the body, the same way in every state, so nothing jumps
             if not self.held:
                 self.clamp_x()
-            geo = (w, h, round(self.x - w / 2), round(self.y - h))
+            geo = (w, h, round(self.x - self.center_x), round(self.y - self.feet_win))
         if geo != self.geo:
             self.root.geometry("{}x{}+{}+{}".format(*geo))   # "+-50" = 50 left of the main screen
             self.geo = geo
@@ -1117,37 +1298,84 @@ class Pet:
     def press(self, e):
         self.moved, self.pressed = False, True
         self.press_at = (e.x_root, e.y_root)
-        self.grab = (e.x_root - self.x, e.y_root - self.y)
+        self.trail = [(time.perf_counter(), e.x_root, e.y_root)]
+        # where on its body you grabbed it, in body pixels (it will hang from that spot)
+        pw, ph = self.pet_px
+        gx = e.x_root - (self.geo[2] if self.geo else 0) - self.body_at[0]
+        gy = e.y_root - (self.geo[3] if self.geo else 0) - self.body_at[1]
+        self.grab_local = (min(max(gx, 0), pw), min(max(gy, 0), ph))
         self.redraw()
 
     def motion(self, e):
+        now = time.perf_counter()
+        self.trail = [t for t in self.trail if now - t[0] < 0.1] + [(now, e.x_root, e.y_root)]
         if not self.moved and abs(e.x_root - self.press_at[0]) + abs(e.y_root - self.press_at[1]) > 4:
             self.moved, self.held, self.pressed = True, True, False
-            self.vy, self.squash_t, self.pending_v = 0.0, 0.0, 0.0
+            self.vx = self.vy = self.squash_t = self.pending_v = 0.0
+            self.chute, self.bounces, self.last_touch = False, 0, time.time()
+            if self.state == "dance":
+                self.state = "idle"
             self.wake(hop=False)
             self.details.hide()
+            self.hang = self.hang_angle() if self.anim.get() else 0.0
             if random.random() < 0.5:
                 self.say(random.choice(DRAG_LINES), force=True)
         if self.held:
-            self.x, self.y = e.x_root - self.grab[0], e.y_root - self.grab[1]
-            i = self.floor_below(self.x, self.y)
-            if i is not None:
-                self.y = min(self.y, self.screens[i].wb)   # not into the taskbar
+            first, last = self.trail[0], self.trail[-1]
+            if last[0] - first[0] > 0.01:
+                self.drag_vx = (last[1] - first[1]) / (last[0] - first[0])
+            self.grip = (e.x_root, e.y_root)
+            self.follow_grip()
             self.redraw()
+
+    def hang_angle(self):
+        # how far it tips so its middle hangs straight below the spot you grabbed
+        pw, ph = self.pet_px
+        vx, vy = pw / 2 - self.grab_local[0], ph / 2 - self.grab_local[1]
+        if math.hypot(vx, vy) < 0.12 * pw:
+            return 0.0   # grabbed near the middle: it just dangles upright
+        return (math.pi / 2 - math.atan2(vy, vx) + math.pi) % (2 * math.pi) - math.pi
+
+    def follow_grip(self):
+        # works out where its body is from your grip and its tilt
+        pw, ph = self.pet_px
+        dx, dy = pw / 2 - self.grab_local[0], ph / 2 - self.grab_local[1]
+        ca, sa = math.cos(self.angle), math.sin(self.angle)
+        self.x = self.grip[0] + dx * ca - dy * sa
+        self.y = self.grip[1] + dx * sa + dy * ca + ph / 2
 
     def release(self, e):
         self.pressed = False
         if self.held:
-            self.held, self.vy = False, 0.0
+            self.held = False
+            s = self.s()
+            now = time.perf_counter()
+            trail = [t for t in self.trail if now - t[0] < 0.1]
+            vx = vy = 0.0
+            if len(trail) >= 2 and trail[-1][0] - trail[0][0] > 0.01:
+                d = trail[-1][0] - trail[0][0]
+                vx, vy = (trail[-1][1] - trail[0][1]) / d, (trail[-1][2] - trail[0][2]) / d
+            cap = 2600 * s
+            vx, vy = max(-cap, min(cap, vx)), max(-cap, min(cap, vy))
+            self.follow_grip()
+            self.angle = (self.angle + math.pi) % (2 * math.pi) - math.pi   # rights itself the short way
             i = self.floor_below(self.x, self.y)
             self.si = i if i is not None else self.nearest_screen(self.x, self.y)
             sc = self.screens[self.si]
             self.x = min(max(self.x, sc.wl + self.half), sc.wr - self.half)
-            self.y = min(self.y, sc.wb) if self.anim.get() else sc.wb   # it falls from where you let go
+            self.y = min(self.y, sc.wb)
+            if self.anim.get():   # it keeps the speed you threw it with
+                self.vx, self.vy, self.bounces = vx, vy, 0
+                self.spin += vx * 0.004 / s
+                if math.hypot(vx, vy) > 900 * s:
+                    self.say(random.choice(THROW_LINES), force=True)
+            else:
+                self.y, self.angle, self.spin = sc.wb, 0.0, 0.0
             self.state, self.state_t = "idle", 2.0
             self.save()
         elif not self.moved:
             self.poke()
+        self.trail = []
         self.redraw()
 
     def check_hover(self, now):
@@ -1219,9 +1447,20 @@ class Pet:
         self.was_working = working
         if working or self.state == "sleep" or self.details.visible or idle_seconds() > 60:
             return   # busy, asleep, or nobody's there to listen
+        if self.full():
+            if now >= self.next_full_line and self.say(random.choice(FULL_LINES)):
+                self.next_full_line = now + random.uniform(8, 15) * 60 / rate
+            return
+        if now - self.last_touch > ATTENTION_MIN * 60 and now >= self.next_attention:
+            if self.say(random.choice(ATTENTION_LINES)):
+                self.wave_t = 1.4
+                self.next_attention = now + random.uniform(15, 25) * 60 / rate
+            return
         if now - self.last_usage > IDLE_TALK_MIN * 60:
-            if now >= self.next_idle_line and self.say(random.choice(IDLE_LINES)):
+            if now >= self.next_idle_line and self.say(random.choice(IDLE_LINES + BORED_LINES)):
                 self.next_idle_line = now + random.uniform(15, 25) * 60 / rate
+                if random.random() < 0.4 and self.state == "idle" and self.grounded():
+                    self.start_dance()   # bored. might as well dance.
         elif now >= self.next_quote:
             self.say(random.choice(QUOTES))
             self.next_quote = now + random.uniform(4, 10) * 60 / rate
@@ -1229,11 +1468,12 @@ class Pet:
     # reactions
     def greet(self):
         # you pointed at it: it wakes up, or stops and waves
+        self.last_touch = time.time()
         if not self.anim.get():
             return
         if self.state == "sleep":
             self.wake()
-        elif self.state != "work":
+        elif self.state not in ("work", "dance"):
             self.wave_t = 1.1
             if self.state == "walk":
                 self.state, self.state_t = "idle", 2.0
@@ -1241,6 +1481,7 @@ class Pet:
     def poke(self):
         # you clicked it: squish, hop, happy face and a heart
         self.pokes += 1
+        self.last_touch = time.time()
         if self.pokes in POKE_COUNT:
             self.say(POKE_COUNT[self.pokes], force=True)
         elif random.random() < 0.35:
@@ -1266,6 +1507,7 @@ class Pet:
         if self.state != "sleep":
             return
         self.state, self.state_t, self.sleep_reason = "idle", 2.0, None
+        self.stretch_t = 0.9   # a big stretch, both arms up
         self.parts = [p for p in self.parts if p["kind"] == "heart"]
         if hop:
             self.jump_now(HOP_HEIGHT * 0.5 * self.s())
@@ -1305,6 +1547,10 @@ class Pet:
             self.parts.append({"kind": "heart", "x": (18 * bw - 7 * pb) / 2 + random.uniform(-2, 2) * bw,
                                "y": self.bubble_top - 7 * pb, "vx": random.uniform(-10, 10) * s,
                                "vy": -30 * s, "life": 0.8, "c": 0})
+        elif kind == "note":   # dancing
+            self.parts.append({"kind": "note", "x": random.uniform(1, 14) * bw, "y": -5 * pb,
+                               "vx": random.uniform(-15, 15) * s, "vy": -35 * s, "life": 1.0,
+                               "c": random.randrange(len(NOTE_C))})
         elif kind == "spark":   # from the wand tip
             self.parts.append({"kind": "spark", "x": 17 * bw + 4 * pb, "y": self.hand() * bh - 8 * pb,
                                "vx": random.uniform(-25, 35) * s, "vy": random.uniform(-45, -5) * s,
@@ -1340,16 +1586,45 @@ class Pet:
                         self.celebrate = 3    # the 5-hour limit just reset. party.
                         self.say(random.choice(RESET_LINES), force=True)
                     elif self.last_5h is not None and r["pct"] > self.last_5h and not self.first_result:
-                        self.note_usage(now, POLL_SECONDS + 10)   # chat or other apps are using tokens
+                        self.note_usage(now, self.poll.get() + 10)   # chat or other apps are using tokens
                     self.last_5h = r["pct"]
                 self.check_milestone(r)
             self.first_result = False
-            self.next_at = now + POLL_SECONDS
+            self.limited = 0
+            self.next_at = now + self.poll.get()
+            self.remember(now, parse_rows(data))
         else:
             if err.startswith("login expired") and not (self.error or "").startswith("login expired"):
                 self.say("I can't see your usage anymore. open Claude Code to log back in?", force=True)
+            if err.startswith("rate limited"):
+                # asked to slow down: wait 3, 6, 12... minutes (up to 30), or longer if the service says so
+                self.limited += 1
+                wait = max(RETRY_AFTER, min(1800, RATE_LIMITED_SECONDS * 2 ** (self.limited - 1)))
+                self.next_at = now + wait
+                at = datetime.datetime.fromtimestamp(self.next_at)
+                err = (f"rate limited: the usage service asked us to slow down, so it'll try again at {at:%H:%M}. "
+                       "your last numbers are still shown. a slower 'refresh every' setting helps.")
+            else:
+                self.next_at = now + self.poll.get()
             self.error = err
-            self.next_at = now + (RATE_LIMITED_SECONDS if "rate limited" in err else POLL_SECONDS)
+
+    def remember(self, now, rows):
+        # keeps a history of the 5-hour and weekly % for the plan tab's chart:
+        # every check for the last 6 hours, then one per 10 minutes, for 8 days
+        by_key = {r["key"]: r["pct"] for r in rows}
+        if "five_hour" not in by_key and "seven_day" not in by_key:
+            return
+        self.history.append((now, by_key.get("five_hour"), by_key.get("seven_day")))
+        kept, last_old = [], 0.0
+        for h in self.history:
+            if now - h[0] > 8 * 86400:
+                continue
+            if now - h[0] > 6 * 3600:
+                if h[0] - last_old < 600:
+                    continue
+                last_old = h[0]
+            kept.append(h)
+        self.history = kept
 
     def check_milestone(self, r):
         lines = MILESTONES.get(r["key"])
@@ -1411,15 +1686,20 @@ class Pet:
         return [(SHORT.get(r["key"], r["label"][:4]), round(r["pct"]), bar_color(r["pct"])) for r in self.shown_rows()]
 
     def warn_level(self):
-        # 0 = fine (or warnings switched off), 1 = a limit is nearly full, 2 = it's about to run out
+        # 0 = fine (or warnings switched off), 1 = yellow ring, 2 = red ring, 3 = completely used up
         if not self.warn.get():
             return 0
         top = max([r["pct"] for r in self.shown_rows()] or [0])
+        if top >= 100:
+            return 3
         return 2 if top >= self.panic_at.get() else 1 if top >= self.warn_at.get() else 0
+
+    def full(self):
+        return any(r["pct"] >= 100 for r in self.shown_rows())
 
     # movement
     def walking_allowed(self):
-        return self.walk.get() and not self.details.visible and not self.hidden
+        return self.walk.get() and not self.details.visible and not self.hidden and not self.full()
 
     def grounded(self):
         return self.vy >= 0 and self.y >= self.screens[self.si].wb - 0.5
@@ -1478,19 +1758,19 @@ class Pet:
         # fast while moving, slower while standing around, very slow while hidden
         if self.hidden:
             return 500
-        if (self.held or self.pressed or self.squash_t > 0 or not self.grounded()
+        if (self.held or self.pressed or self.squash_t > 0 or not self.grounded() or self.angle or self.vx
                 or (self.state == "walk" and self.walking_allowed())):
             return 15
-        if self.parts or self.wave_t > 0 or self.state == "work" or self.speech:
+        if (self.parts or self.wave_t > 0 or self.state in ("work", "dance") or self.speech
+                or self.dizzy_t > 0 or self.stretch_t > 0):
             return 30
         return 80
 
     def physics(self, dt):
         s = self.s()
         self.clock += dt
-        self.happy_t -= dt
-        self.wave_t -= dt
-        self.look_t -= dt
+        for name in ("happy_t", "wave_t", "look_t", "dizzy_t", "stretch_t"):
+            setattr(self, name, getattr(self, name) - dt)
         if self.state != "sleep":
             self.next_blink -= dt
             if self.next_blink <= 0:
@@ -1501,6 +1781,7 @@ class Pet:
             p["x"] += p["vx"] * dt
             p["y"] += p["vy"] * dt
         self.parts = [p for p in self.parts if p["life"] > 0]
+        self.turn(dt, s)
         if self.held or self.hidden or self.pressed:
             return
         if self.squash_t > 0:   # crouching or squished: hold still for a moment
@@ -1509,18 +1790,37 @@ class Pet:
                 self.vy, self.pending_v = -self.pending_v, 0.0
             return
         walking = self.state == "walk" and self.walking_allowed()
-        if not self.grounded():   # in the air: a proper curve, the same whatever the frame rate
+        sc = self.screens[self.si]
+        if not self.grounded():   # in the air
             g = GRAVITY * s
-            self.y += self.vy * dt + 0.5 * g * dt * dt
-            self.vy += g * dt
-            if walking:
+            if (not self.chute and self.vy > 150 * s and sc.wb - self.y > CHUTE_HEIGHT * s
+                    and abs(self.angle) < 0.4):
+                self.chute = True   # a long way down: open the parachute
+                if random.random() < 0.6:
+                    self.say(random.choice(CHUTE_LINES), force=True)
+            if self.chute:
+                self.vy = min(self.vy + g * dt, CHUTE_SPEED * s)
+                self.y += self.vy * dt
+                self.vx *= max(0.0, 1 - 2.5 * dt)
+                self.x += math.sin(self.clock * 1.6) * 14 * s * dt   # drifting in the breeze
+            else:   # a proper curve, the same whatever the frame rate
+                self.y += self.vy * dt + 0.5 * g * dt * dt
+                self.vy += g * dt
+                self.vx *= max(0.0, 1 - THROW_DRAG * dt)
+            if self.y - self.pet_px[1] < sc.mt:   # bonk on the top of the screen
+                self.y, self.vy = sc.mt + self.pet_px[1], abs(self.vy) * 0.3
+            if abs(self.vx) > 1:
+                self.slide(dt)
+            elif walking:
                 self.move_x(self.dir * WALK_SPEED * s * dt)
-            floor = self.screens[self.si].wb
-            if self.y >= floor:
-                if self.vy > 350 * s:
-                    self.squash_t = 0.07   # landing squish
-                self.y, self.vy = floor, 0.0
+            if self.y >= self.screens[self.si].wb:
+                self.land(s)
             return
+        if abs(self.vx) > 5 * s:   # still sliding after a throw
+            self.slide(dt)
+            self.vx -= math.copysign(min(abs(self.vx), GROUND_FRICTION * s * dt), self.vx)
+            return
+        self.vx = 0.0
         if self.state == "sleep":
             if self.sleep_reason == "nap":
                 self.state_t -= dt
@@ -1538,7 +1838,7 @@ class Pet:
             self.jump_now(HOP_HEIGHT * 1.3 * s)
             return
         casting = self.wizard.get() and time.time() < self.working_until
-        if casting and self.state in ("idle", "walk"):
+        if casting and self.state in ("idle", "walk", "dance"):
             self.state, self.cast_t = "work", 0.0
         if self.state == "work":
             if not casting:
@@ -1550,16 +1850,28 @@ class Pet:
                     self.spawn("spark")
                     self.part_t = random.uniform(0.08, 0.2)
                 return
+        if self.state == "dance":
+            self.dance_t += dt
+            self.state_t -= dt
+            self.part_t -= dt
+            if self.part_t <= 0:
+                self.spawn("note")
+                self.part_t = 0.45
+            if self.state_t <= 0:
+                self.state, self.state_t = "idle", 2.0
+            return
         self.state_t -= dt
         if walking:
             self.move_x(self.dir * WALK_SPEED * s * dt)
             self.step_t += dt
             if self.step_t >= 0.18:
                 self.step_t, self.step = 0.0, self.step + 1
-        if self.jump.get() and random.random() < dt / JUMP_EVERY:
+        if self.jump.get() and not self.full() and random.random() < dt / JUMP_EVERY:
             self.jump_now(HOP_HEIGHT * s)
         if self.state_t <= 0:
-            if self.state == "walk" or not self.walking_allowed():
+            if random.random() < DANCE_CHANCE and not self.full():
+                self.start_dance()
+            elif self.state == "walk" or not self.walking_allowed():
                 if self.naps.get() and random.random() < NAP_CHANCE and not self.details.visible:
                     self.fall_asleep("nap")
                 else:
@@ -1570,6 +1882,52 @@ class Pet:
         if self.state == "idle" and self.look_t <= 0 and random.random() < dt / 4:
             self.look_d, self.look_t = random.choice((-1, 1)), random.uniform(0.6, 1.4)
 
+    def start_dance(self):
+        if self.anim.get():
+            self.state, self.state_t, self.dance_t, self.part_t = "dance", random.uniform(3.5, 6), 0.0, 0.2
+
+    def turn(self, dt, s):
+        # tilting: hangs from where you grabbed it and swings as you move, then rights itself
+        if self.held:
+            self.drag_vx *= max(0.0, 1 - 5 * dt)
+            target, k, damp = self.hang + max(-0.7, min(0.7, -self.drag_vx * 0.0011 / s)), 40, 6
+        elif self.angle or self.spin:
+            target, k, damp = 0.0, 22, 5
+        else:
+            return
+        self.spin += ((target - self.angle) * k - self.spin * damp) * dt
+        self.angle += self.spin * dt
+        if self.held:
+            self.follow_grip()
+        elif abs(self.angle) < 0.02 and abs(self.spin) < 0.2:
+            self.angle = self.spin = 0.0
+
+    def slide(self, dt):
+        # moves sideways with the throw speed. bounces off the screen edge.
+        want = self.x + self.vx * dt
+        self.move_x(self.vx * dt)
+        if abs(self.x - want) > 1:
+            self.vx = -self.vx * 0.5
+
+    def land(self, s):
+        impact = self.vy
+        self.y = self.screens[self.si].wb
+        if self.chute:
+            self.chute, self.vy, self.squash_t = False, 0.0, 0.07
+            return
+        if impact > 700 * s and self.bounces < 1:
+            self.bounces += 1
+            self.vy = -impact * 0.35   # boing
+        else:
+            self.vy = 0.0
+            if impact > 350 * s:
+                self.squash_t = 0.07   # landing squish
+        if impact > 1100 * s and self.dizzy_t <= 0:
+            self.dizzy_t = 2.4   # that was a hard landing: seeing stars
+            if random.random() < 0.7:
+                self.say(random.choice(DIZZY_LINES), force=True)
+        self.vx *= 0.6
+
     # drawing. only redraws when something visible changed; moving is just moving the window.
     def frame(self):
         anim = self.anim.get()
@@ -1577,35 +1935,55 @@ class Pet:
         grounded = self.grounded()
         airborne = self.held or not grounded
         sleeping = anim and self.state == "sleep"
+        dancing = anim and self.state == "dance" and grounded
         wiz = anim and self.state == "work" and not airborne
+        full = self.full()
         squash = anim and grounded and not self.held and (self.squash_t > 0 or self.pressed)
         walking = anim and self.state == "walk" and self.walking_allowed() and grounded and not squash
+        beat = int(self.dance_t / 0.25) % 4 if dancing else 0
+        chute = anim and self.chute and not grounded
         if sleeping:
             legs = ()
         elif self.held:
             legs = LEGS_STEP if int(self.clock / 0.12) % 2 else LEGS_AIR   # wiggling
         elif airborne:
             legs = LEGS_AIR
+        elif dancing:
+            legs = LEGS_STEP if beat % 2 else LEGS_STAND
         else:
             legs = LEGS_STEP if walking and self.step % 2 else LEGS_STAND
-        if sleeping:
+        if sleeping or (anim and self.dizzy_t > 0):
             eyes = "closed"
-        elif anim and self.happy_t > 0:
+        elif anim and (self.happy_t > 0 or dancing):
             eyes = "happy"
         elif anim and self.blink_t > 0:
             eyes = "closed"
+        elif full and not airborne:
+            eyes = "tired"   # a hard day's work
         else:
             eyes = "open"
         if wiz:
             eye_dir = 1   # watching the wand
         else:
             eye_dir = self.dir if walking else (self.look_d if anim and self.look_t > 0 and not sleeping else 0)
-        breath = sleeping and int(self.clock / 1.4) % 2 == 1
-        if wiz:
-            arm = 2 - self.hand()
+        if sleeping:
+            sink = "lie"
+        elif squash or (dancing and beat in (1, 3)) or (full and grounded and self.state == "idle"):
+            sink = "half"   # squished, bopping to the beat, or slumped because the limit is full
         else:
-            arm = (int(self.wave_t / 0.18) % 2 + 1) if anim and self.wave_t > 0 and not sleeping else 0
-        warn = self.warn_level()   # 0 none, 1 yellow ring, 2 red ring
+            sink = None
+        if wiz:
+            arms = (ARMS[0],) + WAVE[1 - self.hand()]
+        elif anim and self.stretch_t > 0 and not sleeping:
+            arms = LEFT_WAVE[1] + WAVE[1]
+        elif dancing:
+            arms = (LEFT_WAVE[1] + (ARMS[1],), ARMS, (ARMS[0],) + WAVE[1], LEFT_WAVE[1] + WAVE[1])[beat]
+        elif chute:
+            arms = LEFT_WAVE[1] + WAVE[1]   # holding the strings
+        elif anim and self.wave_t > 0 and not sleeping:
+            arms = (ARMS[0],) + WAVE[int(self.wave_t / 0.18) % 2]
+        else:
+            arms = ARMS
         parts = tuple((p["kind"], round(p["x"]), round(p["y"]), p["c"]) for p in self.parts) if anim else ()
         show = (self.bubble_mode.get() != "hover" or self.hovering or self.held
                 or self.details.visible or now < self.hover_until)
@@ -1618,8 +1996,17 @@ class Pet:
                 typed = int((now - self.speech["start"]) * SPEAK_CPS) if anim else len(text)
                 speech = (text, min(len(text), typed))
         bars = tuple(self.bubble_bars()) if self.bubble_style.get() == "bars" and self.data else None
-        return (self.scale, legs, eyes, eye_dir, squash, sleeping, breath, arm, warn, wiz, parts,
-                tuple(self.bubble_segments()), bars, bool(self.error), show, speech)
+        rot = None
+        if anim and (self.held or self.angle):
+            pw, ph = self.pet_px
+            gx, gy = self.grab_local if self.held else (pw / 2, ph / 2)
+            rot = (round(self.angle, 2), round(gx), round(gy))
+        return (self.scale, legs, eyes, eye_dir, sink, arms, self.hand() if wiz else None, self.warn_level(),
+                wiz, parts, tuple(self.bubble_segments()), bars, bool(self.error), show, speech, rot,
+                round(math.sin(self.clock * 1.6) * 1.4) if chute else None,
+                (0, -1, 0, 1)[beat] if dancing else 0,
+                int(self.clock * 8) % 12 if anim and self.dizzy_t > 0 else None,
+                sleeping and int(self.clock / 1.4) % 2 == 1)
 
     def redraw(self):
         f = self.frame()
@@ -1647,8 +2034,8 @@ class Pet:
                                                      y + (r + 1) * b + d, fill=fill, outline="")
 
     def draw(self, f):
-        (_, legs, eyes, eye_dir, squash, lying, breath, arm, warn, wiz, parts,
-         segs, bars, err, show_bubble, speech) = f
+        (_, legs, eyes, eye_dir, sink_kind, arms, wand, warn, wiz, parts, segs, bars, err, show_bubble,
+         speech, rot, chute, shift, dizzy, breath) = f
         c = self.canvas
         c.delete("all")
         s = self.s()
@@ -1657,6 +2044,8 @@ class Pet:
         pet_w, pet_h = 18 * bw, 5 * bh
         font = self.font(max(8, round(11 * s)))
         pad = round(7 * s)
+        if rot:
+            show_bubble = False   # the usage bubble steps aside while it's tumbling about
 
         # usage bubble size: numbers, or two little bars
         if bars:
@@ -1671,7 +2060,7 @@ class Pet:
             bub_w = 2 * pad + sum(dot + dgap + font.measure(t) for t, _ in segs) + sgap * (len(segs) - 1)
             bub_h = font.metrics("linespace") + round(6 * s)
         ring = max(2, round(2 * s)) if warn else 0         # the warning ring's thickness
-        tail, gap = max(2, round(4 * s)), round(2 * s) + 2 * ring
+        tail, gap = max(2, round(4 * s)), round(2 * s) + 2 * ring + (max(2, round(1.5 * s)) if warn == 3 else 0)
 
         # speech bubble size
         sp_lines, sp_w, sp_h = [], 0, 0
@@ -1684,72 +2073,129 @@ class Pet:
             sp_w = max(sfont.measure(ln) for ln in sp_lines) + 2 * round(8 * s)
             sp_h = len(sp_lines) * sfont.metrics("linespace") + 2 * round(5 * s)
 
-        side = round(30 * s)                               # room for z's and sparks
-        hat_space = (len(HAT) - 1) * pb if wiz else 0
-        sp_space = sp_h + tail + round(3 * s) if speech else 0
-        top = round(40 * s) + sp_space                     # room for hearts, plus the speech bubble
-        W = max(pet_w + 2 * side, bub_w + round(6 * s), sp_w) + 2   # a little extra for the warning ring
-        H = top + bub_h + tail + gap + hat_space + pet_h
-        px, py = (W - pet_w) // 2, H - pet_h
-        sink = bh if lying else bh // 2 if squash else 0   # lying down or squished
+        side = round(30 * s)                               # room for z's, notes and sparks
+        above = max((len(HAT) - 1) * pb if wiz else 0,     # room above the head: hat, parachute, stars
+                    (len(CHUTE) + 10) * pb if chute is not None else 0,
+                    6 * pb if dizzy is not None else 0)
+        # the window is ONE fixed size whatever the mascot is doing, and its middle always sits at the
+        # same spot in it. resizing or shifting the window between frames made windows flash a dark box
+        # or the mascot flicker, because moving and redrawing a window don't happen at the same instant.
+        hd = math.ceil(math.hypot(pet_w, pet_h) / 2) + 2   # a tilted body reaches this far from its middle
+        ring_max = max(2, round(2 * s)) + max(2, round(1.5 * s))
+        lh = self.font(max(8, round(11 * s)), bold=False).metrics("linespace")
+        bub_max = max(2 * self.font(max(8, round(10 * s))).metrics("linespace"), font.metrics("linespace")) + round(6 * s)
+        cy = (pet_h - pet_h // 2 + (len(CHUTE) + 10) * pb + round(2 * s) + 3 * ring_max + 2 * tail + bub_max
+              + round(3 * s) + 4 * lh + 2 * round(5 * s) + round(40 * s))   # room for everything above it
+        W = max(round(320 * s), len(CHUTE[0]) * pb + 2 * side, 2 * hd + 2 * side, bub_w + 4 * ring_max, sp_w + 4)
+        cx = W // 2
+        H = cy + hd
+        sink = {"lie": bh, "half": bh // 2}.get(sink_kind, 0)
+        up = 0
+
+        if rot:
+            # tilted: every block becomes a turned square around the body's middle
+            ang = rot[0]
+            ca, sa = math.cos(ang), math.sin(ang)
+            mx, my = pet_w / 2, pet_h / 2
+            px, py = cx - pet_w // 2, cy - pet_h // 2
+            # how far the tilted body rises above its middle, so speech can sit just above it
+            up = max(0, math.ceil(-min(dx * sa + dy * ca for dx in (-mx, mx) for dy in (-my, my))))
+
+            def emit(x1, y1, x2, y2, color):
+                pts = []
+                for lx, ly in ((x1 - 0.5, y1 - 0.5), (x2 + 0.5, y1 - 0.5), (x2 + 0.5, y2 + 0.5), (x1 - 0.5, y2 + 0.5)):
+                    dx, dy = lx - mx, ly - my
+                    pts += [cx + dx * ca - dy * sa, cy + dx * sa + dy * ca]
+                c.create_polygon(pts, fill=color, outline="")
+        else:
+            px, py = cx - pet_w // 2 + shift * max(1, bw // 2), cy - pet_h // 2
+
+            def emit(x1, y1, x2, y2, color):
+                c.create_rectangle(px + x1, py + y1, px + x2, py + y2, fill=color, outline="")
 
         def block(col, row, cols=1, color=ORANGE):
-            y1 = py + row * bh + sink
-            c.create_rectangle(px + col * bw, y1, px + (col + cols) * bw, min(y1 + bh, H), fill=color, outline="")
+            y1 = row * bh + sink
+            emit(col * bw, y1, (col + cols) * bw, min(y1 + bh, pet_h), color)
 
-        # the mascot, standing on the bottom edge of the window
+        # the mascot
         for row, line in enumerate(BODY):
             start, end = line.index("#"), line.rindex("#") + 1
             if row == 0 and breath:
                 start, end = start + 1, end - 1   # breathing out while asleep
             block(start, row, end - start)
-        arms = (ARMS[0],) + WAVE[arm - 1] if arm else ARMS
         for col, row in arms:
             block(col, row)
         for col in legs:
             block(col, 4)
         for col in EYES:
-            x1, y1 = px + (col + eye_dir) * bw, py + bh + sink
+            x1, y1 = (col + eye_dir) * bw, bh + sink
             if eyes == "open":
-                c.create_rectangle(x1, y1, x1 + bw, y1 + bh, fill=EYE, outline="")
+                emit(x1, y1, x1 + bw, y1 + bh, EYE)
+            elif eyes == "tired":   # heavy eyelids
+                emit(x1, y1 + bh // 2, x1 + bw, y1 + bh, EYE)
             else:   # a thin line: low for closed, high for a happy squint
                 ly = y1 + (bh // 5 if eyes == "happy" else bh // 2)
-                c.create_rectangle(x1, ly, x1 + bw, ly + max(1, bh // 4), fill=EYE, outline="")
+                emit(x1, ly, x1 + bw, ly + max(1, bh // 4), EYE)
         if eyes == "happy":
             for col in BLUSH:
                 block(col, 2, color=BLUSH_C)
-        if wiz:
+        if wiz and not rot:
             # wizard hat on the head, wand in the raised hand
             hx = px + 3 * bw + (12 * bw - len(HAT[0]) * pb) // 2
             self.glyph(HAT, hx, py + sink - (len(HAT) - 1) * pb, pb,
                        {"#": HAT_C, "y": BAND_C, "*": STAR_C}, shadow=False)
-            hand_y = py + sink + (2 - arm) * bh
+            hand_y = py + sink + wand * bh
             for i in range(5):
                 x1, y1 = px + 17 * bw + i * pb, hand_y - (i + 1) * pb
                 c.create_rectangle(x1, y1, x1 + pb, y1 + pb, fill=WAND_C, outline="")
             x1, y1 = px + 17 * bw + 4 * pb, hand_y - 7 * pb
             c.create_rectangle(x1, y1, x1 + 2 * pb, y1 + 2 * pb, fill=STAR_C, outline="")
+        if chute is not None and not rot:
+            # the parachute, with strings down to its raised hands and head
+            cw = len(CHUTE[0]) * pb
+            cx0, cy0 = px + pet_w // 2 - cw // 2 + chute * pb, py + sink - (len(CHUTE) + 10) * pb
+            self.glyph(CHUTE, cx0, cy0, pb, {"r": CHUTE_R, "w": CHUTE_W, "#": CHUTE_R})
+            cb = cy0 + len(CHUTE) * pb
+            lw = max(1, round(s))
+            for sx_, ex in ((cx0 + pb, px + 1.5 * bw), (cx0 + cw - pb, px + 16.5 * bw),
+                            (cx0 + cw * 0.35, px + 7 * bw), (cx0 + cw * 0.65, px + 11 * bw)):
+                c.create_line(sx_, cb, ex, py + sink, fill=STRING_C, width=lw)
+        if dizzy is not None and not rot:
+            # three little stars circling its head
+            cx, cy = px + 9 * bw, py + sink - 3 * pb
+            for k in range(3):
+                a = dizzy / 12 * 2 * math.pi + k * 2 * math.pi / 3
+                self.glyph(SPARK, cx + math.cos(a) * 7 * bw - 1.5 * pb, cy + math.sin(a) * 2 * pb - 1.5 * pb,
+                           pb, STAR_C)
 
-        # z's and sparkles drift up behind the bubbles, so they never cover the words
+        # z's, notes and sparkles drift up behind the bubbles, so they never cover the words
         for kind, x, y, ci in parts:
             if kind in ("z", "Z"):
                 self.glyph(ZZZ, px + x, py + y, pb + (pb // 2 + 1 if kind == "Z" else 0), ZZZ_C)
             elif kind == "spark":
                 self.glyph(SPARK, px + x, py + y, pb, SPARK_C[ci], shadow=False)
+            elif kind == "note":
+                self.glyph(NOTE, px + x, py + y, pb, NOTE_C[ci])
 
         # the usage bubble. text only ever sits on solid bubbles, so there's no fuzzy edge
         # against the see-through colour.
-        bx, by = (W - bub_w) // 2, top
+        bx, by = (W - bub_w) // 2, py - above - gap - tail - bub_h
         if show_bubble:
             mid = W // 2
-            ring_c = PANIC_C if warn == 2 else WARN_C
-            if warn:   # a yellow or red ring around the bubble and its tail: a limit is nearly full
-                round_rect(c, bx - ring, by - ring, bx + bub_w + ring, by + bub_h + ring, round(5 * s) + ring, ring_c)
+            ring_c = {1: WARN_C, 2: PANIC_C, 3: FULL_C}.get(warn, KEY)
+            if warn:   # a ring around the bubble and its tail: yellow, red, or black when it's all used up
                 t2 = tail + 2 * ring
+                if warn == 3:   # a silver edge so the black ring shows on dark backgrounds too
+                    e = max(2, round(1.5 * s))
+                    round_rect(c, bx - ring - e, by - ring - e, bx + bub_w + ring + e, by + bub_h + ring + e,
+                               round(5 * s) + ring + e, FULL_EDGE)
+                    c.create_polygon(mid - t2 - e, by + bub_h, mid + t2 + e, by + bub_h, mid, by + bub_h + t2 + e,
+                                     fill=FULL_EDGE, outline="")
+                round_rect(c, bx - ring, by - ring, bx + bub_w + ring, by + bub_h + ring, round(5 * s) + ring,
+                           ring_c, bg=FULL_EDGE if warn == 3 else KEY)
                 c.create_polygon(mid - t2, by + bub_h - 1, mid + t2, by + bub_h - 1, mid, by + bub_h + t2,
                                  fill=ring_c, outline="")
-            round_rect(c, bx, by, bx + bub_w, by + bub_h, round(5 * s), BUBBLE, bg=ring_c if warn else KEY,
-                       smooth=bool(warn))
+            round_rect(c, bx, by, bx + bub_w, by + bub_h, round(5 * s), BUBBLE, bg=ring_c, smooth=bool(warn))
             c.create_polygon(mid - tail, by + bub_h - 1, mid + tail, by + bub_h - 1, mid, by + bub_h + tail,
                              fill=BUBBLE, outline="")
             if bars:
@@ -1778,7 +2224,9 @@ class Pet:
 
         # the speech bubble, above the usage bubble. it types itself out.
         if speech:
-            sx, sy = (W - sp_w) // 2, top - tail - round(3 * s) - sp_h
+            sx, sy = (W - sp_w) // 2, by - ring - tail - round(3 * s) - sp_h
+            if rot:
+                sy = cy - up - round(6 * s) - tail - sp_h
             round_rect(c, sx, sy, sx + sp_w, sy + sp_h, round(6 * s), SPEECH)
             mid = W // 2
             c.create_polygon(mid - tail, sy + sp_h - 1, mid + tail, sy + sp_h - 1, mid, sy + sp_h + tail,
@@ -1796,17 +2244,107 @@ class Pet:
             if kind == "heart":
                 self.glyph(HEART, px + x, py + y, pb, HEART_C)
 
-        c.configure(width=W, height=H)
-        self.size, self.half, self.top_margin = (W, H), max(pet_w, bub_w, sp_w) / 2 + 2, top
-        highest = top - sp_space if speech else top if show_bubble else py - hat_space
+        if (W, H) != self.size:
+            c.configure(width=W, height=H)
+        self.size, self.half, self.top_margin = (W, H), max(pet_w, bub_w, sp_w) / 2 + 2, by
+        self.center_x, self.feet_win = cx, cy - pet_h // 2 + pet_h   # where the body sits in the window
+        self.body_at, self.pet_px = (px, py), (pet_w, pet_h)
+        highest = sy if speech else by if show_bubble else py - above
         self.bubble_top = highest - py   # relative to the head: where new hearts appear
-        self.rects = {"pet": (px, py - hat_space, px + pet_w, py + pet_h),
-                      "bubble": (bx, by, bx + bub_w, by + bub_h + tail) if show_bubble else None}
+        body = (cx - hd, cy - hd, cx + hd, cy + hd) if rot else (px, py - above, px + pet_w, py + pet_h)
+        self.rects = {"pet": body, "bubble": (bx, by, bx + bub_w, by + bub_h + tail) if show_bubble else None}
+
+
+# ---- menu tooltips ----
+
+class Tooltip:
+    BG, BORDER, FG, DIM = "#1f1e1d", "#3a3a3c", "#f2efe8", "#a8a8ad"
+    TAGS = {"On": "#7bd88f", "Off": "#8e8e93"}   # other tags (choices) are amber
+
+    def __init__(self, pet):
+        self.pet = pet
+        self.win = tk.Toplevel(pet.root)
+        self.win.overrideredirect(True)
+        self.win.attributes("-topmost", True)
+        self.win.configure(bg=self.BORDER)
+        self.win.geometry(f"10x10+{PARK}+{PARK}")   # parked off screen until needed
+        self.canvas = tk.Canvas(self.win, bg=self.BG, highlightthickness=0)
+        self.canvas.pack(padx=1, pady=1)
+        self.job, self.rounded, self.fonts = None, False, {}
+
+    def font(self, size, bold=False):
+        px = max(8, round(size * self.pet.dpi))
+        if (px, bold) not in self.fonts:
+            self.fonts[(px, bold)] = tkfont.Font(root=self.win, family="Segoe UI", size=-px,
+                                                 weight="bold" if bold else "normal")
+        return self.fonts[(px, bold)]
+
+    def hover(self, menu):
+        # the highlighted menu item changed: show its tooltip after a short pause
+        self.hide()
+        try:
+            i = menu.index("active")
+            label = menu.entrycget(i, "label").strip() if i is not None else ""
+        except tk.TclError:
+            label = ""   # a separator, or nothing highlighted
+        if label in TIPS:
+            try:
+                row_y = menu.yposition(i)   # where the item sits inside the menu
+            except tk.TclError:
+                row_y = 0
+            self.job = self.win.after(350, lambda: self.show(label, row_y))
+
+    def show(self, label, row_y=0):
+        self.job = None
+        desc, rows = TIPS[label]
+        s, c = self.pet.dpi, self.canvas
+        c.delete("all")
+        pad, width = round(10 * s), round(260 * s)
+        tag_w = max([self.font(12, True).measure(tag) for tag, _ in rows] or [0]) + round(8 * s)
+        item = c.create_text(pad, pad, anchor="nw", text=desc, fill=self.FG, font=self.font(12.5, True), width=width)
+        y = c.bbox(item)[3] + round(7 * s)
+        for tag, text in rows:
+            c.create_text(pad, y, anchor="nw", text=tag, fill=self.TAGS.get(tag, "#d9a441"), font=self.font(12, True))
+            item = c.create_text(pad + tag_w, y, anchor="nw", text=text, fill=self.DIM, font=self.font(12),
+                                 width=width - tag_w)
+            y = c.bbox(item)[3] + round(4 * s)
+        w, h = width + 2 * pad, y + pad - round(4 * s)
+        c.configure(width=w, height=h)
+        # next to the open menu: on its left (the right side is where submenus open), or right if no room
+        p = self.pet
+        mx, my = p.root.winfo_pointerxy()
+        rects = menu_rects()
+        on_menu = next((r for r in rects if r[0] <= mx < r[2] and r[1] <= my < r[3]), None)
+        r = on_menu or (rects[0] if rects else (mx, my, mx, my))
+        if not on_menu:   # using the keyboard: line up with the highlighted item instead of the mouse
+            my = r[1] + row_y + round(10 * s)
+        cx, cy = (r[0] + r[2]) // 2, (r[1] + r[3]) // 2
+        si = p.find_screen(cx, cy)
+        sc = p.screens[si if si is not None else p.nearest_screen(cx, cy)]
+        x = r[0] - w - 2 - round(6 * s)
+        if x < sc.wl:
+            x = r[2] + round(6 * s)
+        y = min(max(sc.wt, my - round(12 * s)), sc.wb - h - 2)
+        self.win.geometry(f"{w + 2}x{h + 2}+{x}+{y}")
+        self.win.update_idletasks()   # apply the move now: while a menu is open tk may hold it back
+        if (self.win.winfo_x(), self.win.winfo_y()) != (x, y):
+            hwnd = u32.GetParent(self.win.winfo_id()) or self.win.winfo_id()
+            u32.SetWindowPos(hwnd, None, x, y, w + 2, h + 2, 0x0014)   # SWP_NOZORDER | SWP_NOACTIVATE
+        self.win.lift()
+        if not self.rounded:
+            round_corners(self.win)
+            self.rounded = True
+
+    def hide(self):
+        if self.job:
+            self.win.after_cancel(self.job)
+            self.job = None
+        self.win.geometry(f"+{PARK}+{PARK}")
 
 
 # ---- details panel (hover the mascot) ----
 
-PANEL_W = 300
+PANEL_W = 320
 HEAT = ["#2c2c2e", "#173c6e", "#1f57a6", "#2b74e0", "#5aa2ff"]   # empty day, then busier and busier
 
 
@@ -1830,6 +2368,7 @@ class Details:
         self.hits, self.rect, self.px_size, self.fonts = [], None, (10, 10), {}
         self.anchor_x = self.anchor_bottom = 0
         self.s = 1.0
+        self.curve_key, self.curve = None, []   # cached estimate for the plan chart
         self.fader = Fader(self.win, 0.0, 1.0, self.place)
 
     def show(self, pinned=False):
@@ -1876,7 +2415,7 @@ class Details:
                     self.hide()
                     return
                 kind, val = name.split(":")
-                {"tab": p.panel_tab, "view": p.cc_view, "range": p.cc_range}[kind].set(val)
+                {"tab": p.panel_tab, "view": p.cc_view, "range": p.cc_range, "chart": p.plan_chart}[kind].set(val)
                 self.draw()
                 p.save()
                 return
@@ -1918,19 +2457,27 @@ class Details:
     def draw(self):
         p = self.pet
         self.s = s = p.dpi * min(1.6, max(1.0, p.scale))
-        self.canvas.delete("all")
-        self.hits = []
-        W = PANEL_W
-        x = 8
-        for name, label in (("plan", "Plan"), ("cc", "Claude Code")):
-            x += self.pill(x, 6, label, p.panel_tab.get() == name, "tab:" + name) + 2
-        self.text(W - 15, 5, "×", self.DIM, 11, True, "n")      # close button
-        self.hits.append(("close", (W - 28) * s, 2 * s, (W - 2) * s, 26 * s))
-        y = self.draw_plan(32) if p.panel_tab.get() == "plan" else self.draw_cc(32)
-        H = y + 8
-        self.px_size = (round(W * s), round(H * s))
+        # every tab and view gets the same height, so the tabs never jump when you switch
+        tallest = 0
+        for tab, view in (("plan", "overview"), ("cc", "overview"), ("cc", "models")):
+            tallest = max(tallest, self.draw_tab(tab, view))
+        self.draw_tab(p.panel_tab.get(), p.cc_view.get())
+        H = tallest + 12
+        self.px_size = (round(PANEL_W * s), round(H * s))
         self.canvas.configure(width=self.px_size[0], height=self.px_size[1])
         self.place()
+
+    def draw_tab(self, tab, view):
+        # draws one tab from scratch and returns how tall it came out
+        p, s, W = self.pet, self.s, PANEL_W
+        self.canvas.delete("all")
+        self.hits = []
+        x = 10
+        for name, label in (("plan", "Plan"), ("cc", "Claude Code")):
+            x += self.pill(x, 8, label, tab == name, "tab:" + name) + 4
+        self.text(W - 16, 7, "\u00d7", self.DIM, 11, True, "n")      # close button
+        self.hits.append(("close", (W - 30) * s, 2 * s, (W - 2) * s, 28 * s))
+        return self.draw_plan(38) if tab == "plan" else self.draw_cc(38, view)
 
     def draw_plan(self, y):
         p = self.pet
@@ -1952,7 +2499,9 @@ class Details:
             if el is not None:   # the pace tick: where the clock is in this window
                 tx = 12 + (W - 24) * el / 100
                 self.line(tx, y + 16, tx, y + 30, self.FG, 2)
-            self.text(12, y + 32, reset_text(r["resets"], now_dt), self.DIM, 8)
+            when = parse_time(r["resets"])
+            at = f" · at {when.astimezone():{'%H:%M' if r['key'] == 'five_hour' else '%a %H:%M'}}" if when else ""
+            self.text(12, y + 32, reset_text(r["resets"], now_dt) + at, self.DIM, 8)
             if msg:
                 y = self.text(12, y + 46, msg, self.FASTC if kind == "fast" else self.SLOWC, 8, True,
                               width=W - 24) + 8
@@ -1963,24 +2512,115 @@ class Details:
         elif not rows:
             self.text(12, y, "loading...", self.DIM, 8)
             y += 20
-        st = p.cc.stats
+        if rows:
+            y = self.draw_chart(y + 6, rows, now_dt)
+        st = p.cc_stats()
         if st:
             self.text(12, y, f"Claude Code today: {fmt_tokens(st['today'])} tokens", self.DIM, 8)
             y += 18
         return y
 
-    def draw_cc(self, y):
+    def draw_chart(self, y, rows, now_dt):
+        # usage so far in the current window, against the pace line, plus a forecast
+        p, s, W = self.pet, self.s, PANEL_W
+        which = p.plan_chart.get()
+        key = "five_hour" if which == "5h" else "seven_day"
+        r = next((r for r in rows if r["key"] == key), None)
+        self.text(12, y + 8.5, "This window", self.FG, 8.5, True, "w")
+        x = W - 10
+        for name, label in (("7d", "Week"), ("5h", "5-hour")):
+            x -= self.pill(x, y, label, which == name, "chart:" + name, right=True) + 2
+        y += 26
+        reset = parse_time(r["resets"]) if r else None
+        if not r or reset is None:
+            self.text(12, y, "No data for this limit yet.", self.DIM, 8)
+            return y + 24
+        period = period_seconds(key)
+        start = reset.timestamp() - period
+        now = time.time()
+        pts = [(h[0], h[1] if key == "five_hour" else h[2]) for h in p.history if h[0] >= start]
+        pts = [(tt, v) for tt, v in pts if v is not None]
+        # before the pet's first check in this window there's no real data. estimate it from when
+        # claude code used tokens, scaled so it meets the first real number. drawn dotted.
+        first_t, first_v = pts[0] if pts else (now, r["pct"])
+        est = []
+        if first_t - start > 300 and first_v > 0:
+            ck = (round(start), round(first_t), len(p.cc.answers))
+            if self.curve_key != ck:
+                self.curve_key, self.curve = ck, p.cc.usage_curve(start, first_t)
+            if self.curve and self.curve[-1][1] > 0:
+                k = first_v / self.curve[-1][1]
+                est = [(start, 0.0)] + [(tt, v * k) for tt, v in self.curve] + [(first_t, first_v)]
+            else:
+                est = [(start, 0.0), (first_t, first_v)]
+        pts = pts + [(now, r["pct"])]
+        # the box
+        x0, x1, y0, y1 = 12, W - 12, y, y + 74
+        round_rect(self.canvas, x0 * s, y0 * s, x1 * s, y1 * s, 6 * s, self.CARD, self.BG, True)
+        ix0, ix1, iy0, iy1 = x0 + 8, x1 - 8, y0 + 8, y1 - 8
+        fx = lambda tt: ix0 + (ix1 - ix0) * min(1.0, max(0.0, (tt - start) / period))
+        fy = lambda v: iy1 - (iy1 - iy0) * min(100.0, max(0.0, v)) / 100
+        for v in (50, 100):   # faint guide lines at 50% and 100%
+            self.rect_(ix0, fy(v), ix1, fy(v) + 0.6, "#3a3a3c")
+        self.text(ix0 + 2, fy(100) + 1, "100%", "#6e6e73", 6.5)
+        # the pace line: where you'd be if you used it evenly until the reset
+        self.canvas.create_line(fx(start) * s, fy(0) * s, fx(reset.timestamp()) * s, fy(100) * s,
+                                fill="#6e6e73", width=max(1, round(s)), dash=(3, 3))
+        color = bar_color(r["pct"])
+        if est:
+            line = []
+            for tt, v in est:
+                line += [fx(tt) * s, fy(v) * s]
+            self.canvas.create_line(*line, fill=color, width=max(2, round(2 * s)), dash=(2, 3))
+        if len(pts) >= 2:
+            line = []
+            for tt, v in pts:
+                line += [fx(tt) * s, fy(v) * s]
+            self.canvas.create_line(*line, fill=color, width=max(2, round(2 * s)))
+        nx, ny = fx(now) * s, fy(r["pct"]) * s
+        d = max(3, round(3 * s))
+        self.canvas.create_oval(nx - d, ny - d, nx + d, ny + d, fill=color, outline="")
+        if len(pts) < 2 and not est:
+            self.text((ix0 + ix1) / 2, iy0 + 16, "the line fills in as I check your usage", self.DIM, 7.5,
+                      anchor="n")
+        fmt = "%H:%M" if key == "five_hour" else "%a"
+        self.text(x0, y1 + 3, f"{datetime.datetime.fromtimestamp(start):{fmt}}", "#6e6e73", 7)
+        self.text(x1, y1 + 3, f"resets {reset.astimezone():{'%H:%M' if key == 'five_hour' else '%a %H:%M'}}",
+                  "#6e6e73", 7, anchor="ne")
+        if est:
+            self.text((x0 + x1) / 2, y1 + 3, "dotted = estimate", "#6e6e73", 7, anchor="n")
+        y = y1 + 20
+        # the forecast
+        el = elapsed_pct(key, r["resets"], now_dt)
+        if el is None or el < 3 or r["pct"] <= 0:
+            msg, col = "Too early in this window for a forecast.", self.DIM
+        else:
+            proj = r["pct"] / el * 100
+            if proj >= 100 and r["pct"] < 100:
+                out = start + (now - start) * 100 / r["pct"]
+                left = reset.timestamp() - out
+                fmt = "%H:%M" if key == "five_hour" else "%a %H:%M"
+                gap = f"{left / 3600:.0f}h" if left >= 3600 else f"{left / 60:.0f}m"
+                msg, col = (f"At this pace you'll run out around {datetime.datetime.fromtimestamp(out):{fmt}}, "
+                            f"about {gap} before the reset."), self.FASTC
+            elif r["pct"] >= 100:
+                msg, col = "All used up. It comes back at the reset.", RED
+            else:
+                msg, col = f"At this pace you'll use about {proj:.0f}% by the reset.", "#4caf7d"
+        return self.text(12, y, msg, col, 8, True, width=W - 24) + 12
+
+    def draw_cc(self, y, view):
         p = self.pet
         W, s = PANEL_W, self.s
-        view, rng = p.cc_view.get(), p.cc_range.get()
-        x = 8
+        rng = p.cc_range.get()
+        x = 10
         for name, label in (("overview", "Overview"), ("models", "Models")):
             x += self.pill(x, y, label, view == name, "view:" + name) + 2
-        x = W - 8
+        x = W - 10
         for name, label in (("7d", "7d"), ("30d", "30d"), ("all", "All")):
             x -= self.pill(x, y, label, rng == name, "range:" + name, right=True) + 2
-        y += 26
-        st = p.cc.stats
+        y += 32
+        st = p.cc_stats()
         if st is None:
             self.text(12, y, "reading Claude Code's logs...", self.DIM, 8)
             return y + 20
@@ -1993,20 +2633,20 @@ class Details:
             cards = [("Sessions", f"{r['sessions']:,}"), ("Messages", f"{r['messages']:,}"),
                      ("Total tokens", fmt_tokens(r["tokens"])), ("Active days", f"{r['days']:,}"),
                      ("Peak hour", "-" if r["peak"] is None else hour_label(r["peak"])), ("Favorite model", fav)]
-            cw = (W - 24 - 12) / 3
+            cw = (W - 28 - 16) / 3
             for i, (label, val) in enumerate(cards):
-                cx, cy = 12 + (i % 3) * (cw + 6), y + (i // 3) * 44
-                round_rect(self.canvas, cx * s, cy * s, (cx + cw) * s, (cy + 38) * s, 6 * s, self.CARD, self.BG, True)
-                self.text(cx + 7, cy + 5, label, self.DIM, 7.5)
-                self.text(cx + 7, cy + 19, val, self.FG, 9.5, True)
-            y += 92
+                cx, cy = 14 + (i % 3) * (cw + 8), y + (i // 3) * 50
+                round_rect(self.canvas, cx * s, cy * s, (cx + cw) * s, (cy + 42) * s, 6 * s, self.CARD, self.BG, True)
+                self.text(cx + 8, cy + 6, label, self.DIM, 7.5)
+                self.text(cx + 8, cy + 21, val, self.FG, 9.5, True)
+            y += 106
             # activity over the last 26 weeks, one square per day, sunday at the top
             heat, today = st["heat"], datetime.date.today()
             start = today - datetime.timedelta(days=(today.weekday() + 1) % 7 + 7 * 25)
             busiest = max([v for d, v in heat.items() if d >= start] or [0])
-            pitch = int((W - 24) * s // 26)            # whole pixels, so every square is the same size
+            pitch = int((W - 28) * s // 26)            # whole pixels, so every square is the same size
             cell = pitch - max(2, round(2 * s))
-            gx, gy = round(12 * s), round(y * s)
+            gx, gy = round(14 * s), round(y * s)
             for col in range(26):
                 for row in range(7):
                     d = start + datetime.timedelta(days=col * 7 + row)
@@ -2016,8 +2656,8 @@ class Details:
                     lvl = 1 + min(3, int(4 * v / busiest)) if v and busiest else 0
                     x0, y0 = gx + col * pitch, gy + row * pitch
                     self.canvas.create_rectangle(x0, y0, x0 + cell, y0 + cell, fill=HEAT[lvl], width=0)
-            y += 7 * pitch / s + 6
-            y = self.text(12, y, compare_line(r["tokens"]), self.DIM, 8, width=W - 24) + 6
+            y += 7 * pitch / s + 12
+            y = self.text(14, y, compare_line(r["tokens"]), self.DIM, 8, width=W - 28) + 12
         else:
             total = r["tokens"] or 1
             for m, t in r["models"][:4]:
@@ -2029,9 +2669,10 @@ class Details:
             i_, o_, w_, r_ = r["parts"]
             self.text(12, y, f"input {fmt_tokens(i_)} · output {fmt_tokens(o_)}", self.DIM, 8)
             self.text(12, y + 16, f"cache write {fmt_tokens(w_)} · cache read {fmt_tokens(r_)}", self.DIM, 8)
-            y += 38
-        self.text(12, y, "counted from this computer's Claude Code logs", self.DIM, 7)
-        return y + 14
+            y += 44
+        how = ("Counted like the Claude app (every logged copy), from this computer's logs." if p.cc_app.get()
+               else "Real count (each answer once), from this computer's logs.")
+        return self.text(14, y, how, self.DIM, 7, width=W - 28) + 4
 
 
 if __name__ == "__main__":

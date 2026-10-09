@@ -8,7 +8,8 @@ What it does:
 - Hover over it for a details panel with reset times and pace tips. It also has a Claude Code tab with real token counts, an activity grid and model stats, read from Claude Code's local logs.
 - Puts on a wizard hat and casts sparkles while Claude is working.
 - Talks in little speech bubbles: encouragement, silly quotes, milestones, and comments on what's going on.
-- Click it to poke it. Drag it to pick it up.
+- Click it to poke it. Drag it around (it dangles from where you grab it), or throw it: it screams, bounces, and opens a parachute on long falls.
+- Dances now and then, gets bored, and asks for attention when you ignore it.
 - Falls asleep when you're away, rings its bubble yellow, then red, as you near a limit, and remembers its moods across restarts.
 - Hides while something is full-screen.
 - Everything can be switched off from the right-click menu, including all animations.

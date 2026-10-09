@@ -2,7 +2,7 @@
 
 A small Claude mascot that walks along the top of the Windows taskbar. A bubble above its head shows Claude plan usage. If any file here gets lost or corrupted, this note has enough detail to rebuild it. You can give this file to Claude and ask it to rebuild the project.
 
-Last updated: 2026-10-09 (version 3)
+Last updated: 2026-10-09 (version 4.2)
 
 ## Files in this folder
 
@@ -25,14 +25,18 @@ Last updated: 2026-10-09 (version 3)
 3. **Hover** over the mascot or its bubble:
    - It waves, and after a moment the details panel fades in above it.
    - The panel has two tabs:
-     - **Plan:** reset times, pace bars, tips, and Claude Code tokens used today.
+     - **Plan:** pace bars, reset times (as countdowns and clock times), tips, a chart of your usage across the current window with the pace line (switch between 5-hour and Week), a forecast ("at this pace you'll run out around 23:40" or "you'll use about 60% by the reset"), and Claude Code tokens used today.
      - **Claude Code:** stats read from your Claude Code logs. "Overview" shows sessions, messages, total tokens, active days, peak hour, favourite model, a 26-week activity grid and a book comparison. "Models" shows tokens per model plus the input/output/cache split. Each view can show all time, 30 days or 7 days.
    - Move the mouse onto the panel and it stays open, so you can click the tabs. Move away and it fades out.
+   - The panel is the same height on every tab, so the tabs never move when you switch.
 4. **Click** the mascot to poke it. It squishes, hops, makes a happy face and pops a heart.
-5. **Drag** the mascot to pick it up. Its legs wiggle, and when you let go it falls back down.
+5. **Drag** the mascot to pick it up. It hangs from the spot you grabbed and swings as you move. Its legs wiggle.
+   - **Throw it** by letting go while moving. It keeps your speed, screams, bounces off screen edges and the floor, and slides to a stop. From high up it opens a parachute. A hard landing leaves it dizzy.
 6. **Right-click** the mascot to open the menu:
    - Refresh now
+   - Refresh every (2, 3, 4 or 5 minutes; 2 is the default. Faster settings got "slow down" answers, so they were removed.)
    - Keep details open (the panel stays until you close it with ×)
+   - Count tokens like the Claude app (on by default; off shows the real count, see below)
    - Walk around (on/off)
    - Jump now and then (on/off)
    - Take naps (on/off)
@@ -47,6 +51,8 @@ Last updated: 2026-10-09 (version 3)
    - Stay on one monitor (on/off)
    - Start with Windows (on/off)
    - Quit
+
+   Hover any menu item for a tooltip: what it does, then what happens when it's on or off (or its choices).
 7. **Ctrl + mouse wheel** over the mascot fine-tunes its size. This may only work after you've clicked the mascot once.
 
 ### Things it does on its own
@@ -54,14 +60,19 @@ Last updated: 2026-10-09 (version 3)
 - **Two or more monitors:** it walks from one screen to the next. If the next screen's taskbar is lower, it drops down. If it's higher, it jumps up (up to 400 px at 1x). If it's higher than that, it turns around. Turn on "Stay on one monitor" to keep it on one screen. You can still drag it to another screen.
 - **Full screen:** when a video, game or anything else is full-screen on its monitor, it fades away. It comes back when you leave full screen. A monitor that's showing something full-screen counts as a wall, so it won't walk onto it.
 - **Sleep:** if you haven't touched the mouse or keyboard for 5 minutes, it lies down, closes its eyes and floats z's. When you come back, it wakes up with a hop and a wave. It also takes short naps (20–60 seconds) now and then. Hovering or clicking wakes it up.
-- **Usage warning:** when a limit reaches 80%, the usage bubble (and its little tail) gets a yellow ring. From 90% the ring turns red. Change both levels under "Warning levels", or switch the ring off with "Warn when nearly full" in the menu. When the 5-hour limit resets, it celebrates with three happy hops and hearts.
-- **Idle habits:** it blinks, glances left and right, and hops about every 30 seconds.
+- **Usage warning:** when a limit reaches 80%, the usage bubble (and its little tail) gets a yellow ring. From 90% the ring turns red. At 100% it turns black with a silver edge. Change the yellow and red levels under "Warning levels", or switch the ring off with "Warn when nearly full" in the menu. When the 5-hour limit resets, it celebrates with three happy hops and hearts.
+- **Idle habits:** it blinks, glances left and right, hops about every 30 seconds, and now and then breaks into a little dance with music notes.
+- **Waking up:** a big stretch, both arms up.
+- **Limit used up (100%):** it slumps with tired eyes, stops walking and hopping, and says "hard day's work" lines.
 - **Wizard mode:** when tokens are going up, it puts on a wizard hat and casts sparkles with a wand. It notices Claude Code within about 3 seconds, by reading its logs. It notices claude.ai chat and other apps when the 5-hour % goes up, which is checked every 2 minutes.
 - **Talking:** speech bubbles type themselves out above the usage bubble. It says:
   - an encouraging or silly line every 4–10 minutes ("Sometimes"), but only when you're at the computer
   - something when work starts, now and then while it's working, and when a long job finishes
-  - a comment after 30 minutes with no token usage at all
-  - milestones at 50%, 75% and 90% of each limit
+  - bored comments after 30 minutes with no token usage at all (and sometimes it dances to pass the time)
+  - a polite request for attention after 20 minutes without a hover, poke or drag
+  - screams when thrown, parachute lines, and dizzy lines after a hard landing
+  - special lines when a limit hits 100%
+  - milestones at 50%, 75%, 90% and 100% of each limit
   - a cheer when the 5-hour limit resets
   - replies to some pokes, plus poke-count milestones (10, 50, 100, 500)
   - "wheee!" when you pick it up, a yawn before sleeping, and a hello when you come back
@@ -75,6 +86,7 @@ Only one pet runs at a time. Starting it again while it's already running does n
 - **The pet acts strangely or won't start:** delete `pet_settings.json` and start it again. All settings go back to their defaults.
 - **The pet won't start at all:** to see the error message, open this folder in File Explorer, click the address bar, type `cmd`, press Enter, then type `py claude_pet.py` and press Enter. The error appears in that window.
 - **Nothing happens when you start it:** a pet is probably already running. It may be hidden because something is full-screen, or sitting on your other monitor.
+- **"Rate limited" / the bubble says "slow down":** the usage service answered "too many requests". This used to happen with the old 30-second and 1-minute refresh settings, and can still happen after restarting the pet several times in a row (each start checks straight away). Your last numbers stay on screen. It waits 3 minutes, then 6, 12 and so on (up to 30, or longer if the service asks), and goes back to normal after the next successful check.
 - **The bubble says "login expired":** open Claude Code once so it refreshes your login. The pet picks up the new login by itself.
 - **The bubble says "no login":** Claude Code isn't signed in on this computer. Run `claude` once and sign in.
 - **It hides when it shouldn't, or doesn't hide during full screen:** turn off "Hide during full screen" in the menu, then tell Claude which app caused it.
@@ -93,12 +105,14 @@ Only one pet runs at a time. Starting it again while it's already running does n
 - **Token rule:** the token is never printed, logged or saved. It's only ever sent to `https://api.anthropic.com`.
 - **Response:** `five_hour`, `seven_day`, `seven_day_sonnet` and so on, each shaped like `{utilization, resets_at}`. Unknown extra fields also appear (for example `iguana_necktie`). They're hidden unless they're a 5-hour or 7-day window (setting: `ONLY_KNOWN_LIMITS`).
 - **What the numbers cover:** they're for the whole plan, so they include claude.ai chat, the desktop app and Claude Code together.
-- **Polling:** every 120 seconds. After a 429 ("slow down") it waits 180 seconds instead.
+- **Polling:** every 2 minutes by default (menu: Refresh every, 2 to 5 min). After a 429 ("slow down") it waits 3 minutes, doubling each time it repeats (up to 30 minutes), or the service's `Retry-After` if that's longer.
 
 **Claude Code token counts** come from its local logs:
 - Files: `~/.claude/projects/**/*.jsonl`, one JSON object per line.
 - Assistant lines have `message.usage` (`input_tokens`, `output_tokens`, `cache_creation_input_tokens`, `cache_read_input_tokens`), plus `message.model`, `message.id`, `requestId`, `timestamp` (UTC), `sessionId` and `uuid`.
-- **Each answer is logged several times** (once per content block, with the same usage repeated). The pet counts each `(message.id, requestId)` pair only once. Claude Code's own stats page seems to add up every copy, so its total is about 3× higher than the pet's.
+- **Each answer is logged several times** (once per content block, with the same usage repeated).
+- **"Count tokens like the Claude app" (default):** adds up every copy, like the Claude desktop app, and "Peak hour" is the hour most sessions *start* in (that's what matches the app).
+- **Switched off (real count):** each `(message.id, requestId)` pair is counted once, about 3× lower, and "Peak hour" is the hour with the most messages.
 - "Messages" counts every user and assistant line (each `uuid` once), which matches Claude Code's own count.
 - "Total tokens" is input + output + cache write + cache read.
 - Only numbers are kept from the logs (times, session ids, model names and token counts), never message text.
@@ -250,8 +264,15 @@ There's also 30 px of side space for z's and sparks.
 
 **Milestones:** announced once per limit window, with the window identified by `resets_at` (±10 minutes). On the very first run, levels already passed are recorded quietly instead of announced.
 
+**Plan tab chart:**
+- Plots `history` points that fall inside the current window (window start = `resets_at` minus 5 hours or 7 days) plus the current %, against a dashed pace line from 0% at the start to 100% at the reset.
+- Forecast: projected % at reset = used % ÷ elapsed % × 100. If that's 100 or more, the run-out time is start + elapsed × 100 ÷ used %.
+- **Before the pet's first check in the window** there's no real %, so that stretch is estimated and drawn dotted ("dotted = estimate"). Claude Code's token use from the window start up to the first real point becomes a running total, weighted roughly by cost (input ×1, output ×5, cache write ×1.25, cache read ×0.1). It's then scaled so it ends exactly at the first real %. With no Claude Code activity in that stretch, it's a straight dotted line. Claude.ai chat use isn't in the logs, so the estimate's shape only reflects Claude Code.
+- With no data and no estimate it shows "the line fills in as I check your usage". The real history only grows while the pet is running.
+
 **Memory file (`pet_state.json`):**
-- Holds `seen` (per limit: %, when it last changed, `resets_at`), `last_5h`, `pokes`, `milestones` and `last_usage`.
+- Holds `seen` (per limit: %, when it last changed, `resets_at`), `last_5h`, `pokes`, `milestones`, `last_usage` and `history`.
+- `history` is `[time, 5-hour %, weekly %]` from each successful check: every check for the last 6 hours, then one per 10 minutes, kept for 8 days.
 - Saved every 60 s and when you quit.
 - Bad values are ignored.
 
@@ -266,7 +287,8 @@ There's also 30 px of side space for z's and sparks.
 - The panel opens after 0.3 s of hovering. It closes 0.35 s after the mouse leaves the mascot, bubble and panel, unless it's pinned.
 
 **Details panel:**
-- 300 base units wide, opened just above the bubble, with two tabs.
+- 320 base units wide, opened just above the bubble, with two tabs.
+- Its height is the tallest of Plan, Claude Code Overview and Claude Code Models (each is drawn once to measure it), so the tab buttons stay put. Shorter tabs leave space at the bottom.
 - The **Plan** tab is the old widget's panel: bars, a pace tick, reset times and pace messages, plus "Claude Code today".
 - The **Claude Code** tab has "Overview" and "Models" views, and "All", "30d" and "7d" ranges. The selected tab, view and range are remembered.
 - The activity grid is 26 weeks × 7 days with Sunday at the top. Each day's colour level is 1 + min(3, int(4 × day ÷ busiest day)).
@@ -280,16 +302,35 @@ There's also 30 px of side space for z's and sparks.
   - "no usage lately" when the number hasn't changed for 45 minutes (5-hour) or 12 hours (weekly).
   - Nothing during the first 10% of a window.
 
+**Dragging and throwing:**
+- On press it remembers where on the body you grabbed (`grab_local`). While held, it tilts so its middle hangs straight below that spot (`hang_angle`), plus a swing from how fast you move sideways. A spring pulls the tilt toward that target.
+- Tilted, every block is drawn as a turned square (polygon) around the turning point. The usage bubble steps aside, and speech sits just above the body.
+- **The mascot's window is one fixed size in every state** (worked out from the size setting only, with room for the parachute, bubbles, 4 lines of speech and a fully tilted body). It's always placed by the body: window x = body centre − `center_x`, window y = feet − `feet_win`. Resizing or shifting the window when switching states (tilted, standing, parachute) made Windows flash a dark box or the mascot flicker for a frame, because moving a window and redrawing it don't happen at the same instant. Tilting turns the body around its middle.
+- The window reaches about 20 px below its feet into the taskbar area. That part is see-through and click-through, so it doesn't get in the way.
+- On release, the speed comes from the mouse movement over the last 0.1 s (capped at 2600 px/s at 1x). It keeps that speed, with air drag of 60% per second.
+  - It bounces off screen edges, losing half its speed each time.
+  - It bounces once off the floor if it lands faster than 700 px/s (35% bounce).
+  - It slides with friction of 900 px/s² until it stops.
+  - It bonks on the top of the screen.
+  - The tilt springs back upright the short way.
+- Thrown faster than 900 px/s: a scream. Landing faster than 1100 px/s: dizzy for 2.4 s (stars circle its head).
+- **Parachute:** opens when falling faster than 150 px/s with more than 260 px (`CHUTE_HEIGHT`) still to go. It then falls at 110 px/s, drifting side to side. The 36-block red and white canopy has 4 strings to its raised hands and head.
+
+**Dancing:** a 5% chance whenever it stops walking (or when it's bored). It lasts 3.5–6 s. The beat is 0.25 s: arms up left, down, up right, both up. It bops down on beats 2 and 4 and sways half a block, with music notes floating up.
+
+**Menu tooltips:** Windows draws the right-click menu itself, so tooltips use `<<MenuSelect>>` (which item is highlighted). It then finds the open menu's position (window class `#32768`) and shows a small dark window beside it, on the left, or on the right when there's no room, after 0.35 s. The texts are in `TIPS` in the code. The tooltip is moved with `SetWindowPos` if Tk holds the move back while the menu is open.
+
 **Single instance:** a named mutex, `claude-usage-pet`.
 
 **Settings file:**
 - `pet_settings.json` holds:
   - `scale`, `x` and `y`
-  - on/off switches: `walk`, `jump`, `naps`, `anim`, `wizard`, `warn`, `hide_fs`, `one_monitor`
+  - on/off switches: `walk`, `jump`, `naps`, `anim`, `wizard`, `warn`, `cc_app`, `hide_fs`, `one_monitor`
+  - `poll`, the refresh time in seconds (120/180/240/300)
   - `warn_at` (70/75/80/85) and `panic_at` (85/90/95), the yellow and red ring levels
   - `bubble` ("both" / "5h" / "hover") and `bubble_style` ("numbers" / "bars")
   - `chatter` ("off" / "some" / "lots")
-  - the panel's `panel_tab`, `cc_view` and `cc_range`
+  - the panel's `panel_tab`, `plan_chart` ("5h" / "7d"), `cc_view` and `cc_range`
 - It's written to a temporary file first, then swapped in, so a crash can't leave half a file.
 - Bad or missing values fall back to the defaults.
 
@@ -336,6 +377,17 @@ There's also 30 px of side space for z's and sparks.
 - Seven simulated monitor layouts: level, lower, higher, too high, one-monitor mode, full-screen neighbour, and a bigger monitor on the left.
 - CPU: about 4% of one core while walking, about 2% while standing.
 
+**Version 4, tested on 2026-10-09** (left monitor, fake plan numbers):
+- Grabbed by the arm, it hangs sideways (90°) and swings.
+- A throw from the left monitor onto the main one, with a scream.
+- The parachute opening on a long fall.
+- Dizzy stars after a hard landing.
+- Dancing.
+- 100%: black ring with silver edge, slumped with tired eyes.
+- Panel the same height (320×343) on both tabs.
+- Refresh setting saved.
+- The earlier speech, wizard, milestone, memory and monitor tests still pass.
+
 **Version 3, tested on 2026-10-09:**
 - Speech bubbles: typing out, wrapping, and staying above the usage bubble.
 - Wizard hat, wand and sparkles, with working mode starting and stopping on its own.
@@ -353,7 +405,8 @@ There's also 30 px of side space for z's and sparks.
 - Wizard mode triggered by real Claude Code activity (it was tested by calling it directly).
 - The quiet-time comments and random quotes on their real timers.
 - Right-click menu clicks.
-- Real mouse hover, click and drag. These were tested with a pretend mouse position and direct calls.
+- Real mouse hover, click, drag and throw. These were tested with pretend mouse events.
+- Hovering the menu tooltips with the mouse (they were tested with the keyboard).
 - Ctrl + mouse wheel.
 - Start with Windows.
 - Real YouTube, Netflix or game full screen. This was tested with a stand-in full-screen window.
@@ -371,6 +424,28 @@ There's also 30 px of side space for z's and sparks.
 - Dim the bubble when the data is stale.
 
 ## Change log
+
+- **2026-10-09 (version 4.2):**
+  - Fixed the dark box flash and the flicker when switching between dragged/thrown and other states: the window now never resizes or jumps.
+  - The plan chart fills in the time before the pet started, estimated from Claude Code's logs (dotted).
+  - Removed the 30-second and 1-minute refresh options.
+
+- **2026-10-09 (version 4.1):**
+  - Plan tab: usage chart for the current window (5-hour or Week) with the pace line, a forecast, and reset clock times.
+  - Friendlier "slow down" handling: a clear message, waits that grow while it repeats, and it follows the service's `Retry-After`.
+  - Fixed the dark outline flicker while it tumbles, by keeping the window one size.
+
+- **2026-10-09 (version 4):**
+  - Throwing: it keeps its speed, bounces and slides.
+  - It hangs from where you grab it and swings.
+  - New animations: parachute, dizzy stars, dancing with notes, wake-up stretch, slumped and tired at 100%.
+  - New lines: screams, attention-seeking, bored, dizzy, parachute, and 100% lines.
+  - The 100% ring is black with a silver edge.
+  - "Refresh every" setting.
+  - Roomier details panel with a wrapped footer, and the same height on every tab so the tabs never move.
+- **2026-10-09 (version 3.3):**
+  - Claude Code numbers count like the Claude desktop app by default, with an option for the real count.
+  - Tooltips on every menu item.
 
 - **2026-10-09 (version 3.2):**
   - Removed the warning sign.
