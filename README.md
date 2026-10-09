@@ -5,9 +5,11 @@ A tiny pixel Claude mascot that lives on your Windows taskbar. A bubble above it
 What it does:
 
 - Walks along the taskbar, hops now and then, and moves between monitors.
-- Hover over it for a details panel with reset times and pace tips.
+- Hover over it for a details panel with reset times and pace tips. It also has a Claude Code tab with real token counts, an activity grid and model stats, read from Claude Code's local logs.
+- Puts on a wizard hat and casts sparkles while Claude is working.
+- Talks in little speech bubbles: encouragement, silly quotes, milestones, and comments on what's going on.
 - Click it to poke it. Drag it to pick it up.
-- Falls asleep when you're away and sweats when you're close to a limit.
+- Falls asleep when you're away, rings its bubble yellow, then red, as you near a limit, and remembers its moods across restarts.
 - Hides while something is full-screen.
 - Everything can be switched off from the right-click menu, including all animations.
 

@@ -2,7 +2,7 @@
 
 A small Claude mascot that walks along the top of the Windows taskbar. A bubble above its head shows Claude plan usage. If any file here gets lost or corrupted, this note has enough detail to rebuild it. You can give this file to Claude and ask it to rebuild the project.
 
-Last updated: 2026-10-09 (version 2)
+Last updated: 2026-10-09 (version 3)
 
 ## Files in this folder
 
@@ -15,6 +15,7 @@ Last updated: 2026-10-09 (version 2)
 | `.gitignore` | Tells git which files stay on this computer only. |
 | `Start Claude Pet.lnk` | Double-click to start the pet without a console window. Made for this computer, so it's not on GitHub. |
 | `pet_settings.json` | Saved settings: size, toggles, position. Created the first time the pet runs. Safe to delete. Not on GitHub. |
+| `pet_state.json` | The pet's memory: when each limit last moved, milestones it has already announced, and how many times you've poked it. Safe to delete (it just forgets). Not on GitHub. |
 | `LOCAL_NOTES.md` | Details about this particular computer (paths, monitors, Python install). Not on GitHub. |
 
 ## How to use it
@@ -22,8 +23,11 @@ Last updated: 2026-10-09 (version 2)
 1. Double-click **Start Claude Pet** in this folder.
 2. The mascot appears on top of the taskbar. The first numbers can take a few seconds to show up.
 3. **Hover** over the mascot or its bubble:
-   - It waves, and after a moment the details panel fades in above it (reset times, pace bars, tips).
-   - Move the mouse onto the panel and it stays open. Move away and it fades out.
+   - It waves, and after a moment the details panel fades in above it.
+   - The panel has two tabs:
+     - **Plan:** reset times, pace bars, tips, and Claude Code tokens used today.
+     - **Claude Code:** stats read from your Claude Code logs. "Overview" shows sessions, messages, total tokens, active days, peak hour, favourite model, a 26-week activity grid and a book comparison. "Models" shows tokens per model plus the input/output/cache split. Each view can show all time, 30 days or 7 days.
+   - Move the mouse onto the panel and it stays open, so you can click the tabs. Move away and it fades out.
 4. **Click** the mascot to poke it. It squishes, hops, makes a happy face and pops a heart.
 5. **Drag** the mascot to pick it up. Its legs wiggle, and when you let go it falls back down.
 6. **Right-click** the mascot to open the menu:
@@ -32,9 +36,13 @@ Last updated: 2026-10-09 (version 2)
    - Walk around (on/off)
    - Jump now and then (on/off)
    - Take naps (on/off)
-   - Animations (on/off; off makes it completely still and switches off the fades)
+   - Wizard when Claude works (on/off)
+   - Warn when nearly full (on/off; the coloured ring around the usage bubble)
+   - Warning levels (yellow ring from 70/75/80/85%, red ring from 85/90/95%)
+   - Animations (on/off; off makes it completely still and switches off the fades and typing)
+   - Chatter (off, sometimes, or a lot)
    - Size (0.75x to 3x)
-   - Bubble (both limits, 5-hour only, or only when you hover)
+   - Bubble (both limits, 5-hour only, or only when you hover; and show numbers or show bars)
    - Hide during full screen (on/off)
    - Stay on one monitor (on/off)
    - Start with Windows (on/off)
@@ -46,8 +54,19 @@ Last updated: 2026-10-09 (version 2)
 - **Two or more monitors:** it walks from one screen to the next. If the next screen's taskbar is lower, it drops down. If it's higher, it jumps up (up to 400 px at 1x). If it's higher than that, it turns around. Turn on "Stay on one monitor" to keep it on one screen. You can still drag it to another screen.
 - **Full screen:** when a video, game or anything else is full-screen on its monitor, it fades away. It comes back when you leave full screen. A monitor that's showing something full-screen counts as a wall, so it won't walk onto it.
 - **Sleep:** if you haven't touched the mouse or keyboard for 5 minutes, it lies down, closes its eyes and floats z's. When you come back, it wakes up with a hop and a wave. It also takes short naps (20–60 seconds) now and then. Hovering or clicking wakes it up.
-- **Usage moods:** it sweats (a little blue drop) when a limit is at 85% or more. When the 5-hour limit resets, it celebrates with three happy hops and hearts.
+- **Usage warning:** when a limit reaches 80%, the usage bubble (and its little tail) gets a yellow ring. From 90% the ring turns red. Change both levels under "Warning levels", or switch the ring off with "Warn when nearly full" in the menu. When the 5-hour limit resets, it celebrates with three happy hops and hearts.
 - **Idle habits:** it blinks, glances left and right, and hops about every 30 seconds.
+- **Wizard mode:** when tokens are going up, it puts on a wizard hat and casts sparkles with a wand. It notices Claude Code within about 3 seconds, by reading its logs. It notices claude.ai chat and other apps when the 5-hour % goes up, which is checked every 2 minutes.
+- **Talking:** speech bubbles type themselves out above the usage bubble. It says:
+  - an encouraging or silly line every 4–10 minutes ("Sometimes"), but only when you're at the computer
+  - something when work starts, now and then while it's working, and when a long job finishes
+  - a comment after 30 minutes with no token usage at all
+  - milestones at 50%, 75% and 90% of each limit
+  - a cheer when the 5-hour limit resets
+  - replies to some pokes, plus poke-count milestones (10, 50, 100, 500)
+  - "wheee!" when you pick it up, a yawn before sleeping, and a hello when you come back
+  - a warning if your login expires
+- **Memory:** it remembers when each limit last moved, which milestones it has already announced, and your poke count, even after a restart.
 
 Only one pet runs at a time. Starting it again while it's already running does nothing, so **quit the old one first** (right-click → Quit) after updating the file.
 
@@ -73,8 +92,17 @@ Only one pet runs at a time. Starting it again while it's already running does n
 - The token comes from `~/.claude/.credentials.json`, at `claudeAiOauth.accessToken`. That file only exists because Claude Code is installed and signed in.
 - **Token rule:** the token is never printed, logged or saved. It's only ever sent to `https://api.anthropic.com`.
 - **Response:** `five_hour`, `seven_day`, `seven_day_sonnet` and so on, each shaped like `{utilization, resets_at}`. Unknown extra fields also appear (for example `iguana_necktie`). They're hidden unless they're a 5-hour or 7-day window (setting: `ONLY_KNOWN_LIMITS`).
-- **What the numbers cover:** they're for the whole plan, so they include claude.ai chat, the desktop app and Claude Code together. Raw token counts are only available for Claude Code, from its local logs in `~/.claude/projects/`. That isn't built yet.
+- **What the numbers cover:** they're for the whole plan, so they include claude.ai chat, the desktop app and Claude Code together.
 - **Polling:** every 120 seconds. After a 429 ("slow down") it waits 180 seconds instead.
+
+**Claude Code token counts** come from its local logs:
+- Files: `~/.claude/projects/**/*.jsonl`, one JSON object per line.
+- Assistant lines have `message.usage` (`input_tokens`, `output_tokens`, `cache_creation_input_tokens`, `cache_read_input_tokens`), plus `message.model`, `message.id`, `requestId`, `timestamp` (UTC), `sessionId` and `uuid`.
+- **Each answer is logged several times** (once per content block, with the same usage repeated). The pet counts each `(message.id, requestId)` pair only once. Claude Code's own stats page seems to add up every copy, so its total is about 3× higher than the pet's.
+- "Messages" counts every user and assistant line (each `uuid` once), which matches Claude Code's own count.
+- "Total tokens" is input + output + cache write + cache read.
+- Only numbers are kept from the logs (times, session ids, model names and token counts), never message text.
+- Claude.ai chat has no local token log, so there are no token numbers for chat. Only the plan % covers it.
 
 ## How it's built (to rebuild from scratch)
 
@@ -86,7 +114,7 @@ Only one pet runs at a time. Starting it again while it's already running does n
 **The window:**
 - Borderless and always on top, with no taskbar button.
 - The whole window is filled with one "key" colour, `#010203`. `-transparentcolor` makes that colour see-through, and clicks go through it to whatever is behind.
-- The mascot and the little pictures (hearts, z's, sweat drop) are drawn as solid rectangles, not text, so their edges stay sharp. The small pictures get a 1-block dark shadow so they show on any wallpaper.
+- The mascot and the little pictures (hearts, z's, sparks) are drawn as solid rectangles, not text, so their edges stay sharp. The small pictures get a 1-block dark shadow so they show on any wallpaper.
 - Text only ever sits on the solid dark bubble.
 
 **Screens:**
@@ -152,13 +180,26 @@ Only one pet runs at a time. Starting it again while it's already running does n
 | Lying down (asleep) | The body sinks one block and the legs are hidden. |
 | Squished | The body sinks half a block. |
 
+**Rounded boxes:**
+- Three rectangles plus four corner images, all on whole pixels.
+- Each corner is made once and reused. It's sampled 4×4 per pixel.
+- In the details panel the edge is blended into the panel colour, which makes it smooth.
+- On the see-through window, each pixel is either fully in or fully out, because blending into the key colour would leave a coloured fringe.
+
 **Little pictures** (each block is 2 px at 1x):
 
 | Picture | Pattern | Behaviour |
 | --- | --- | --- |
 | Heart | `.##.##. / ####### / ####### / .#####. / ..###.. / ...#...` | Pops out above the bubble. |
 | Z | `#### / ..#. / .#.. / ####` | Two sizes. Drifts up behind the bubble. |
-| Sweat | `.#. / ### / ### / .#.` | Sits left of the head and bobs. |
+| Spark | `.#. / ### / .#.` | Shoots from the wand tip in gold, cyan, pink or white, and drifts behind the bubbles. |
+| Wizard hat | 24×11 blocks: a purple cone leaning right, a star of `*` in the middle, a gold band and a wide brim (see `HAT` in the code) | Sits on the head while working. |
+
+**Wizard pose:**
+- The right arm swaps between (15,1)+(16,1) and (15,1)+(16,0) every 0.35 s.
+- A 5-block brown wand goes diagonally up and right from the hand, with a 2×2 gold tip.
+- The eyes look toward the wand.
+- The usage bubble moves up to make room for the hat.
 
 **Colours:**
 
@@ -169,18 +210,50 @@ Only one pet runs at a time. Starting it again while it's already running does n
 | Cheeks | `#f4a08f` |
 | Heart | `#ff6f8a` |
 | Z's | `#f2efe8` |
-| Sweat | `#7cc4ff` |
+| Warning ring | `#f2c14e` (yellow), `#e5534b` (red) |
 | Bubble | `#1f1e1d` |
 | Bubble text | `#f2efe8` |
+| Speech bubble | `#f2efe8`, with text `#2b1a14` |
+| Hat, band, star | `#6c4ab6`, `#f2c14e`, `#ffe08a` |
+| Wand | `#8b5a2b` |
+| Activity grid | `#2c2c2e` for an empty day, then `#173c6e`, `#1f57a6`, `#2b74e0`, `#5aa2ff` from quiet to busy |
 | Usage dots | green `#4caf7d` under 60%, amber `#d9a441` under 85%, red `#e5534b` from 85% |
 
 **Window layout (bottom to top):**
 1. The mascot.
-2. A 2 px gap and the bubble's tail.
-3. The bubble.
-4. 40 px of empty space at 1x for hearts.
+2. Room for the hat (only while working).
+3. A 2 px gap and the bubble's tail.
+4. The usage bubble.
+5. The speech bubble (only while talking).
+6. 40 px of empty space at 1x for hearts.
 
-There's also 22 px of side space for the sweat drop and z's.
+There's also 30 px of side space for z's and sparks.
+
+**Usage bubble, "bars" style:**
+- One row per limit: a small label (`5h`, `wk`), then a 56×5 px bar in the usage colour on a `#3a3a3c` track.
+- A red dot in the corner when the last check failed.
+- With no data yet, it falls back to the numbers style.
+
+**Talking:**
+- Speech is wrapped to 190 px at 1x and types out at 30 letters a second. It stays up for 2.6 s + typing time + 0.03 s per letter.
+- `say()` has a 25 s cooldown for chit-chat. Lines about something that just happened skip the cooldown.
+- No talking when chatter is off or the pet is hidden.
+- Random lines and quiet-time comments only happen when someone has touched the mouse or keyboard in the last minute, and not while it's working, asleep or showing the panel.
+- "Chatter" changes how often: sometimes = ×1, a lot = ×2.5.
+- All the lines are lists near the top of `claude_pet.py` (`QUOTES`, `WORK_START`, `WORKING`, `WORK_DONE`, `IDLE_LINES`, `POKE_LINES`, `POKE_COUNT`, `DRAG_LINES`, `WAKE_LINES`, `RESET_LINES`, `MILESTONES`).
+
+**Working (wizard) detection:**
+- A background thread reads only the new bytes of each log file every 3 s.
+- New output tokens mean it keeps working for 20 more seconds.
+- A rise in the 5-hour % (after the first check of each run) means it keeps working for 130 more seconds, which covers the next 2-minute check.
+- No napping while working. If it was asleep, it wakes up for work.
+
+**Milestones:** announced once per limit window, with the window identified by `resets_at` (±10 minutes). On the very first run, levels already passed are recorded quietly instead of announced.
+
+**Memory file (`pet_state.json`):**
+- Holds `seen` (per limit: %, when it last changed, `resets_at`), `last_5h`, `pokes`, `milestones` and `last_usage`.
+- Saved every 60 s and when you quit.
+- Bad values are ignored.
 
 **Sleep:**
 - Away for `SLEEP_AFTER_MIN` (5) minutes, measured with `GetLastInputInfo`. It wakes when there's any input again.
@@ -193,7 +266,11 @@ There's also 22 px of side space for the sweat drop and z's.
 - The panel opens after 0.3 s of hovering. It closes 0.35 s after the mouse leaves the mascot, bubble and panel, unless it's pinned.
 
 **Details panel:**
-- The old widget's panel, opened just above the bubble: bars, a pace tick, reset times and pace messages.
+- 300 base units wide, opened just above the bubble, with two tabs.
+- The **Plan** tab is the old widget's panel: bars, a pace tick, reset times and pace messages, plus "Claude Code today".
+- The **Claude Code** tab has "Overview" and "Models" views, and "All", "30d" and "7d" ranges. The selected tab, view and range are remembered.
+- The activity grid is 26 weeks × 7 days with Sunday at the top. Each day's colour level is 1 + min(3, int(4 × day ÷ busiest day)).
+- The book comparison picks the biggest book from a list that the total is at least twice the size of (book sizes are rough token counts).
 - It fades in and out over 0.18 s with an ease-out curve, sliding up 10 px as it appears.
 - Windows 11 gives it rounded corners (`DwmSetWindowAttribute` 33 = round).
 - The mascot stops walking while the panel is open.
@@ -206,7 +283,13 @@ There's also 22 px of side space for the sweat drop and z's.
 **Single instance:** a named mutex, `claude-usage-pet`.
 
 **Settings file:**
-- `pet_settings.json` holds `scale`, `walk`, `jump`, `naps`, `anim`, `bubble` ("both" / "5h" / "hover"), `hide_fs`, `one_monitor`, `x` and `y`.
+- `pet_settings.json` holds:
+  - `scale`, `x` and `y`
+  - on/off switches: `walk`, `jump`, `naps`, `anim`, `wizard`, `warn`, `hide_fs`, `one_monitor`
+  - `warn_at` (70/75/80/85) and `panic_at` (85/90/95), the yellow and red ring levels
+  - `bubble` ("both" / "5h" / "hover") and `bubble_style` ("numbers" / "bars")
+  - `chatter` ("off" / "some" / "lots")
+  - the panel's `panel_tab`, `cc_view` and `cc_range`
 - It's written to a temporary file first, then swapped in, so a crash can't leave half a file.
 - Bad or missing values fall back to the defaults.
 
@@ -240,7 +323,7 @@ There's also 22 px of side space for the sweat drop and z's.
 - Details panel fading in, with rounded corners.
 - Poke: heart, happy face and hop.
 - Sleeping with z's.
-- Sweat at 90%.
+- Sweat drop at 90% (replaced in version 3.1 by the warning sign and red ring, tested at 90% and 96%).
 - Waving on hover.
 - Panel opening on hover and closing after the mouse leaves (with a pretend mouse position).
 - Hover-only bubble.
@@ -253,8 +336,22 @@ There's also 22 px of side space for the sweat drop and z's.
 - Seven simulated monitor layouts: level, lower, higher, too high, one-monitor mode, full-screen neighbour, and a bigger monitor on the left.
 - CPU: about 4% of one core while walking, about 2% while standing.
 
+**Version 3, tested on 2026-10-09:**
+- Speech bubbles: typing out, wrapping, and staying above the usage bubble.
+- Wizard hat, wand and sparkles, with working mode starting and stopping on its own.
+- Bars-style bubble.
+- Claude Code tab: Overview and Models, read from the real logs.
+- Plan tab with the "today" line.
+- 50% milestone line.
+- Reset cheer with three hops.
+- 10th-poke line.
+- Memory saved, reloaded and checked.
+- No errors.
+
 **Not tested yet:**
 - Real API data inside the pet.
+- Wizard mode triggered by real Claude Code activity (it was tested by calling it directly).
+- The quiet-time comments and random quotes on their real timers.
 - Right-click menu clicks.
 - Real mouse hover, click and drag. These were tested with a pretend mouse position and direct calls.
 - Ctrl + mouse wheel.
@@ -268,17 +365,28 @@ There's also 22 px of side space for the sweat drop and z's.
 - It sits at the bottom of the screen if the taskbar auto-hides.
 - If a monitor has different display scaling, the pet keeps its size in real pixels, so it looks smaller or bigger there.
 - No automatic login refresh.
-- "No usage lately" tracking resets when the pet restarts.
+- Claude Code stats only cover this computer's logs. If Claude Code deletes old logs, they disappear from the stats too.
 
 **Ideas for later:**
-- Claude Code token totals from local logs.
 - Dim the bubble when the data is stale.
-- Small speech lines ("70% used!") at usage milestones.
-- Mute effects during Do Not Disturb.
-- Remember naps and moods across restarts.
 
 ## Change log
 
+- **2026-10-09 (version 3.2):**
+  - Removed the warning sign.
+  - The warning ring now also goes around the bubble's tail. It's yellow from 80% and red from 90%, and both levels can be changed in the menu ("Warning levels").
+
+- **2026-10-09 (version 3.1):**
+  - Rounded boxes are drawn with smooth corner images, so their corners are clean (anti-aliased in the panel, step-free on the mascot's see-through window).
+  - The activity grid uses whole pixels, so every square is the same size.
+  - Replaced the sweat drop with a warning sign plus a red ring around the bubble. It can be switched off with "Warn when nearly full".
+
+- **2026-10-09 (version 3):**
+  - Speech bubbles: encouraging and silly quotes, plus lines about work, quiet times, milestones, resets, pokes, dragging, sleeping and waking. A "Chatter" setting controls how often.
+  - Wizard mode while tokens are going up: hat, wand and sparkles.
+  - The bubble can show bars instead of numbers.
+  - New Claude Code tab in the details panel, with real token counts from the local logs, an overview, models, and 7-day, 30-day and all-time ranges.
+  - Remembers moods, milestones and pokes across restarts (`pet_state.json`).
 - **2026-10-09:** Put the project in a private GitHub repo. Added `README.md` and `.gitignore`. Moved this computer's details into `LOCAL_NOTES.md`, which git ignores.
 - **2026-10-09 (version 2):**
   - Hides during full screen.
