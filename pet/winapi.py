@@ -1,6 +1,7 @@
 # windows bits through ctypes: screens, windows, idle time, notifications, shortcuts, startup.
 import ctypes
 import os
+import shutil
 import subprocess
 import sys
 import threading
@@ -292,9 +293,12 @@ def set_startup(enable):
             return "removed from startup."
         except OSError:
             return "it was not in startup."
+    # the pyw launcher always picks the newest python, so the shortcut survives python updates.
+    # without it, point at this python's own pythonw (breaks when that python is removed)
+    launcher = shutil.which("pyw")
     exe = Path(sys.executable)
     pyw = exe.with_name("pythonw.exe")
-    target = pyw if pyw.exists() else exe
+    target = launcher or (pyw if pyw.exists() else exe)
     script = HERE / "claude_pet.py"   # the file you start
     q = lambda p: str(p).replace("'", "''")   # powershell quoting
     ps = ("$s=(New-Object -ComObject WScript.Shell).CreateShortcut('{lnk}');"

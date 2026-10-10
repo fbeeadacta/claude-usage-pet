@@ -2,19 +2,19 @@
 
 A small Claude mascot that walks along the top of the Windows taskbar. A bubble above its head shows Claude plan usage. If any file here gets lost or corrupted, this note has enough detail to rebuild it. You can give this file to Claude and ask it to rebuild the project.
 
-Last updated: 2026-10-10 (version 6.3)
+Last updated: 2026-10-10 (version 6.5)
 
 ## Files in this folder
 
 | File | What it is |
 | --- | --- |
-| `claude_pet.py` | Starts the pet. Run this one (the shortcut and "Start with Windows" point at it). |
+| `claude_pet.py` | Starts the pet (the shortcut and "Start with Windows" point at it). Before loading anything it checks for Windows, Python 3.10+ and tkinter, and explains in a pop-up if one is missing. |
+| `Start pet.bat` | Double-click to start the pet without a console window. Finds Python (the `py` launcher first, then `python`/`pythonw` on the path). If there's no Python it says so and opens python.org. |
+| `.gitattributes` | Keeps `.bat` files in Windows line endings, which batch files need. |
 | `pet/` | The pet's code, split into small parts. `pet/__init__.py` lists what each file does and where new things go. See "Code layout" below. |
 | `README.md` | Short intro for the GitHub page. |
 | `PROJECT_NOTES.md` | This file. |
-| `usage_widget.py` | The original panel-style widget, kept as a backup. It still works on its own. |
 | `.gitignore` | Tells git which files stay on this computer only. |
-| `Start Claude Pet.lnk` | Double-click to start the pet without a console window. Made for this computer, so it's not on GitHub. |
 | `pet_settings.json` | Saved settings: size, toggles, position. Created the first time the pet runs. Safe to delete. Not on GitHub. |
 | `pet_state.json` | The pet's memory: when each limit last moved, milestones it has already announced, and how many times you've poked it. Safe to delete (it just forgets). Not on GitHub. |
 | `LOCAL_NOTES.md` | Details about this particular computer (paths, monitors, Python install). Not on GitHub. |
@@ -49,7 +49,7 @@ One thing to know: `usage.RETRY_AFTER` changes while the pet runs, so other file
 
 ## How to use it
 
-1. Double-click **Start Claude Pet** in this folder.
+1. Double-click **Start pet.bat** in this folder.
 2. The mascot appears on top of the taskbar. The first numbers can take a few seconds to show up.
 3. **Hover** over the mascot or its bubble:
    - It waves, and after a moment the details panel fades in above it.
@@ -120,8 +120,8 @@ Only one pet runs at a time. Starting it again while it's already running does n
 - **A keyboard shortcut does nothing:** another app may already use Ctrl + Alt + P or D. `pet_errors.log` will say so. Settings → Shortcuts shows "Another app already uses these keys" under it; click it and pick different keys.
 - **The bubble says "no login":** Claude Code isn't signed in on this computer. Run `claude` once and sign in.
 - **It hides when it shouldn't, or doesn't hide during full screen:** turn off "Hide during full screen" (Settings → System), then tell Claude which app caused it.
-- **The double-click shortcut stops working after a Python update:** the shortcut points to one specific Python version's `pythonw.exe`. Rebuild it using the settings in `LOCAL_NOTES.md` (your own notes file, not on GitHub), or ask Claude to fix it.
-- **Two pets start with Windows:** the old widget may have its own startup shortcut. Run `py usage_widget.py --no-startup` once to remove it.
+- **"Start with Windows" stops working after a Python update:** turn it off and on again in Settings → System. (New shortcuts use the `pyw` launcher, which follows Python updates; only computers without the launcher point at one Python version.)
+- **Two pets start with Windows:** an old version may have left its own startup shortcut. Press Windows + R, type `shell:startup` and press Enter, then delete `Claude Usage Widget` if it's there.
 
 ## Where the numbers come from
 
@@ -398,15 +398,15 @@ There's also 30 px of side space for z's and sparks.
 
 **Start with Windows:**
 - Makes a shortcut named `Claude Usage Pet.lnk` in `%APPDATA%\Microsoft\Windows\Start Menu\Programs\Startup`.
-- The shortcut targets `pythonw.exe` with the script path as its argument.
+- The shortcut targets the `pyw` launcher if it's on the path (it picks the newest Python, so it survives Python updates), otherwise this Python's `pythonw.exe`. The script path is its argument.
 
 ## Setup
 
 - Windows 10 or 11 (tested on Windows 11).
-- Python 3 with tkinter (tested with Python 3.14). No pip installs.
+- Python 3.10 or newer with tkinter (tested with Python 3.14). No pip installs. The code's syntax was checked against 3.8 to 3.14, but it has only been run on 3.14.
 - Claude Code installed and signed in on the same computer.
 - The development computer has two 1920×1080 monitors side by side, with the taskbar at the bottom of both.
-- Everything specific to one computer (paths, the shortcut's settings, the Python install) goes in `LOCAL_NOTES.md`, which git ignores.
+- Everything specific to one computer (paths, monitors, the Python install) goes in `LOCAL_NOTES.md`, which git ignores.
 
 ## GitHub
 
@@ -531,6 +531,17 @@ There's also 30 px of side space for z's and sparks.
 - Dim the bubble when the data is stale.
 
 ## Change log
+
+- **2026-10-10 (version 6.5): tidy-up.**
+  - `Start pet.bat` replaces the hand-made `Start Claude Pet` shortcut, which pointed at one Python version.
+  - Removed `usage_widget.py`, the original widget kept as a backup (it's still in the git history).
+
+- **2026-10-10 (version 6.4): easier to install for someone new.**
+  - New `Start pet.bat`: double-click to start the pet with no console. It finds Python, and if there's none it explains and opens the python.org download page.
+  - `claude_pet.py` checks for Windows, Python 3.10+ and tkinter before loading anything, and says what to fix in a pop-up (with a button to open the download page). If the pet crashes while starting without a console, a pop-up points to `pet_errors.log`.
+  - "Start with Windows" now uses the `pyw` launcher when there is one, so the shortcut keeps working after Python updates.
+  - README: a step-by-step install section for people who don't use terminals, and a short troubleshooting list.
+  - Tested: the checks (old Python, no tkinter, not Windows) with fake pop-ups; `Start pet.bat` with the launcher, with only `python` on the path, and with no Python, in a folder with spaces and brackets in its name; the startup shortcut opening through `pyw`; the crash pop-up. Not tested: a real older Python, Windows 10, Microsoft Store Python, and the security prompt for a `.bat` from a downloaded ZIP.
 
 - **2026-10-10 (version 6.3): getting ready to go public.**
   - Removed a code comment that suggested sending Claude Code's user agent. The pet always identifies itself as `usage-widget/0.1`.

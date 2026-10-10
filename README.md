@@ -25,19 +25,33 @@ What it does:
 - Keyboard shortcuts: Ctrl + Alt + P hides or shows it, and Ctrl + Alt + D pins the details panel. You can change them in Settings → Shortcuts.
 - Right-click it for Refresh now, Settings and Quit. The settings window has every option and what it does, and everything can be switched off, including all animations.
 
-## Requirements
+## What you need
 
 - Windows 10 or 11 (tested on Windows 11).
-- Python 3 with tkinter, which the standard python.org installer includes (tested with Python 3.14). No `pip install` needed, because it only uses the standard library.
-- Claude Code installed and signed in on the same computer. The pet uses Claude Code's saved login.
+- Python 3.10 or newer from [python.org](https://www.python.org/downloads/windows/) (tested with Python 3.14). No `pip install` needed: it only uses Python's standard library.
+- [Claude Code](https://claude.com/claude-code) installed on the same computer and signed in with your Claude account (Pro or Max). The pet reads your usage through Claude Code's saved login. Signing in to only claude.ai or the desktop app isn't enough, and neither is a Claude Code API key.
 
-## Run it
+## Install and start it
 
-```bash
-py claude_pet.py
-```
+No terminal needed.
 
-Use `pyw claude_pet.py` (or `pythonw`) to run it without a console window. To start it when you sign in to Windows, right-click the mascot, open **Settings → System** and turn on **Start with Windows**.
+1. **Install Python.** Go to [python.org/downloads/windows](https://www.python.org/downloads/windows/), download the installer and run it. If the installer shows a "tcl/tk and IDLE" option, leave it ticked: the pet needs it to draw its windows. Skip the Microsoft Store version of Python.
+2. **Download the pet.** On this page, click the green **Code** button, then **Download ZIP**.
+3. **Unzip it** somewhere you'll keep it, for example your Documents folder. Right-click the ZIP, choose **Extract All**, and pick the folder. Avoid `Program Files`: the pet saves its settings next to its files and can't write there.
+4. **Start it.** Open the extracted folder and double-click **`Start pet.bat`**. The mascot appears on your taskbar.
+   - Windows may warn about a file from the internet the first time. Click **Run** (or **More info → Run anyway**) to go ahead.
+   - If Python is missing, a window says so and opens the Python download page. If your Python is too old or incomplete, a pop-up says what to fix.
+5. **Optional:** to start it every time you sign in to Windows, right-click the mascot, open **Settings → System** and turn on **Start with Windows**.
+
+To stop it, right-click the mascot and choose **Quit**.
+
+From a terminal, `py claude_pet.py` runs it with a console window, which shows errors as they happen.
+
+## If something goes wrong
+
+- **The bubble says "no login" or "login expired":** open Claude Code and sign in again. Hover over the mascot for step-by-step help.
+- **Nothing appears:** look for `pet_errors.log` in the pet's folder, which says what went wrong. Also check it isn't hiding: press Ctrl + Alt + P.
+- **"Start with Windows" stopped working after a Python update:** turn it off and on again in Settings → System.
 
 The code lives in the `pet/` folder; `pet/__init__.py` explains what each file does.
 

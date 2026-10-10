@@ -62,7 +62,7 @@ TIPS = {
         ("Off", "It walks across to your other monitors.")]),
     "Start with Windows": ("Starts the mascot automatically.", [
         ("On", "It starts when you sign in to Windows."),
-        ("Off", "Start it yourself with the Start Claude Pet shortcut.")]),
+        ("Off", "Start it yourself: double-click Start pet.bat in its folder.")]),
     "Settings…": ("Opens a window with every option in one place, each with a short description.", []),
     "Stand on windows": ("Lets the mascot land on top of your windows, and makes windows solid.", [
         ("On", "When it falls (dropped, thrown or walking off an edge) past the top of a window, it lands there, "
