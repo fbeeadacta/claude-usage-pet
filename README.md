@@ -2,16 +2,7 @@
 
 A tiny pixel Claude mascot that lives on your Windows taskbar. A bubble above its head shows your Claude plan usage: the 5-hour and weekly limits, which cover claude.ai, the desktop app and Claude Code together.
 
-<p>
-  <img src="docs/pet.png" alt="The mascot on the taskbar with its usage bubble, saying 'you got this!'" width="300">
-  <img src="docs/wizard.png" alt="The mascot in wizard mode while Claude is working" width="300">
-</p>
-<p>
-  <img src="docs/plan.png" alt="The Plan tab: usage bars, reset times, a chart of the current window and a forecast" width="340">
-  <img src="docs/claude-code.png" alt="The Claude Code tab: sessions, messages, tokens, peak hour, favourite model and an activity grid" width="340">
-</p>
-
-<p><img src="docs/wizard-jobs.png" alt="The mascot's wizard jobs: spell tome, quill and scroll, rune rain, crystal ball, summoning, sticky notes, question mark, rune circle, hourglass, rolling scroll" width="700"></p>
+<p><img src="screenshots/wizard-jobs.png" alt="The mascot's wizard jobs: spell tome, quill and scroll, rune rain, crystal ball, summoning, sticky notes, question mark, rune circle, hourglass, rolling scroll" width="700"></p>
 
 What it does:
 

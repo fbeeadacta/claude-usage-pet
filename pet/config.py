@@ -141,10 +141,15 @@ CC_CACHE = DATA_DIR / "pet_cc_cache.json.gz" # claude code's log numbers, saved 
 ERROR_LOG = DATA_DIR / "pet_errors.log"
 try:
     DATA_DIR.mkdir(exist_ok=True)
-    # older versions kept these files next to claude_pet.py, so carry them over once
+    # older versions kept these files next to claude_pet.py. move them in (the newer copy wins)
+    # and drop a stale one, so there's never a second copy in the main folder
     for _f in (SETTINGS_FILE, STATE_FILE, CC_CACHE, ERROR_LOG):
-        if (HERE / _f.name).exists() and not _f.exists():
-            (HERE / _f.name).replace(_f)
+        _old = HERE / _f.name
+        if _old.exists():
+            if not _f.exists() or _old.stat().st_mtime > _f.stat().st_mtime:
+                _old.replace(_f)
+            else:
+                _old.unlink()
 except OSError:
     pass
 STARTUP_NAME = "Claude Usage Pet.lnk"

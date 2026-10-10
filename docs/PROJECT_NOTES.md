@@ -2,7 +2,7 @@
 
 A small Claude mascot that walks along the top of the Windows taskbar. A bubble above its head shows Claude plan usage. If any file here gets lost or corrupted, this note has enough detail to rebuild it. You can give this file to Claude and ask it to rebuild the project.
 
-Last updated: 2026-10-10 (version 7.6)
+Last updated: 2026-10-10 (version 7.7)
 
 The change log is in `CHANGELOG.md`, next to this file.
 
@@ -24,7 +24,7 @@ The change log is in `CHANGELOG.md`, next to this file.
 | `docs/LOCAL_NOTES.md` | Details about this particular computer (paths, monitors, Python install). Not on GitHub. |
 | `data/pet_errors.log` | What went wrong, if anything (Python error details, never the login token). Kept under about 200 KB. Safe to delete. Not on GitHub. |
 | `data/` | Everything the pet writes while it runs: settings, memory, the log cache and the error log. Made on first run (and old copies next to `claude_pet.py` are moved in once). Git ignores it. |
-| `docs/*.png` | Screenshots for the README, staged on a plain backdrop (nothing personal in them). `docs/wizard-jobs.png` is a sheet of all the wizard jobs, and `docs/jobs/*.png` has each one at 2x. |
+| `screenshots/wizard-jobs.png` | The README picture: a sheet of all the wizard jobs, staged on a plain backdrop (nothing personal in it). |
 
 ## Code layout
 
@@ -135,7 +135,7 @@ One thing to know: `usage.RETRY_AFTER` changes while the pet runs, so other file
 - **Eyes:** when your mouse pointer is within about 420 px, it looks at it: left, right, up or down.
 - **Seasonal outfits** (if on): a jack-o'-lantern on its head from 25 to 31 October, a Santa hat from 1 to 26 December, a party hat on 31 December, 1 January and its birthday (9 October), and hearts on springs on 14 February. Each comes with a line once that day. Fireworks burst above it from 23:55 on New Year's Eve until 1 AM. The wizard hat takes the outfit's place while it works.
 - **Pajamas at bedtime** (if on, the default): from the chosen hour (`bedtime_at`, default 11 PM) until 6 AM (`BEDTIME_END`), it wears a blue and white striped nightcap with a bobble (about the wizard hat's size; `NIGHTCAP` in `pet/art.py`) and carries a candle in a brass holder, with flickering rays of light round the flame (`CANDLE`, `CANDLE_BASE`). Neither has the dark edge other little pictures get (like the wizard hat). Both follow the way it's heading (or last headed, `self.dir`): the candle is in its lead hand and the bobble flops out behind it (`OUTFITS["bedtime"]` heading left, the flipped `"bedtime_right"` heading right). Asleep, it puts the candle down on the floor on that side. The nightcap wins over a seasonal outfit; the wizard hat wins over both, and the candle goes away while it works, dances, does an idle activity, is in the hay, or has its lead arm up (e.g. waving with the right hand while heading right). When bedtime starts while it's running (and awake) it says a line (`BEDTIME_LINES`); not when the pet starts up at night.
-- **Wizard jobs** (`pet/magic.py`, pictures in `docs/wizard-jobs.png`): while it's a wizard, the last Claude Code tool it saw (by name, within 8 seconds) picks a job. The hat stays on for all of them, it holds itself to suit (hands out, wand raised, both arms up...), looks at the prop, and every job has its own particles. Props float beside it, on the side towards the middle of the screen.
+- **Wizard jobs** (`pet/magic.py`, picture in `screenshots/wizard-jobs.png`): while it's a wizard, the last Claude Code tool it saw (by name, within 8 seconds) picks a job. The hat stays on for all of them, it holds itself to suit (hands out, wand raised, both arms up...), looks at the prop, and every job has its own particles. Props float beside it, on the side towards the middle of the screen.
   - **Reading** (Read, Grep, Glob, LS, NotebookRead): a detailed spell tome floats beside it (leather cover, gold corners, a red capital, writing, a pulsing blue sigil, a ribbon). A page turns every 3 seconds, between two spreads, and little gold and blue runes float up off it.
   - **Writing** (Write, Edit, MultiEdit, NotebookEdit): a quill scribbles line after line on a floating scroll, flicking ink and gold flecks; it conducts with one raised arm.
   - **Commands** (Bash, PowerShell, BashOutput, KillShell, Monitor): green runes rain down around it in columns, brightest at the bottom like falling code, some behind it and some in front; both hands up in turn.
@@ -160,14 +160,14 @@ Only one pet runs at a time. Starting it again while it's already running calls 
 
 ## Fixing problems
 
-- **The pet acts strangely or won't start:** delete `pet_settings.json` and start it again. All settings go back to their defaults.
+- **The pet acts strangely or won't start:** delete `data/pet_settings.json` and start it again. All settings go back to their defaults.
 - **The pet won't start at all:** to see the error message, open this folder in File Explorer, click the address bar, type `cmd`, press Enter, then type `py claude_pet.py` and press Enter. The error appears in that window.
 - **Nothing happens when you start it:** a pet is probably already running. Starting it again calls it over to your mouse (a pet from before version 7.0 doesn't know how). It may be hidden because something is full-screen.
 - **The bubble says "service changed":** Anthropic changed the undocumented usage service. Look in `pet_errors.log` for the names it sent back, and give them to Claude to update `pet/usage.py`.
 - **It's silent and doesn't talk:** check the Plan tab for "Quiet mode", the menu for "Talk again", and Settings → Sound & talking → Quiet.
 - **"Rate limited" / the bubble says "slow down":** the usage service answered "too many requests". This used to happen with the old 30-second and 1-minute refresh settings, and can still happen after restarting the pet several times in a row (each start checks straight away). Your last numbers stay on screen. It waits 3 minutes, then 6, 12 and so on (up to 30, or longer if the service asks), and goes back to normal after the next successful check.
 - **The bubble says "login expired":** open Claude Code once so it refreshes your login. The pet notices the renewed login file and checks again straight away.
-- **Something seems broken:** look in `pet_errors.log` in this folder, or send it to Claude. It never contains your login token.
+- **Something seems broken:** look in `data/pet_errors.log`, or send it to Claude. It never contains your login token.
 - **A keyboard shortcut does nothing:** another app may already use Ctrl + Alt + P or D. `pet_errors.log` will say so. Settings → Shortcuts shows "Another app already uses these keys" under it; click it and pick different keys.
 - **The bubble says "no login":** Claude Code isn't signed in on this computer. Run `claude` once and sign in.
 - **It hides when it shouldn't, or doesn't hide during full screen:** turn off "Hide during full screen" (Settings → System), then tell Claude which app caused it.

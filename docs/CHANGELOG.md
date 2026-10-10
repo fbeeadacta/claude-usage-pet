@@ -2,6 +2,11 @@
 
 Newest first. The spec and how everything works are in `PROJECT_NOTES.md`.
 
+- **2026-10-10 (version 7.7): one copy of the data, fewer pictures.**
+  - Copies of the data files left in the main folder are now always cleaned up on start: if the main-folder copy is newer than the one in `data/`, it replaces it; if it's older, it's deleted. Before, a leftover copy stayed forever once `data/` had its own. (These leftovers came from a pet still running the pre-7.6 code, which writes to the main folder until it's restarted.)
+  - Screenshots: only the wizard jobs sheet is kept, moved to `screenshots/wizard-jobs.png`. The other README pictures and `docs/jobs/` are removed, and the README no longer shows them.
+  - Tested: the move/cleanup logic in a scratch folder (newer root copy, older root copy, no data copy). Not tested on the running pet until it's restarted.
+
 - **2026-10-10 (version 7.6): tidier folder.**
   - The change log moved out of `PROJECT_NOTES.md` into `docs/CHANGELOG.md`, so the notes are quicker to read.
   - The notes (`PROJECT_NOTES.md`, `LOCAL_NOTES.md`) moved into `docs/`. `README.md`, `CLAUDE.md` and `CLAUDE.local.md` stay in the main folder.
