@@ -2,7 +2,7 @@
 
 A small Claude mascot that walks along the top of the Windows taskbar. A bubble above its head shows Claude plan usage. If any file here gets lost or corrupted, this note has enough detail to rebuild it. You can give this file to Claude and ask it to rebuild the project.
 
-Last updated: 2026-10-10 (version 6.2)
+Last updated: 2026-10-10 (version 6.3)
 
 ## Files in this folder
 
@@ -120,7 +120,7 @@ Only one pet runs at a time. Starting it again while it's already running does n
 - **A keyboard shortcut does nothing:** another app may already use Ctrl + Alt + P or D. `pet_errors.log` will say so. Settings → Shortcuts shows "Another app already uses these keys" under it; click it and pick different keys.
 - **The bubble says "no login":** Claude Code isn't signed in on this computer. Run `claude` once and sign in.
 - **It hides when it shouldn't, or doesn't hide during full screen:** turn off "Hide during full screen" (Settings → System), then tell Claude which app caused it.
-- **The double-click shortcut stops working after a Python update:** the shortcut points to one specific Python version's `pythonw.exe`. Rebuild it using the settings in `LOCAL_NOTES.md`, or ask Claude to fix it.
+- **The double-click shortcut stops working after a Python update:** the shortcut points to one specific Python version's `pythonw.exe`. Rebuild it using the settings in `LOCAL_NOTES.md` (your own notes file, not on GitHub), or ask Claude to fix it.
 - **Two pets start with Windows:** the old widget may have its own startup shortcut. Run `py usage_widget.py --no-startup` once to remove it.
 
 ## Where the numbers come from
@@ -168,7 +168,7 @@ Only one pet runs at a time. Starting it again while it's already running does n
 - `EnumDisplayMonitors` and `GetMonitorInfoW` list every monitor's full area and its "work area" (the area without the taskbar). This is checked again every 5 seconds.
 - The pet's position is its centre `x` and its feet `y`, in real screen pixels. The floor is the bottom of the work area of the screen it's on.
 - The process uses `SetProcessDpiAwareness(2)` (per-monitor) so positions are correct on every screen.
-- **Gotcha:** Tk window positions must be written `+x+y`, even when x is negative, for example `"123x87+-1022+945"`. Writing `-1022` means "1022 pixels from the right edge" and sends a window on the left monitor to the wrong place.
+- **Gotcha:** Tk window positions must be written `+x+y`, even when x is negative, for example `"123x87+-1022+945"`. Writing `-1022` means "1022 pixels from the right edge" and sends a window on a monitor left of the main one to the wrong place.
 - Hidden windows (the pet during full screen, the closed panel) are parked at (-32000, -32000) instead of using withdraw/deiconify, which would steal keyboard focus.
 
 **Full-screen detection (twice a second):**
@@ -434,14 +434,14 @@ There's also 30 px of side space for z's and sparks.
 - Error bubble at 2x.
 - Jump height (exactly 34 px).
 - Frame timing: steady at about 60 fps, about 0.1 ms of work per frame.
-- Hiding during full screen on the left monitor and coming back afterwards.
-- Walking from the left monitor onto the main one.
+- Hiding during full screen on the second monitor and coming back afterwards.
+- Walking from the second monitor onto the main one.
 - Seven simulated monitor layouts: level, lower, higher, too high, one-monitor mode, full-screen neighbour, and a bigger monitor on the left.
 - CPU: about 4% of one core while walking, about 2% while standing.
 
-**Version 4, tested on 2026-10-09** (left monitor, fake plan numbers):
+**Version 4, tested on 2026-10-09** (second monitor, fake plan numbers):
 - Grabbed by the arm, it hangs sideways (90°) and swings.
-- A throw from the left monitor onto the main one, with a scream.
+- A throw from the second monitor onto the main one, with a scream.
 - The parachute opening on a long fall.
 - Dizzy stars after a hard landing.
 - Dancing.
@@ -462,7 +462,7 @@ There's also 30 px of side space for z's and sparks.
 - Memory saved, reloaded and checked.
 - No errors.
 
-**Version 5, tested on 2026-10-09** (left monitor):
+**Version 5, tested on 2026-10-09** (second monitor):
 - Landing on a real window from another program, riding it when it moved, and falling when it closed.
 - The parachute only on long drops.
 - Worried face after a tool error.
@@ -482,27 +482,27 @@ There's also 30 px of side space for z's and sparks.
 - All five settings tabs.
 - A switch, a choice button and the volume slider, each changed and saved, with the sample file made at 25%.
 
-**Version 5.4, tested on 2026-10-09** (left monitor, real windows from a second program):
+**Version 5.4, tested on 2026-10-09** (second monitor, real windows from a second program):
 - Dragging the window it stands on: it stayed exactly in place on the window, 0 px drift per frame.
 - A window sliding over it: pushed along, at most 4 px overlap for a frame.
 - Cornered at the screen edge: dropped through to the taskbar.
 - A window suddenly brought to the front over it: scooted out the nearer side within 0.4 s.
 - Not tested: dragging a real app's window by its title bar with the mouse (the test moved windows by code).
 
-**Version 5.5, tested on 2026-10-09** (left monitor, real windows):
+**Version 5.5, tested on 2026-10-09** (second monitor, real windows):
 - Jumps from the taskbar: easy window (150 px up) 5/6 made it, medium (280 up) 5/6, too high (390 up) 0/6, each with a line before and an excuse or a brag after.
 - Window to window (220 px up): 4/5 made it.
 - Small talk over 20 simulated minutes at "Sometimes": about 16 lines, matching what it's doing (walking, dancing, standing on a window, idle), with no repeats.
 - The version 5.4 window tests still pass.
 
-**Version 5.6, tested on 2026-10-09** (left monitor, real windows):
+**Version 5.6, tested on 2026-10-09** (second monitor, real windows):
 - Taskbar: a window sliding in pushed it from x −1220 to −1450 (at most 17 px overlap for a frame); squeezed into the screen edge it stayed put on the floor.
 - Leap of faith off a window 520 px up: dove head first, landed in hay, popped out onto the floor (screenshots checked).
 - Personalities over 3 simulated minutes: Parkour! 73% walking / 15 hops / 0 naps, Lively 64% / 10 / 0, Normal 41% / 7 / 3, Chill 24% / 4 / 6, Statue 0% / 0.
 - Settings: the Personality row (five pills) fits and switches.
 - The 5.4 and 5.5 window and jump tests still pass.
 
-**Version 5.7, tested on 2026-10-09** (left monitor, real windows):
+**Version 5.7, tested on 2026-10-09** (second monitor, real windows):
 - Jumping for a window that's too high, from beside it: hit the side every time (8/8), for windows that end above the taskbar and ones that go behind it, then landed beside it with no overlap.
 - The same jump from in front of a window that goes behind the taskbar: landed back in front and stayed (not pushed).
 - A window ending exactly at the taskbar slid over it: pushed. One that goes behind the taskbar: not pushed.
@@ -531,6 +531,11 @@ There's also 30 px of side space for z's and sparks.
 - Dim the bubble when the data is stale.
 
 ## Change log
+
+- **2026-10-10 (version 6.3): getting ready to go public.**
+  - Removed a code comment that suggested sending Claude Code's user agent. The pet always identifies itself as `usage-widget/0.1`.
+  - Personal working notes moved out of `CLAUDE.md` into the gitignored `CLAUDE.local.md`. Test notes say "second monitor" instead of describing one desk.
+  - Fixed an old author email in the git history so every commit uses the same GitHub address.
 
 - **2026-10-10 (version 6.2): the code is split into small files.**
   - `claude_pet.py` (about 4,900 lines) became a 45-line starter plus the `pet/` package (20 files, mostly 100–400 lines; the biggest is the settings window at about 1,000). Nothing about how the pet looks or behaves changed. The shortcut, "Start with Windows" and the settings, memory and error-log files are all where they were.

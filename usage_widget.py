@@ -34,7 +34,7 @@ from pathlib import Path
 POLL_SECONDS = 120         # how often to ask the api
 ONLY_KNOWN_LIMITS = True   # show only the 5-hour and weekly limits. False shows everything the api lists.
 RATE_LIMITED_SECONDS = 180 # wait this long after the api says "slow down"
-USER_AGENT = "usage-widget/0.1"  # if the api refuses this, try "claude-code/2.1.204"
+USER_AGENT = "usage-widget/0.1"
 WIDTH = 270
 # pace messages
 AHEAD_BY = 10          # used% this far above the clock = "ahead of pace"

@@ -10,7 +10,7 @@ MIN_SCALE, MAX_SCALE = 0.5, 4.0            # limits for ctrl + mouse wheel
 POLL_SECONDS = 120         # how often to ask the api
 ONLY_KNOWN_LIMITS = True   # show only the 5-hour and weekly limits. False shows everything the api lists.
 RATE_LIMITED_SECONDS = 180 # wait at least this long after the api says "slow down" (longer if it repeats)
-USER_AGENT = "usage-widget/0.1"  # if the api refuses this, try "claude-code/2.1.204"
+USER_AGENT = "usage-widget/0.1"
 # how it moves (pixels are at 1x size)
 WALK_SPEED = 28            # pixels per second
 JUMP_EVERY = 30            # on average one hop every this many seconds
