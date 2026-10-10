@@ -96,11 +96,43 @@ LOVE = [                   # valentine's day: two hearts on springs
     "...s...........s...",
     "...s...........s...",
 ]
+# bedtime: an old-fashioned nightcap, flopped over to one side with a bobble on the end. about the wizard hat's size.
+# S = the striped part (turned into blue and white stripes below), W = the white cuff, p = the bobble
+NIGHTCAP = ["".join(("b" if (i + r) // 2 % 2 else "w") if ch == "S" else ch for i, ch in enumerate(line))
+            for r, line in enumerate([
+    "...........SSSS.........",
+    "..........SSSSSSS.......",
+    ".........SSSSSSSSSS.....",
+    "........SSSSSSSSSSSSS...",
+    ".......SSSSSSSSSS..SSS..",
+    "......SSSSSSSSSSS...SS..",
+    "......SSSSSSSSSSS..pppp.",
+    ".....WWWWWWWWWWWWW.pppp.",
+    ".....WWWWWWWWWWWWW..pp..",
+])]
+# the candle it carries at bedtime, in a little holder with a ring handle (held at the h on the right).
+# f / o = the flame (two frames, so it flickers), k = wick, c = candle, d = wax drip, h = brass holder
+CANDLE = [[".f......", "fff.....", "fof.....", "fof....."],
+          ["..f.....", ".ff.....", "fof.....", "foff...."]]
+CANDLE_BASE = [
+    ".k......",
+    "ccc.....",
+    "cdc.....",
+    "ccc.....",
+    "ccc.....",
+    "ccc..hh.",
+    "hhhhhh.h",
+    ".hhhh.hh",
+]
+CANDLE_C = {"f": "#ffd166", "o": "#ff8c3a", "k": "#2b1a14", "c": "#f3ead2", "d": "#ffffff", "h": "#d9a441"}
+GLOW_C = "#ffe9a8"   # the candle's soft light
 OUTFITS = {"halloween": (PUMPKIN, {"o": "#f28c28", "#": "#ffcf4d", "g": "#4f7a28"}),
            "christmas": (SANTA, {"r": "#d8343a", "w": "#f7f4ee"}),
            "newyear": (PARTY, {"p": "#ff6f8a", "c": "#5ad1e8", "y": "#ffe08a"}),
            "birthday": (PARTY, {"p": "#ff6f8a", "c": "#5ad1e8", "y": "#ffe08a"}),
-           "valentine": (LOVE, {"#": "#ff6f8a", "s": "#2b1a14"})}
+           "valentine": (LOVE, {"#": "#ff6f8a", "s": "#2b1a14"}),
+           "bedtime": (NIGHTCAP, {"b": "#3f6fc6", "w": "#f2efe8", "W": "#f7f4ee", "p": "#ffffff"})}
+OUTFITS["bedtime_right"] = ([ln[::-1] for ln in NIGHTCAP], OUTFITS["bedtime"][1])   # heading right: bobble on the left
 # the spell tome (reading files): two open spreads, so turning pages shows it reading on.
 # c = leather cover, g = gold corners, p / P = page / page shadow, e / E = page edges, s = spine,
 # r = red capital, i = ink, b = glowing sigil, y = its gold heart, m = ribbon bookmark

@@ -3,7 +3,8 @@ import math
 import time
 import tkinter.font as tkfont
 
-from .art import (ARMS, BAND_C, BEAM_C, BLOCK_H, BLOCK_W, BLUSH, BLUSH_C, BODY, BUBBLE, BUBBLE_TEXT, CHUTE,
+from .art import (ARMS, BAND_C, BEAM_C, BLOCK_H, BLOCK_W, BLUSH, BLUSH_C, BODY, BUBBLE, BUBBLE_TEXT, CANDLE,
+    CANDLE_BASE, CANDLE_C, CHUTE, GLOW_C,
     CHUTE_R, CHUTE_W, EYE, EYES, FULL_C, FULL_EDGE, HAT, HAT_C, HAY_C, HEART, HEART_C, KEY,
     LEFT_WAVE, LEGS_AIR, LEGS_STAND, LEGS_STEP, NOTE, NOTE_C, ORANGE, OUTFITS, PANIC_C, RED,
     SHADOW, SHINY, SPARK, SPARK_C, SPEECH, SPEECH_TEXT, STAR_C, STRING_C, TRACK, UFO, UFO_C, UFO_LIGHTS,
@@ -25,7 +26,6 @@ class RenderMixin:
         sleeping = anim and self.state == "sleep"
         dancing = anim and self.state == "dance" and grounded
         wiz = anim and self.state == "work" and not airborne
-        full = self.full()
         squash = anim and grounded and not self.held and (self.squash_t > 0 or self.pressed)
         walking = (anim and grounded and not squash
                    and ((self.state == "walk" and self.walking_allowed()) or self.goto_x is not None))
@@ -50,8 +50,6 @@ class RenderMixin:
             eyes = "worried"   # a claude code tool call just failed
         elif anim and self.blink_t > 0:
             eyes = "closed"
-        elif full and not airborne:
-            eyes = "tired"   # a hard day's work
         else:
             eyes = "open"
         job = self.job_frame() if wiz else None   # what claude is doing, as a wizard job (pet/magic.py)
@@ -61,14 +59,14 @@ class RenderMixin:
             eye_dir, eye_v = pose[1:3] if pose else (1, 0)   # watching the wand, or the job
         elif walking or (anim and self.look_t > 0 and not sleeping):
             eye_dir = self.dir if walking else self.look_d
-        elif anim and not sleeping and eyes in ("open", "worried", "tired"):
+        elif anim and not sleeping and eyes in ("open", "worried"):
             eye_dir, eye_v = self.gaze()   # watching your mouse pointer
         else:
             eye_dir = 0
         if sleeping or hay:
             sink = "lie"   # lying down, or sat in the hay
-        elif squash or (dancing and beat in (1, 3)) or (full and grounded and self.state == "idle"):
-            sink = "half"   # squished, bopping to the beat, or slumped because the limit is full
+        elif squash or (dancing and beat in (1, 3)):
+            sink = "half"   # squished, or bopping to the beat
         else:
             sink = None
         if wiz and pose:
@@ -110,7 +108,14 @@ class RenderMixin:
             pw, ph = self.pet_px
             gx, gy = self.grab_local if self.held else (pw / 2, ph / 2)
             rot = (round(self.angle, 2), round(gx), round(gy))
-        outfit = season() if self.seasonal.get() and not wiz else None
+        night = self.bedtime_now()
+        lead = 1 if self.dir > 0 else 0   # the hand on the side it's heading (or last headed): 0 left, 1 right
+        cap = "bedtime_right" if lead else "bedtime"   # (the bobble flops out behind it)
+        outfit = None if wiz else cap if night else season() if self.seasonal.get() else None
+        candle = None   # at bedtime: held in its lead hand, or put down on that side while it sleeps
+        if night and not wiz and not hay and not dancing and not act:
+            where = "floor" if sleeping else "hold" if ARMS[lead] in arms else None
+            candle = (where, lead, int(self.clock * 5) % 2 if anim else 0) if where else None
         helpers = (self.helpers(), int(self.clock * 5)) if wiz else None
         ufo = None
         if anim and self.ufo:
@@ -131,7 +136,8 @@ class RenderMixin:
                 round(math.sin(self.clock * 1.6) * 1.4) if chute else None,
                 shift,
                 int(self.clock * 8) % 12 if anim and self.dizzy_t > 0 else None,
-                sleeping and int(self.clock / 1.4) % 2 == 1, hay, eye_v, outfit, helpers, ufo, self.shiny, job, act)
+                sleeping and int(self.clock / 1.4) % 2 == 1, hay, eye_v, outfit, helpers, ufo, self.shiny, job, act,
+                candle)
 
     def gaze(self):
         # which way to look so it's watching your mouse pointer, when the pointer's nearby
@@ -169,7 +175,7 @@ class RenderMixin:
 
     def draw(self, f):
         (_, legs, eyes, eye_dir, sink_kind, arms, wand, warn, wiz, parts, segs, bars, err, show_bubble,
-         speech, rot, chute, shift, dizzy, breath, hay, eye_v, outfit, helpers, ufo, shiny, job, act) = f
+         speech, rot, chute, shift, dizzy, breath, hay, eye_v, outfit, helpers, ufo, shiny, job, act, candle) = f
         c = self.canvas
         c.delete("all")
         s = self.s()
@@ -282,8 +288,6 @@ class RenderMixin:
             x1, y1 = (col + eye_dir) * bw, bh + sink + eye_v * max(1, bh // 4)
             if eyes in ("open", "worried"):
                 emit(x1, y1, x1 + bw, y1 + bh, EYE)
-            elif eyes == "tired":   # heavy eyelids
-                emit(x1, y1 + bh // 2, x1 + bw, y1 + bh, EYE)
             else:   # a thin line: low for closed, high for a happy squint
                 ly = y1 + (bh // 5 if eyes == "happy" else bh // 2)
                 emit(x1, ly, x1 + bw, ly + max(1, bh // 4), EYE)
@@ -301,7 +305,24 @@ class RenderMixin:
             # a seasonal outfit on its head (the wizard hat takes its place while it works)
             rows_, colours = look
             hx = px + 3 * bw + (12 * bw - len(rows_[0]) * pb) // 2
-            self.glyph(rows_, hx, py + sink - (len(rows_) - 1) * pb, pb, colours)
+            self.glyph(rows_, hx, py + sink - (len(rows_) - 1) * pb, pb, colours,
+                       shadow=not outfit.startswith("bedtime"))   # (the nightcap has no dark edge, like the wizard hat)
+        if candle and not rot and not gone:
+            # a candle for a night light, with little rays of light round the flame
+            where, right, flick = candle
+            rows_ = CANDLE[flick] + CANDLE_BASE
+            if right:   # in the right hand: the same picture, flipped
+                rows_ = [ln[::-1] for ln in rows_]
+                x0 = px + pet_w - 4 * pb if where == "hold" else px + pet_w - 2 * pb
+            else:
+                x0 = px - 4 * pb if where == "hold" else px - 6 * pb
+            y0 = py + sink if where == "hold" else py + pet_h - 12 * pb
+            gx, gy = x0 + (6 if right else 1) * pb, y0 + 2 * pb   # the flame's middle block
+            for k, (dx, dy) in enumerate(((0, -1), (1, -1), (1, 0), (1, 1), (-1, 1), (-1, 0), (-1, -1))):
+                r = 3 + (k + flick) % 2   # (none straight down: that's the candle)
+                x1, y1 = gx + dx * r * pb, gy + dy * r * pb
+                c.create_rectangle(x1, y1, x1 + pb, y1 + pb, fill=GLOW_C, outline="")
+            self.glyph(rows_, x0, y0, pb, CANDLE_C, shadow=False)
         if wiz and not rot:
             # wizard hat on the head, then whatever the job brings along (pet/magic.py)
             hx = px + 3 * bw + (12 * bw - len(HAT[0]) * pb) // 2

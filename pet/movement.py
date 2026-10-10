@@ -16,7 +16,7 @@ from .winapi import list_platforms, own_usage, u32, window_box, winmm
 class MovementMixin:
     # movement
     def walking_allowed(self):
-        return self.walk.get() and not self.details.visible and not self.hidden and not self.full()
+        return self.walk.get() and not self.details.visible and not self.hidden
 
     def floor(self):
         # the taskbar (or screen bottom), or the top of the window it's standing on
@@ -549,15 +549,15 @@ class MovementMixin:
             self.step_t += dt
             if self.step_t >= 0.18:
                 self.step_t, self.step = 0.0, self.step + 1
-        if (self.jump.get() and self.walk.get() and self.platforms.get() and not self.full()
+        if (self.jump.get() and self.walk.get() and self.platforms.get()
                 and not self.details.visible and random.random() < dt / self.prof()["leap"] and self.try_leap()):
             return
-        if self.jump.get() and not self.full() and random.random() < dt / self.prof()["hop"]:
+        if self.jump.get() and random.random() < dt / self.prof()["hop"]:
             self.jump_now(HOP_HEIGHT * s)
             self.tally("hops")
         if self.state_t <= 0:
             pr = self.prof()
-            if random.random() < DANCE_CHANCE and not self.full():
+            if random.random() < DANCE_CHANCE:
                 self.start_dance()
             elif self.state != "walk" and self.maybe_act():
                 pass

@@ -8,7 +8,7 @@ import webbrowser
 
 from .art import ARMS, BLOCK_H, BLOCK_W, BODY, BUBBLE, BUBBLE_TEXT, EYE, EYES, LEGS_STAND, ORANGE, TRACK
 from .config import (MAX_SCALE, MIN_SCALE, PANIC_CHOICES, POLL_CHOICES, PROFILE_NAMES, QUIET_FROM_CHOICES,
-    QUIET_TO_CHOICES, SHORTCUTS, WARN_CHOICES, combo_parts, key_name)
+    QUIET_TO_CHOICES, BEDTIME_CHOICES, SHORTCUTS, WARN_CHOICES, combo_parts, key_name)
 from .sounds import SOUND_DIR, SOUND_GROUPS
 from .storage import DEFAULTS
 from .tips import TIPS
@@ -81,11 +81,16 @@ class SettingsWindow:
                         row("toggle", "Animations", "anim", p.anim, p.anim_changed, words="still motion")])]
         if page == "appearance":
             return [("Preview", None, [row("preview", "Preview", words="look size bubble")]),
-                    ("Mascot", ["scale", "seasonal"], [
+                    ("Mascot", ["scale", "seasonal", "bedtime", "bedtime_at"], [
                         row("slider", "Size", "scale", p.size_var, p.set_scale, (MIN_SCALE, MAX_SCALE, 0.05, "{:.2f}x"),
                             words="big small scale"),
                         row("toggle", "Seasonal outfits", "seasonal", p.seasonal, p.changed,
-                            words="halloween christmas hat pumpkin holiday")]),
+                            words="halloween christmas hat pumpkin holiday"),
+                        row("toggle", "Pajamas at bedtime", "bedtime", p.bedtime, p.changed,
+                            words="night cap nightcap candle sleep pyjamas"),
+                        row("choice", "Bedtime from", "bedtime_at", p.bedtime_at, p.changed,
+                            [(v, hour_name(v)) for v in BEDTIME_CHOICES], show=lambda: bool(p.bedtime.get()),
+                            words="night time hour")]),
                     ("Usage bubble", ["bubble", "bubble_style"], [
                         row("choice", "Bubble shows", "bubble", p.bubble_mode, p.changed,
                             (("both", "Both limits"), ("5h", "5-hour only"), ("hover", "On hover"))),

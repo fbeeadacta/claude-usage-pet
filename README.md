@@ -55,7 +55,7 @@ From a terminal, `py claude_pet.py` runs it with a console window, which shows e
 ## If something goes wrong
 
 - **The bubble says "no login" or "login expired":** open Claude Code and sign in again. Hover over the mascot for step-by-step help.
-- **Nothing appears:** look for `pet_errors.log` in the pet's folder, which says what went wrong. Also check it isn't hiding: press Ctrl + Alt + P.
+- **Nothing appears:** look for `pet_errors.log` in the `data` folder, which says what went wrong. Also check it isn't hiding: press Ctrl + Alt + P.
 - **"Start with Windows" stopped working after a Python update:** turn it off and on again in Settings → System.
 
 The code lives in the `pet/` folder; `pet/__init__.py` explains what each file does.
@@ -71,7 +71,7 @@ The code lives in the `pet/` folder; `pet/__init__.py` explains what each file d
 - The usage numbers come from an **undocumented** endpoint (`/api/oauth/usage`), so this can stop working at any time without notice.
 - This is an unofficial fan project. It isn't affiliated with or endorsed by Anthropic. "Claude" and the Claude Code mascot design belong to Anthropic.
 
-More detail, including how everything works, is in [PROJECT_NOTES.md](PROJECT_NOTES.md).
+More detail, including how everything works, is in [PROJECT_NOTES.md](docs/PROJECT_NOTES.md).
 
 ## Licence
 

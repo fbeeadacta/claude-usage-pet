@@ -84,6 +84,6 @@ if __name__ == "__main__":
         if sys.stderr is None or not sys.stderr.isatty():   # no console (pythonw): say so in a pop-up
             import ctypes
             ctypes.windll.user32.MessageBoxW(None, "The Claude usage pet stopped because of an error.\n\n"
-                                             "The details are in pet_errors.log, in the pet's folder.",
+                                             "The details are in data/pet_errors.log, in the pet's folder.",
                                              "Claude usage pet", 0x10)
         raise

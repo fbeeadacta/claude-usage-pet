@@ -86,6 +86,8 @@ class Pet(ScreensMixin, MouseMixin, TalkMixin, DataMixin, MovementMixin, RenderM
         self.dnd = tk.BooleanVar(value=st["dnd"])                 # quiet while windows' do not disturb is on
         self.rare = tk.BooleanVar(value=st["rare"])               # ufos, cats, a shiny colour
         self.apprentices = tk.BooleanVar(value=st["apprentices"]) # little helpers for parallel sessions
+        self.bedtime = tk.BooleanVar(value=st["bedtime"])         # nightcap and candle at night
+        self.bedtime_at = tk.IntVar(value=st["bedtime_at"])
 
         # usage data, plus what it remembers from last time
         mem = load_memory()
@@ -186,6 +188,7 @@ class Pet(ScreensMixin, MouseMixin, TalkMixin, DataMixin, MovementMixin, RenderM
         self.dir = random.choice((-1, 1))
         self.state, self.state_t = "idle", 2.0    # idle, walk, sleep, work or dance
         self.sleep_reason = None
+        self.was_bedtime = None                   # was it in its pajamas last tick (None = just started)
         self.step, self.step_t = 0, 0.0
         self.blink_t, self.next_blink = 0.0, 3.0
         self.look_t, self.look_d = 0.0, 0         # glancing left or right while standing
@@ -248,7 +251,8 @@ class Pet(ScreensMixin, MouseMixin, TalkMixin, DataMixin, MovementMixin, RenderM
             ("cc_range", self.cc_range), ("plan_chart", self.plan_chart), ("x", round(self.x)), ("y", round(self.y)),
             ("tray", self.tray_on), ("pace_warn", self.pace_warn), ("seasonal", self.seasonal),
             ("quiet_hours", self.quiet_hours), ("quiet_from", self.quiet_from), ("quiet_to", self.quiet_to),
-            ("dnd", self.dnd), ("rare", self.rare), ("apprentices", self.apprentices))}
+            ("dnd", self.dnd), ("rare", self.rare), ("apprentices", self.apprentices),
+            ("bedtime", self.bedtime), ("bedtime_at", self.bedtime_at))}
         write_json(SETTINGS_FILE, st)
         write_json(STATE_FILE, {"seen": self.seen, "last_5h": self.last_5h, "pokes": self.pokes,
                                 "history": self.history, "greeted": self.greeted,

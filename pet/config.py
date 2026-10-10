@@ -71,7 +71,7 @@ CHUTE_SPEED = 110          # falling speed with the parachute open, pixels per s
 DANCE_CHANCE = 0.05        # chance of a little dance whenever it stops walking
 ACT_CHANCE = 0.1           # ...and of something else to do: sweeping, painting, fishing, balloons, a paper plane
 STALE_MIN = 10             # numbers older than this (and 3 checks) look faded in the bubble
-ERROR_LOG_KB = 200         # pet_errors.log is trimmed to stay about this small
+ERROR_LOG_KB = 200         # data/pet_errors.log is trimmed to stay about this small
 # keyboard shortcuts: (modifiers, key) with windows' codes. modifiers: 1 alt, 2 ctrl, 4 shift, 8 win.
 SHORTCUTS = (("pet", "Show / hide the mascot", "Hides it completely (it keeps checking your usage), or brings it back."),
              ("details", "Open the details panel", "Pins the Plan / Claude Code panel open, or closes it."),
@@ -114,6 +114,9 @@ PACE_WARN = {"five_hour": (30 * 60, 50), "seven_day": (12 * 3600, 40)}   # (seco
 QUIET_FOR = 3600
 QUIET_FROM_CHOICES = (20, 21, 22, 23, 0)   # quiet hours start at this hour...
 QUIET_TO_CHOICES = (6, 7, 8, 9)            # ...and end at this one
+# bedtime (settings: pajamas at night): a striped nightcap and a candle from this hour until BEDTIME_END
+BEDTIME_CHOICES = (20, 21, 22, 23, 0, 1)
+BEDTIME_END = 6
 # coming over when called (shortcut, tray icon, or starting the pet again)
 SPRINT = 5.0               # running speed, times the walking speed
 COME_DROP = 500            # further than this (or on another monitor) it parachutes in instead of running
@@ -131,9 +134,19 @@ CONFIG_DIR = Path(os.environ.get("CLAUDE_CONFIG_DIR") or (Path.home() / ".claude
 CREDENTIALS = CONFIG_DIR / ".credentials.json"
 CC_LOGS = CONFIG_DIR / "projects"
 HERE = Path(__file__).resolve().parent.parent   # the project folder (this file is in pet/)
-SETTINGS_FILE = HERE / "pet_settings.json"
-STATE_FILE = HERE / "pet_state.json"     # moods and memories that survive a restart
-CC_CACHE = HERE / "pet_cc_cache.json.gz" # claude code's log numbers, saved so a restart doesn't re-read every log
+DATA_DIR = HERE / "data"                  # everything the pet writes while it runs lives here (git ignores it)
+SETTINGS_FILE = DATA_DIR / "pet_settings.json"
+STATE_FILE = DATA_DIR / "pet_state.json"     # moods and memories that survive a restart
+CC_CACHE = DATA_DIR / "pet_cc_cache.json.gz" # claude code's log numbers, saved so a restart doesn't re-read every log
+ERROR_LOG = DATA_DIR / "pet_errors.log"
+try:
+    DATA_DIR.mkdir(exist_ok=True)
+    # older versions kept these files next to claude_pet.py, so carry them over once
+    for _f in (SETTINGS_FILE, STATE_FILE, CC_CACHE, ERROR_LOG):
+        if (HERE / _f.name).exists() and not _f.exists():
+            (HERE / _f.name).replace(_f)
+except OSError:
+    pass
 STARTUP_NAME = "Claude Usage Pet.lnk"
 SUMMON_EVENT = "claude-usage-pet-summon" # starting the pet again sets this, and the running one comes over
 

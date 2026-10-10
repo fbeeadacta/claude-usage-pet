@@ -1,18 +1,11 @@
 # this computer only
-LOCAL_NOTES.md
+docs/LOCAL_NOTES.md
 *.lnk
 
 # made by the pet while it runs
-pet_settings.json
-pet_settings.tmp
-pet_state.json
-pet_state.tmp
-pet_cc_cache.json.gz
-pet_cc_cache.json.gz.tmp
-usage_widget_pos.json
+data/
 
 # python
 __pycache__/
 *.pyc
-pet_errors.log
 CLAUDE.local.md

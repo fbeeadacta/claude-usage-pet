@@ -7,9 +7,9 @@ import time
 
 from .art import BALL, BALL_C, CAT_A, CAT_B, CAT_C
 from .cclog import fmt_minutes, fmt_tokens
-from .config import (CAT_HOURS, CHUTE_HEIGHT, COME_DROP, FETCH_SECONDS, GRAVITY, QUIET_FOR, SESSION_DONE_MIN, SPRINT,
-    UFO_HOURS, WALK_SPEED)
-from .lines import (AWAY_RECAP, CAT_LINES, COME_LINES, DROP_IN_LINES, FETCH_BACK, FETCH_GOT, FETCH_START,
+from .config import (BEDTIME_END, CAT_HOURS, CHUTE_HEIGHT, COME_DROP, FETCH_SECONDS, GRAVITY, QUIET_FOR,
+    SESSION_DONE_MIN, SPRINT, UFO_HOURS, WALK_SPEED)
+from .lines import (AWAY_RECAP, BEDTIME_LINES, CAT_LINES, COME_LINES, DROP_IN_LINES, FETCH_BACK, FETCH_GOT, FETCH_START,
     QUIET_LINES, RECAP_LINES, SEASON_LINES, SHINY_LINES, TOUR_LINES, UFO_LINES, WELCOME_LINES, CONTINUE_LINES)
 from .sprites import Sprite
 from .storage import log_error
@@ -118,6 +118,14 @@ class FunMixin:
         busy = sum(1 for t in list(self.cc.active.values()) if now - t < 45)
         return max(0, min(3, busy - 1))
 
+    # ---- bedtime ----
+    def bedtime_now(self):
+        # nightcap and candle time: from the chosen hour until BEDTIME_END in the morning
+        if not self.bedtime.get():
+            return False
+        h, a = datetime.datetime.now().hour, self.bedtime_at.get()
+        return (h >= a or h < BEDTIME_END) if a > BEDTIME_END else a <= h < BEDTIME_END
+
     # ---- quiet mode ----
     def quiet(self):
         # no talking and no sounds: for an hour from the menu, during quiet hours, or when windows says so
@@ -189,6 +197,10 @@ class FunMixin:
             if self.say(self.pick(SEASON_LINES[day]), force=True):
                 self.season_said = today
                 self.wave_t = 1.4
+        night = self.bedtime_now()
+        if night and self.was_bedtime is False and self.state != "sleep":   # (not when it starts up at night)
+            self.say(self.pick(BEDTIME_LINES))
+        self.was_bedtime = night
         if self.shiny and not self.shiny_said and not self.speech and self.say(self.pick(SHINY_LINES), force=True):
             self.shiny_said = True
             self.tally("shiny")

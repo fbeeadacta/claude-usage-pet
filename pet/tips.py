@@ -96,6 +96,11 @@ TIPS = {
                        "mascot wakes up a rare colour.", []),
     "Seasonal outfits": ("Dresses up for special days: a pumpkin at Halloween, a Santa hat in December, a party "
                          "hat at New Year and on its birthday, and hearts on Valentine's Day.", []),
+    "Pajamas at bedtime": ("Gets ready for bed at night: a blue and white striped nightcap, and a candle "
+                           "to light the way.", [
+        ("On", "It wears them from the time below until 6 AM. This is the default."),
+        ("Off", "No nightcap or candle.")]),
+    "Bedtime from": ("When the nightcap and candle come out.", []),
     "Quiet hours": ("No talking and no sounds at night. The usage bubble still shows.", []),
     "Quiet from": ("When quiet hours start.", []),
     "Quiet until": ("When quiet hours end.", []),

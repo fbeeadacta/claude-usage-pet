@@ -5,19 +5,17 @@ import os
 import time
 import traceback
 
-from .config import (CHATTER, DEFAULT_KEYS, DEFAULT_SCALE, ERROR_LOG_KB, HERE, MAX_SCALE, MIN_SCALE,
+from .config import (CHATTER, DEFAULT_KEYS, DEFAULT_SCALE, ERROR_LOG, ERROR_LOG_KB, MAX_SCALE, MIN_SCALE,
     PANIC_AT, PANIC_CHOICES, POLL_CHOICES, POLL_SECONDS, PROFILES, QUIET_FROM_CHOICES, QUIET_TO_CHOICES,
-    SETTINGS_FILE, SHORTCUTS, STATE_FILE, WARN_AT, WARN_CHOICES, combo_ok)
+    BEDTIME_CHOICES, SETTINGS_FILE, SHORTCUTS, STATE_FILE, WARN_AT, WARN_CHOICES, combo_ok)
 from .sounds import SOUNDS
 
 
 # ---- error log ----
 
-ERROR_LOG = HERE / "pet_errors.log"
-
 
 def log_error(what, exc=None):
-    # writes what went wrong (with the python traceback) to pet_errors.log, kept small.
+    # writes what went wrong (with the python traceback) to data/pet_errors.log, kept small.
     # the login token is never in here: tracebacks don't include it.
     try:
         text = "".join(traceback.format_exception(*exc)) if exc else traceback.format_exc()
@@ -41,9 +39,10 @@ DEFAULTS = {"scale": DEFAULT_SCALE, "energy": "normal", "walk": True, "jump": Tr
             "hide_fs": True, "one_monitor": False, "panel_tab": "plan", "plan_chart": "5h", "cc_view": "overview",
             "cc_range": "all", "x": None, "y": None,
             "tray": True, "pace_warn": True, "seasonal": True, "quiet_hours": False, "quiet_from": 22, "quiet_to": 7,
-            "dnd": True, "rare": True, "apprentices": True}
+            "dnd": True, "rare": True, "apprentices": True, "bedtime": True, "bedtime_at": 23}
 BOOLS = ("walk", "jump", "naps", "anim", "wizard", "warn", "cc_app", "notify", "sounds", "hotkeys", "platforms",
-         "hide_fs", "one_monitor", "tray", "pace_warn", "seasonal", "quiet_hours", "dnd", "rare", "apprentices")
+         "hide_fs", "one_monitor", "tray", "pace_warn", "seasonal", "quiet_hours", "dnd", "rare", "apprentices",
+         "bedtime")
 CHOICES = {"energy": tuple(PROFILES), "bubble": ("both", "5h", "hover"), "bubble_style": ("numbers", "bars"), "clock": ("12h", "24h"), "dates": ("ddmm", "mmdd"),
            "chatter": tuple(CHATTER), "panel_tab": ("plan", "cc"), "plan_chart": ("5h", "7d"),
            "cc_view": ("overview", "models", "projects", "sessions"), "cc_range": ("all", "30d", "7d"),
@@ -86,7 +85,8 @@ def load_settings():
     if isinstance(st["volume"], bool) or not isinstance(st["volume"], int) or not 0 <= st["volume"] <= 100:
         st["volume"] = DEFAULTS["volume"]
     for k, ok in (("warn_at", WARN_CHOICES), ("panic_at", PANIC_CHOICES), ("poll", POLL_CHOICES),
-                  ("quiet_from", QUIET_FROM_CHOICES), ("quiet_to", QUIET_TO_CHOICES)):
+                  ("quiet_from", QUIET_FROM_CHOICES), ("quiet_to", QUIET_TO_CHOICES),
+                  ("bedtime_at", BEDTIME_CHOICES)):
         if st[k] not in ok or isinstance(st[k], bool):
             st[k] = DEFAULTS[k]
     keys = st["keys"] if isinstance(st["keys"], dict) else {}

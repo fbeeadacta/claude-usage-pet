@@ -79,7 +79,7 @@ def fetch_usage():
 
 RETRY_AFTER = 0   # seconds the usage service asked us to wait, from its last "slow down"
 SERVICE_CHANGED = ("the usage service changed. Its answer doesn't look like it used to, so the mascot can't read "
-                   "your usage right now.\n\nThis usually needs an update to the mascot. pet_errors.log (in its "
+                   "your usage right now.\n\nThis usually needs an update to the mascot. data/pet_errors.log (in its "
                    "folder) lists the names of what the service sent back, which helps fix it. It keeps trying.")
 
 

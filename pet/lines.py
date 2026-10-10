@@ -327,7 +327,7 @@ OOPS_LINES = ["oops, something went wrong in there.", "uh oh. a tool tripped ove
               "that didn't work. Claude will try again!", "*winces* an error. it happens."]
 FULL_LINES = ["100%. that's what I call a hard day's work.", "we used ALL of it. I'm so proud.",
               "the tank is empty. see you after the reset!", "*collapses dramatically*",
-              "I'm exhausted. clocking out until the reset.", "not a single token left. legendary."]
+              "all used up. I'll keep you company till the reset.", "not a single token left. legendary."]
 # early pace warning ({when} = when it runs out at this pace, {reset} = when the limit resets)
 PACE_LINES = {
     "five_hour": ["at this pace you'll hit the 5-hour limit around {when}. it resets {reset}. maybe pace yourself?",
@@ -362,6 +362,8 @@ SEASON_LINES = {
     "birthday": ["it's my birthday! I'm made of rectangles and I'm one year older.", "party hat on! it's my birthday!"],
     "valentine": ["happy valentine's day! you're my favourite user.", "I ♥ you. and your tokens."],
 }
+BEDTIME_LINES = ["*puts on nightcap* bedtime mode.", "I found a candle. it's getting late!",
+                 "pajamas on. you should think about bed too.", "*lights a candle* night shift begins."]
 # rare events
 SHINY_LINES = ["whoa. I feel... shiny today.", "is it me, or am I sparkly?"]
 UFO_LINES = ["uh oh.", "wait, what's that light?", "hey! put me down!"]

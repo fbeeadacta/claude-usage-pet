@@ -105,7 +105,7 @@ class IdleMixin:
 
     def maybe_act(self):
         # (when it's done standing about) now and then, one of these instead
-        return random.random() < ACT_CHANCE and not self.full() and self.start_act()
+        return random.random() < ACT_CHANCE and self.start_act()
 
     # ---- where things are (relative to the body's top left) ----
     def act_dims(self):
