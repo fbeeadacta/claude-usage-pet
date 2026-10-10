@@ -2,6 +2,11 @@
 
 Newest first. The spec and how everything works are in `PROJECT_NOTES.md`.
 
+- **2026-10-11 (version 7.8): subfolders no longer show up as their own projects.**
+  - The Projects view named a project after the last folder in the session's working directory, so a session that worked in `pet/` or `docs/` showed up as a separate project. `cclog.project_name()` now walks up to the folder that has `.git` and uses that name (falling back to the plain folder name outside a repo). Results are cached per folder.
+  - `CACHE_VERSION` went to 2, so the log cache is rebuilt once on the next start and old rows get the new names.
+  - Tested: the name lookup (repo root, two subfolders, no folder, a missing folder, a non-repo folder). Not tested on the running pet until it's restarted.
+
 - **2026-10-10 (version 7.7): one copy of the data, fewer pictures.**
   - Copies of the data files left in the main folder are now always cleaned up on start: if the main-folder copy is newer than the one in `data/`, it replaces it; if it's older, it's deleted. Before, a leftover copy stayed forever once `data/` had its own. (These leftovers came from a pet still running the pre-7.6 code, which writes to the main folder until it's restarted.)
   - Screenshots: only the wizard jobs sheet is kept, moved to `screenshots/wizard-jobs.png`. The other README pictures and `docs/jobs/` are removed, and the README no longer shows them.

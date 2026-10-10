@@ -31,6 +31,24 @@ def answer_cost(a):
     return (a[3] * pin + a[4] * pout + (a[5] - cw1h) * 1.25 * pin + cw1h * 2 * pin + a[6] * pread) / 1e6
 
 
+_project_names = {}
+
+
+def project_name(cwd):
+    # the folder claude code worked in, or the top of its git repo if it's inside one (so a session
+    # that cd'd into a subfolder still counts as the same project)
+    cwd = str(cwd or "?")
+    if cwd not in _project_names:
+        p = Path(cwd)
+        root = p
+        try:
+            root = next((q for q in (p, *p.parents) if (q / ".git").exists()), p)
+        except OSError:
+            pass
+        _project_names[cwd] = root.name or "?"
+    return _project_names[cwd]
+
+
 def fmt_money(d):
     return f"${d:,.2f}" if d < 1000 else f"${d:,.0f}"
 
@@ -169,7 +187,7 @@ def job_for(name):
     name = str(name)
     return "mcp" if name.startswith("mcp__") else JOBS.get(name)
 CHUNK = 4 * 2 ** 20   # logs are read this much at a time, so a huge log never sits in memory all at once
-CACHE_VERSION = 1
+CACHE_VERSION = 2   # 2: project names are the repo root, not the subfolder
 
 
 class ClaudeCodeLog:
@@ -368,7 +386,7 @@ class ClaudeCodeLog:
                                               "cache_creation_input_tokens", "cache_read_input_tokens")]
             cc = u.get("cache_creation") if isinstance(u.get("cache_creation"), dict) else {}
             cw1h = int(cc.get("ephemeral_1h_input_tokens") or 0)
-            project = Path(str(d.get("cwd") or "?")).name or "?"   # the folder claude code worked in
+            project = project_name(d.get("cwd"))
             row = (when, session, str(m.get("model") or "unknown"), *n, cw1h, project)
             key = (m.get("id"), d.get("requestId"))
             if key in self.seen_answers:
