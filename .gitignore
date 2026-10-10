@@ -13,3 +13,4 @@ usage_widget_pos.json
 __pycache__/
 *.pyc
 pet_errors.log
+CLAUDE.local.md
