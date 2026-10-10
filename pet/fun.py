@@ -10,7 +10,7 @@ from .cclog import fmt_minutes, fmt_tokens
 from .config import (CAT_HOURS, CHUTE_HEIGHT, COME_DROP, FETCH_SECONDS, GRAVITY, QUIET_FOR, SESSION_DONE_MIN, SPRINT,
     UFO_HOURS, WALK_SPEED)
 from .lines import (AWAY_RECAP, CAT_LINES, COME_LINES, DROP_IN_LINES, FETCH_BACK, FETCH_GOT, FETCH_START,
-    QUIET_LINES, RECAP_LINES, SEASON_LINES, SHINY_LINES, TOUR_LINES, UFO_LINES)
+    QUIET_LINES, RECAP_LINES, SEASON_LINES, SHINY_LINES, TOUR_LINES, UFO_LINES, WELCOME_LINES, CONTINUE_LINES)
 from .sprites import Sprite
 from .storage import log_error
 from .tray import Tray
@@ -110,11 +110,6 @@ class FunMixin:
             self.drop_ball()
 
     # ---- what claude code is up to ----
-    def reading(self):
-        # claude reached for a reading tool (read, grep, glob...) in the last few seconds
-        when, job = self.cc.job
-        return job == "read" and time.time() - when < 8
-
     def helpers(self):
         # one little apprentice for each extra claude code session busy right now (up to 3)
         if not self.apprentices.get():
@@ -145,7 +140,24 @@ class FunMixin:
         self.save()
 
     def restart_tour(self):
-        self.tour, self.next_tour = list(TOUR_LINES), time.time() + 0.5
+        self.script, self.next_line = list(TOUR_LINES), time.time() + 0.5
+
+    def welcome(self, now):
+        # (just started) welcome back, and maybe an offer to carry on with the last claude code session's project
+        hour = datetime.datetime.now().hour
+        part = "morning" if 5 <= hour < 12 else "evening" if 17 <= hour < 23 else "late" if hour < 5 or hour >= 23             else "day"
+        lines = [self.pick(WELCOME_LINES[part] + WELCOME_LINES["any"])]
+        if part == "morning":
+            self.greeted = datetime.date.today().isoformat()   # (that was the good morning)
+        st = self.cc_stats()
+        last = (st or {}).get("recent", [None])[0] if st else None
+        if last and last["project"] not in ("?", ""):
+            ago = now - last["end"].timestamp()
+            kind = "warm" if ago < 3 * 3600 else "recent" if ago < 3 * 86400 else "old"
+            days = max(1, round(ago / 86400))
+            lines.append(self.pick(CONTINUE_LINES[kind]).format(project=last["project"], days=days))
+        self.script = lines + self.script
+        self.next_line = now
 
     # ---- the diary ----
     def tally(self, key, n=1):
@@ -160,13 +172,17 @@ class FunMixin:
         if not present or self.hidden:
             return
         today = datetime.date.today().isoformat()
-        if self.tour and now >= self.next_tour and not self.speech and self.state != "sleep":
+        if self.welcome_due and (self.cc.stats is not None or now - self.started > 15):
+            self.welcome_due = False   # (waits a moment for claude code's logs, for the project name)
+            self.welcome(now)
+        if self.script and now >= self.next_line and not self.speech and self.state != "sleep":
+            # lines said one after another: the tour, the welcome back
             if self.chatter.get() == "off":
-                self.tour, self.toured = [], True   # it was asked not to talk
-            elif self.say(self.tour[0], force=True):
-                self.tour.pop(0)
-                self.next_tour = self.speech["until"] + 1.2
-                self.toured = self.toured or not self.tour
+                self.script, self.toured = [], True   # it was asked not to talk
+            elif self.say(self.script[0], force=True):
+                self.script.pop(0)
+                self.next_line = self.speech["until"] + 1.2
+                self.toured = self.toured or not self.script
             return
         day = season() if self.seasonal.get() else None
         if day and self.season_said != today and not self.speech and self.state != "sleep":

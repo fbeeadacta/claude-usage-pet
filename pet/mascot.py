@@ -12,6 +12,8 @@ from .config import MAX_SCALE, MIN_SCALE, PROFILES, SETTINGS_FILE, SHINY_CHANCE,
 from .data import DataMixin
 from .details import Details
 from .fun import FunMixin
+from .idle import IdleMixin
+from .magic import MagicMixin
 from .lines import TOUR_LINES
 from .menu import PopupMenu
 from .mouse import MouseMixin
@@ -28,7 +30,8 @@ from .winapi import hotkey_thread, make_dpi_aware, own_usage, set_startup, start
 
 # ---- the pet ----
 
-class Pet(ScreensMixin, MouseMixin, TalkMixin, DataMixin, MovementMixin, RenderMixin, FunMixin):
+class Pet(ScreensMixin, MouseMixin, TalkMixin, DataMixin, MovementMixin, RenderMixin, FunMixin, MagicMixin,
+          IdleMixin):
     def __init__(self):
         make_dpi_aware()
         self.root = tk.Tk()
@@ -104,7 +107,9 @@ class Pet(ScreensMixin, MouseMixin, TalkMixin, DataMixin, MovementMixin, RenderM
         self.log, self.log_since = mem["log"], mem["log_since"]   # the diary: pokes, throws, jumps...
         self.hush_until = mem["hush_until"]     # quiet (menu) until then
         self.toured, self.season_said = mem["toured"], mem["season_said"]
-        self.tour, self.next_tour = ([] if self.toured else list(TOUR_LINES)), time.time() + 4
+        # lines to say one after another: the tour on the very first start, otherwise a welcome back
+        self.script, self.next_line = ([] if self.toured else list(TOUR_LINES)), time.time() + 4
+        self.welcome_due = self.toured
         self.shape_logged, self.win_quiet = False, False
         self.summon, self.tray = summon_event(), None   # starting it again calls it over; the tray icon
         self.creds_mtime = self.creds_changed_at()
@@ -133,7 +138,7 @@ class Pet(ScreensMixin, MouseMixin, TalkMixin, DataMixin, MovementMixin, RenderM
         self.next_work_line = self.next_idle_line = 0.0
         self.next_chat = time.time() + random.uniform(15, 45)
         self.speech, self.quiet_until = None, 0.0
-        self.recent = collections.deque(maxlen=25)   # lines it said lately, so it doesn't repeat itself
+        self.recent = collections.deque(maxlen=60)   # lines it said lately, so it doesn't repeat itself
         self.last_touch = time.time()             # last hover, poke or drag
         self.next_attention = self.next_full_line = self.next_late_line = 0.0
         self.error_seen, self.worried_t = time.time(), 0.0
@@ -171,7 +176,8 @@ class Pet(ScreensMixin, MouseMixin, TalkMixin, DataMixin, MovementMixin, RenderM
         self.dropping_in = self.ufo_fall = False
         self.ball = self.cat = self.ufo = None        # fetch, and rare visitors
         self.ball_sprite = self.cat_sprite = None
-        self.fetch_at, self.was_reading = 0.0, False
+        self.fetch_at, self.cur_job, self.job_since = 0.0, None, 0.0   # (the wizard's job, and since when)
+        self.act, self.act_t, self.act_said, self.shooting_at = None, 0.0, False, -99.0   # an idle activity
         self.mouse = (-10 ** 6, -10 ** 6)             # where the pointer is (its eyes follow it)
         self.shiny, self.shiny_said = st["rare"] and random.random() < SHINY_CHANCE, False
         self.dizzy_t = self.stretch_t = self.dance_t = 0.0

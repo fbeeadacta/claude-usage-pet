@@ -11,6 +11,8 @@ A tiny pixel Claude mascot that lives on your Windows taskbar. A bubble above it
   <img src="docs/claude-code.png" alt="The Claude Code tab: sessions, messages, tokens, peak hour, favourite model and an activity grid" width="340">
 </p>
 
+<p><img src="docs/wizard-jobs.png" alt="The mascot's wizard jobs: spell tome, quill and scroll, rune rain, crystal ball, summoning, sticky notes, question mark, rune circle, hourglass, rolling scroll" width="700"></p>
+
 What it does:
 
 - Walks along the taskbar, hops now and then, and moves between monitors.
@@ -18,7 +20,7 @@ What it does:
 - Puts on a wizard hat and casts sparkles while Claude is working.
 - Talks in little speech bubbles: encouragement, silly quotes, milestones, and comments on what's going on.
 - Click it to poke it. Drag it around (it dangles from where you grab it), or throw it: it screams, bounces, and opens a parachute on long falls.
-- Dances now and then, gets bored, and asks for attention when you ignore it.
+- Dances now and then, gets bored, and asks for attention when you ignore it. When it's idle it might read a little book, practise a spell (it backfires), or lie on its back stargazing at night.
 - Falls asleep when you're away, rings its bubble yellow, then red, as you near a limit, and remembers its moods across restarts.
 - Hides while something is full-screen, and can land on top of your windows when it falls.
 - Optional sound effects (with a volume slider) and desktop notifications.
@@ -26,7 +28,7 @@ What it does:
 - Right-click it for Refresh now, Play fetch, Quiet for an hour, Settings and Quit. The settings window has every option and what it does, and everything can be switched off, including all animations.
 - A tray icon by the clock shows your usage when you hover it. Click it (or press Ctrl + Alt + H, or start the pet again) and the mascot comes running to your mouse, or parachutes in from above.
 - A Sessions tab recaps your latest Claude Code sessions, and it sums each one up when it finishes. It warns you early if your pace would run out before the reset.
-- Reads from a floating spell tome while Claude reads your files, gets little apprentices when several sessions run at once, wears outfits on special days, plays fetch, and keeps a diary of everything it gets up to. Every so often something rare happens.
+- Turns what Claude Code is doing into wizard magic: a spell tome for reading, a quill for writing, rune rain for commands, a crystal ball for the web, a summoned helper for agents, sticky notes for planning, a question mark when Claude asks you something, a rune circle for add-on tools and an hourglass while it thinks. It gets little apprentices when several sessions run at once, wears outfits on special days, plays fetch, and keeps a diary of everything it gets up to. Every so often something rare happens.
 
 ## What you need
 

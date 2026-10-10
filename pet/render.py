@@ -4,12 +4,14 @@ import time
 import tkinter.font as tkfont
 
 from .art import (ARMS, BAND_C, BEAM_C, BLOCK_H, BLOCK_W, BLUSH, BLUSH_C, BODY, BUBBLE, BUBBLE_TEXT, CHUTE,
-    CHUTE_R, CHUTE_W, COVER_C, EYE, EYES, FULL_C, FULL_EDGE, HAT, HAT_C, HAY_C, HEART, HEART_C, INK_C, KEY,
-    LEFT_WAVE, LEGS_AIR, LEGS_STAND, LEGS_STEP, NOTE, NOTE_C, ORANGE, OUTFITS, PAGE_C, PANIC_C, RED, RUNE_C,
-    SHADOW, SHINY, SPARK, SPARK_C, SPEECH, SPEECH_TEXT, SPINE_C, STAR_C, STRING_C, TRACK, UFO, UFO_C, UFO_LIGHTS,
+    CHUTE_R, CHUTE_W, EYE, EYES, FULL_C, FULL_EDGE, HAT, HAT_C, HAY_C, HEART, HEART_C, KEY,
+    LEFT_WAVE, LEGS_AIR, LEGS_STAND, LEGS_STEP, NOTE, NOTE_C, ORANGE, OUTFITS, PANIC_C, RED,
+    SHADOW, SHINY, SPARK, SPARK_C, SPEECH, SPEECH_TEXT, STAR_C, STRING_C, TRACK, UFO, UFO_C, UFO_LIGHTS,
+    MOTE_C, SMOKE_C,
     WAND_C, WARN_C, WAVE, ZZZ, ZZZ_C)
 from .config import SPEAK_CPS
 from .fun import UFO_BEAM, UFO_DROP, UFO_END, UFO_GONE, season, smooth
+from .magic import SIDE_JOBS
 from .ui import round_rect, wrap
 
 
@@ -52,13 +54,11 @@ class RenderMixin:
             eyes = "tired"   # a hard day's work
         else:
             eyes = "open"
-        tome = None
-        if wiz and self.reading():   # reading files: the spell tome floats in front, pages flipping
-            flip = int(self.cast_t / 0.15) % 14
-            tome = (flip if flip < 4 else 0, round(math.sin(self.clock * 2.5)))
+        job = self.job_frame() if wiz else None   # what claude is doing, as a wizard job (pet/magic.py)
+        pose = self.job_pose(job) if job else None
         eye_v = 0
         if wiz:
-            eye_dir, eye_v = (0, 1) if tome else (1, 0)   # watching the wand, or reading
+            eye_dir, eye_v = pose[1:3] if pose else (1, 0)   # watching the wand, or the job
         elif walking or (anim and self.look_t > 0 and not sleeping):
             eye_dir = self.dir if walking else self.look_d
         elif anim and not sleeping and eyes in ("open", "worried", "tired"):
@@ -71,8 +71,8 @@ class RenderMixin:
             sink = "half"   # squished, bopping to the beat, or slumped because the limit is full
         else:
             sink = None
-        if wiz and tome:
-            arms = ARMS
+        if wiz and pose:
+            arms = pose[0]
         elif wiz:
             arms = (ARMS[0],) + WAVE[1 - self.hand()]
         elif anim and self.stretch_t > 0 and not sleeping:
@@ -85,6 +85,14 @@ class RenderMixin:
             arms = (ARMS[0],) + WAVE[int(self.wave_t / 0.18) % 2]
         else:
             arms = ARMS
+        act = self.act_frame() if anim and grounded and not self.held else None   # an idle activity (pet/idle.py)
+        shift = (0, -1, 0, 1)[beat] if dancing else 0
+        if act:
+            pose = self.act_pose(act)
+            sink = pose.get("sink", sink)
+            legs = pose.get("legs", legs)
+            eyes, eye_dir, eye_v = pose.get("eyes", eyes), pose.get("eye_dir", eye_dir), pose.get("eye_v", eye_v)
+            arms, shift = pose.get("arms", arms), pose.get("shift", shift)
         parts = tuple((p["kind"], round(p["x"]), round(p["y"]), p["c"]) for p in self.parts) if anim else ()
         show = (self.bubble_mode.get() != "hover" or self.hovering or self.held
                 or self.details.visible or now < self.hover_until)
@@ -118,12 +126,12 @@ class RenderMixin:
                 top, dx = top - k * 80 * s, k * 140 * s
             ufo = (round(top - (self.y - ph)), round(dx), UFO_BEAM <= t < UFO_DROP, UFO_GONE <= t < UFO_DROP,
                    int(t * 4) % 2, round(floor - (self.y - ph)))
-        return (self.scale, legs, eyes, eye_dir, sink, arms, None if tome or not wiz else self.hand(), self.warn_level(),
+        return (self.scale, legs, eyes, eye_dir, sink, arms, self.hand() if wiz and not job else None, self.warn_level(),
                 wiz, parts, tuple(self.bubble_segments()), bars, bool(self.error), show, speech, rot,
                 round(math.sin(self.clock * 1.6) * 1.4) if chute else None,
-                (0, -1, 0, 1)[beat] if dancing else 0,
+                shift,
                 int(self.clock * 8) % 12 if anim and self.dizzy_t > 0 else None,
-                sleeping and int(self.clock / 1.4) % 2 == 1, hay, eye_v, tome, outfit, helpers, ufo, self.shiny)
+                sleeping and int(self.clock / 1.4) % 2 == 1, hay, eye_v, outfit, helpers, ufo, self.shiny, job, act)
 
     def gaze(self):
         # which way to look so it's watching your mouse pointer, when the pointer's nearby
@@ -161,7 +169,7 @@ class RenderMixin:
 
     def draw(self, f):
         (_, legs, eyes, eye_dir, sink_kind, arms, wand, warn, wiz, parts, segs, bars, err, show_bubble,
-         speech, rot, chute, shift, dizzy, breath, hay, eye_v, tome, outfit, helpers, ufo, shiny) = f
+         speech, rot, chute, shift, dizzy, breath, hay, eye_v, outfit, helpers, ufo, shiny, job, act) = f
         c = self.canvas
         c.delete("all")
         s = self.s()
@@ -201,7 +209,7 @@ class RenderMixin:
 
         side = round(30 * s)                               # room for z's, notes and sparks
         look = OUTFITS.get(outfit) if not rot else None
-        above = max((len(HAT) - 1) * pb if wiz else 0,     # room above the head: hat, outfit, parachute, stars
+        above = max((len(HAT) - 1) * pb if wiz or (act and act[0] == "practice") else 0,     # room above the head: hat, outfit, parachute, stars
                     (len(look[0]) + 1) * pb if look else 0,   # (a little gap, so the bubble's tail clears it)
                     (len(CHUTE) + 10) * pb if chute is not None else 0,
                     6 * pb if dizzy is not None else 0)
@@ -241,7 +249,7 @@ class RenderMixin:
             def emit(x1, y1, x2, y2, color):
                 c.create_rectangle(px + x1, py + y1, px + x2, py + y2, fill=color, outline="")
 
-        body_c = SHINY if shiny else ORANGE
+        body_c = (act and self.act_body(act)) or (SHINY if shiny else ORANGE)
 
         def block(col, row, cols=1, color=body_c):
             y1 = row * bh + sink
@@ -254,6 +262,11 @@ class RenderMixin:
             c.create_polygon(mid - 8 * pb, top, mid + 8 * pb, top, mid + pet_w // 2 + 3 * bw, bottom,
                              mid - pet_w // 2 - 3 * bw, bottom, fill=BEAM_C, outline="", stipple="gray50")
         gone = bool(ufo and ufo[3])   # inside the saucer
+        if job and not rot:   # the far side of a job's magic goes behind the mascot (and runes falling behind it)
+            self.draw_job(job, "back", px, py)
+            for kind, x, y, ci in parts:
+                if kind == "glyph" and ci < 100:
+                    self.rune(px + x, py + y, pb, ci)
 
         # the mascot
         for row, line in enumerate(BODY if not gone else ()):
@@ -290,14 +303,15 @@ class RenderMixin:
             hx = px + 3 * bw + (12 * bw - len(rows_[0]) * pb) // 2
             self.glyph(rows_, hx, py + sink - (len(rows_) - 1) * pb, pb, colours)
         if wiz and not rot:
-            # wizard hat on the head, and the spell tome floating in front while it reads
+            # wizard hat on the head, then whatever the job brings along (pet/magic.py)
             hx = px + 3 * bw + (12 * bw - len(HAT[0]) * pb) // 2
             self.glyph(HAT, hx, py + sink - (len(HAT) - 1) * pb, pb,
                        {"#": HAT_C, "y": BAND_C, "*": STAR_C}, shadow=False)
-            if tome:
-                self.draw_tome(px + pet_w // 2, py + sink + 2 * bh + tome[1] * pb, tome[0], max(2, round(pb * 1.5)))
-            if helpers and helpers[0]:
-                self.draw_helpers(px, py, pet_w, pet_h, bw, bh, pb, *helpers)
+            if job:
+                self.draw_job(job, "front", px, py)
+            if helpers and helpers[0]:   # (on the other side from a job's prop)
+                away = -job[2] if job and job[0] in SIDE_JOBS else None
+                self.draw_helpers(px, py, pet_w, pet_h, bw, bh, pb, *helpers, away=away)
         if wiz and not rot and wand is not None:   # the wand in the raised hand
             hand_y = py + sink + wand * bh
             for i in range(5):
@@ -315,6 +329,8 @@ class RenderMixin:
             for sx_, ex in ((cx0 + pb, px + 1.5 * bw), (cx0 + cw - pb, px + 16.5 * bw),
                             (cx0 + cw * 0.35, px + 7 * bw), (cx0 + cw * 0.65, px + 11 * bw)):
                 c.create_line(sx_, cb, ex, py + sink, fill=STRING_C, width=lw)
+        if act and not rot:
+            self.draw_act(act, px, py, sink, bw, bh, pb, pet_w, pet_h)
         if dizzy is not None and not rot:
             # three little stars circling its head
             cx, cy = px + 9 * bw, py + sink - 3 * pb
@@ -349,8 +365,12 @@ class RenderMixin:
                 self.glyph(ZZZ, px + x, py + y, pb + (pb // 2 + 1 if kind == "Z" else 0), ZZZ_C)
             elif kind == "spark":
                 self.glyph(SPARK, px + x, py + y, pb, SPARK_C[ci], shadow=False)
-            elif kind == "rune":
-                self.glyph(SPARK, px + x, py + y, max(1, pb * 2 // 3), RUNE_C[ci], shadow=False)
+            elif kind == "puff":   # smoke
+                c.create_rectangle(px + x, py + y, px + x + 2 * pb, py + y + 2 * pb, fill=SMOKE_C[ci], outline="")
+            elif kind == "mote":   # a single glowing speck
+                c.create_rectangle(px + x, py + y, px + x + pb, py + y + pb, fill=MOTE_C[ci], outline="")
+            elif kind == "glyph" and ci >= 100:   # a falling rune, in front of the mascot
+                self.rune(px + x, py + y, pb, ci)
             elif kind == "note":
                 self.glyph(NOTE, px + x, py + y, pb, NOTE_C[ci])
             elif kind == "straw":
@@ -440,36 +460,13 @@ class RenderMixin:
         body = (cx - hd, cy - hd, cx + hd, cy + hd) if rot else (px, py - above, px + pet_w, py + pet_h)
         self.rects = {"pet": body, "bubble": (bx, by, bx + bub_w, by + bub_h + tail) if show_bubble else None}
 
-    def draw_tome(self, mid, top, flip, pb):
-        # an open spell book: two pages with lines of writing, a purple cover and spine. flip 1-3 = a page turning.
-        c = self.canvas
-        x0 = mid - 15 * pb / 2
-
-        def r(a, b, a2, b2, col):
-            c.create_rectangle(round(x0 + a * pb), round(top + b * pb), round(x0 + a2 * pb), round(top + b2 * pb),
-                               fill=col, outline="")
-
-        r(-1, 1, 16, 6, COVER_C)                            # the cover, peeking out round the pages
-        r(0, 0, 7, 5, PAGE_C)
-        r(8, 0, 15, 5, PAGE_C)
-        r(7, 1, 8, 6, SPINE_C)
-        for row, (left, right) in ((1, (5, 4)), (3, (4, 5))):   # lines of writing
-            r(1, row, 1 + left, row + 1, INK_C)
-            r(9, row, 9 + right, row + 1, INK_C)
-        if flip == 1:
-            r(9, -1, 15, 4, PAGE_C)    # a page lifting off the right...
-        elif flip == 2:
-            r(7, -3, 9, 4, PAGE_C)     # ...standing up at the spine...
-        elif flip == 3:
-            r(0, -1, 6, 4, PAGE_C)     # ...and settling on the left
-
-    def draw_helpers(self, px, py, pet_w, pet_h, bw, bh, pb, n, beat):
+    def draw_helpers(self, px, py, pet_w, pet_h, bw, bh, pb, n, beat, away=None):
         # little apprentice wizards beside it, one for each extra claude code session that's busy
         c, s = self.canvas, self.s()
         mbw, mbh, mpb = max(1, bw // 2), max(1, bh // 2), max(1, pb // 2)
         mw, mh, gap = 18 * mbw, 5 * mbh, round(8 * s)
         sc = self.screens[self.si]
-        first = -1 if self.x > (sc.wl + sc.wr) / 2 else 1   # start on the side with more room
+        first = away or (-1 if self.x > (sc.wl + sc.wr) / 2 else 1)   # start on the side with more room
         for i in range(n):
             side, k = (first if i % 2 == 0 else -first), i // 2
             x0 = px + pet_w + gap + k * (mw + gap) if side > 0 else px - gap - mw - k * (mw + gap)

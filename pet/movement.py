@@ -374,7 +374,7 @@ class MovementMixin:
                 or (self.ball and self.ball["phase"] in ("fly", "pet"))
                 or (self.plat is not None and time.perf_counter() < self.ride_until)):
             return 16
-        if (self.plat is not None or self.near or self.hay_t > 0 or self.parts or self.cat or self.wave_t > 0 or self.state in ("work", "dance") or self.speech
+        if (self.plat is not None or self.near or self.hay_t > 0 or self.parts or self.cat or self.wave_t > 0 or self.state in ("work", "dance", "act") or self.speech
                 or self.dizzy_t > 0 or self.stretch_t > 0):
             return 30
         return 80
@@ -485,23 +485,29 @@ class MovementMixin:
             self.jump_now(HOP_HEIGHT * 1.3 * s)
             return
         casting = self.wizard.get() and time.time() < self.working_until
-        if casting and self.state in ("idle", "walk", "dance"):
+        if casting and self.state in ("idle", "walk", "dance", "act"):
             self.state, self.cast_t, self.next_spell = "work", 0.0, 0.0
         if self.state == "work":
             if not casting:
                 self.state, self.state_t = "idle", 2.0
             else:   # stand still, wave the wand (or read the spell tome), make sparkles
-                reading = self.reading()
-                if self.cast_t >= self.next_spell and not reading:   # and a bit of magic now and then
+                job = self.job()
+                if self.cast_t >= self.next_spell:   # and a bit of magic now and then
                     self.play("spell")
                     self.next_spell = self.cast_t + random.uniform(12, 25)
                 self.cast_t += dt
                 self.tally("wizard_s", dt)
                 self.part_t -= dt
-                if self.part_t <= 0:
-                    self.spawn("rune" if reading else "spark")
-                    self.part_t = random.uniform(0.15, 0.3) if reading else random.uniform(0.08, 0.2)
+                if self.part_t <= 0:   # each job has its own sparkles (pet/magic.py)
+                    if job:
+                        self.part_t = self.job_spawn(job)
+                    else:
+                        self.spawn("spark")
+                        self.part_t = random.uniform(0.08, 0.2)
                 return
+        if self.state == "act":   # stargazing, practising a spell, reading (pet/idle.py)
+            self.act_tick(dt, s)
+            return
         if self.state == "dance":
             self.dance_t += dt
             self.state_t -= dt
@@ -551,6 +557,8 @@ class MovementMixin:
             pr = self.prof()
             if random.random() < DANCE_CHANCE and not self.full():
                 self.start_dance()
+            elif self.state != "walk" and self.maybe_act():
+                pass
             elif self.state == "walk" and self.walking_allowed() and random.random() < pr["keep"]:
                 self.state_t = random.uniform(*pr["walk_t"])   # keeps going, maybe the other way
                 if random.random() < 0.3:

@@ -6,11 +6,11 @@ import threading
 import time
 import winsound
 
-from .art import BLOCK_H, BLOCK_W, HAY_C, NOTE_C, RUNE_C, SPARK_C
+from .art import BLOCK_H, BLOCK_W, HAY_C, NOTE_C, SPARK_C
 from .config import (ATTENTION_MIN, CHATTER, CHAT_GAP, CREDENTIALS, HOP_HEIGHT, IDLE_TALK_MIN,
     SLEEP_AFTER_MIN, SPEAK_CPS, WORK_HOLD)
-from .lines import (ATTENTION_LINES, BORED_LINES, CURIOUS_LINES, DANCE_LINES, FULL_LINES, HIGH_LINES,
-    IDLE_LINES, LATE_LINES, MORNING_LINES, OOPS_LINES, POKE_COUNT, POKE_LINES, QUOTES, SLEEP_LINES,
+from .lines import (ATTENTION_LINES, BORED_LINES, CURIOUS_LINES, DANCE_LINES, FOURTH_WALL, FULL_LINES, HIGH_LINES,
+    IDLE_LINES, JOB_LINES, LATE_LINES, MORNING_LINES, OOPS_LINES, POKE_COUNT, POKE_LINES, QUOTES, SLEEP_LINES,
     TOME_LINES, WAKE_LINES, WALK_LINES, WORKING, WORK_DONE, WORK_START)
 from .sounds import SOUNDS, make_sound
 from .storage import log_error
@@ -119,10 +119,13 @@ class TalkMixin:
         elif not working and self.was_working and now - self.work_started > 45:
             self.say(self.pick(WORK_DONE), force=True)
         self.was_working = working
-        reading = working and self.reading()   # the spell tome is out: claude is reading files
-        if reading and not self.was_reading and self.state == "work" and random.random() < 0.5:
-            self.say(self.pick(TOME_LINES))
-        self.was_reading = reading
+        job = self.job() if working or self.cc.job[1] == "ask" else None   # what claude's doing, as a wizard job
+        if job == "ask":
+            self.note_usage(now, 3)   # claude is waiting on you: it keeps the hat on and the question up
+        if job != self.cur_job:
+            self.cur_job, self.job_since = job, now
+            if job and random.random() < (1.0 if job == "ask" else 0.4):
+                self.say(self.pick(TOME_LINES if job == "read" else JOB_LINES[job]), force=job == "ask")
         if self.cc.last_error > self.error_seen:   # a claude code tool call just failed
             self.error_seen = self.cc.last_error
             if self.anim.get() and self.state != "sleep":
@@ -132,7 +135,7 @@ class TalkMixin:
         hour = datetime.datetime.now().hour
         present = idle_seconds() < 60
         today = datetime.date.today().isoformat()
-        if present and 5 <= hour < 12 and self.greeted != today and self.state != "sleep":
+        if present and 5 <= hour < 12 and self.greeted != today and self.state != "sleep" and not self.welcome_due:
             self.greeted = today   # first time at the computer this morning
             if self.say(self.pick(MORNING_LINES), force=True):
                 self.wave_t = 1.4
@@ -172,9 +175,9 @@ class TalkMixin:
             return DANCE_LINES
         if self.plat is not None and random.random() < 0.5:
             return HIGH_LINES
-        if self.state == "walk" and self.walking_allowed() and random.random() < 0.6:
+        if self.state == "walk" and self.walking_allowed() and random.random() < 0.75:
             return WALK_LINES
-        return random.choice((QUOTES, CURIOUS_LINES))
+        return random.choice((QUOTES, CURIOUS_LINES, FOURTH_WALL))
 
     # reactions
     def greet(self):
@@ -268,10 +271,6 @@ class TalkMixin:
             self.parts.append({"kind": "spark", "x": 17 * bw + 4 * pb, "y": self.hand() * bh - 8 * pb,
                                "vx": random.uniform(-25, 35) * s, "vy": random.uniform(-45, -5) * s,
                                "life": random.uniform(0.4, 0.8), "c": random.randrange(len(SPARK_C))})
-        elif kind == "rune":   # glowing bits rising off the spell tome's pages
-            self.parts.append({"kind": "rune", "x": random.uniform(6, 12) * bw, "y": 2 * bh - 3 * pb,
-                               "vx": random.uniform(-12, 12) * s, "vy": random.uniform(-40, -20) * s,
-                               "life": random.uniform(0.5, 0.9), "c": random.randrange(len(RUNE_C))})
         elif kind == "glint":   # a shiny mascot twinkles now and then
             self.parts.append({"kind": "spark", "x": random.uniform(3, 14) * bw, "y": random.uniform(0, 3) * bh,
                                "vx": 0.0, "vy": -6 * s, "life": 0.45, "c": 3})

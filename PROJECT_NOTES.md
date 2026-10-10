@@ -2,7 +2,7 @@
 
 A small Claude mascot that walks along the top of the Windows taskbar. A bubble above its head shows Claude plan usage. If any file here gets lost or corrupted, this note has enough detail to rebuild it. You can give this file to Claude and ask it to rebuild the project.
 
-Last updated: 2026-10-10 (version 7.0)
+Last updated: 2026-10-10 (version 7.2)
 
 ## Files in this folder
 
@@ -20,7 +20,7 @@ Last updated: 2026-10-10 (version 7.0)
 | `pet_cc_cache.json.gz` | Claude Code's log numbers the pet has already read (times, session ids, models, token counts, project folder names), so a restart only reads what's new. Safe to delete (it re-reads the logs). Not on GitHub. |
 | `LOCAL_NOTES.md` | Details about this particular computer (paths, monitors, Python install). Not on GitHub. |
 | `pet_errors.log` | What went wrong, if anything (Python error details, never the login token). Kept under about 200 KB. Safe to delete. Not on GitHub. |
-| `docs/*.png` | Screenshots for the README, staged on a plain backdrop (nothing personal in them). |
+| `docs/*.png` | Screenshots for the README, staged on a plain backdrop (nothing personal in them). `docs/wizard-jobs.png` is a sheet of all the wizard jobs, and `docs/jobs/*.png` has each one at 2x. |
 
 ## Code layout
 
@@ -40,6 +40,8 @@ The code is a package (`pet/`) started by `claude_pet.py`. Every file begins wit
 | `pet/ui.py` | Shared drawing helpers: rounded boxes, smooth corners, fading, text wrapping. |
 | `pet/mascot.py` | The `Pet` class: puts the parts below together; its settings and start-up. |
 | `pet/screens.py`, `mouse.py`, `talk.py`, `data.py`, `movement.py`, `render.py`, `fun.py` | The parts of the `Pet` (mixin classes): monitors, mouse handling, talking and reactions, data and ticks, physics and movement, drawing, and the extras (being called over, quiet mode, seasons, session wrap-ups, the tour, the diary, the tray icon, fetch, rare visitors). They all share one `self`. |
+| `pet/idle.py` | Things it does on its own when idle (a part of the `Pet`): stargazing, a practice spell, a book. |
+| `pet/magic.py` | The wizard's jobs (a part of the `Pet`): which job is on, how the mascot holds itself, the props and their particles. |
 | `pet/tray.py` | The tray icon, with its own thread and hidden window. |
 | `pet/sprites.py` | Small see-through windows for things that leave the mascot's side: the fetch ball and the cat. |
 | `pet/details.py` | The hover details panel. |
@@ -56,10 +58,9 @@ One thing to know: `usage.RETRY_AFTER` changes while the pet runs, so other file
 2. The mascot appears on top of the taskbar. The first numbers can take a few seconds to show up.
 3. **Hover** over the mascot or its bubble:
    - It waves, and after a moment the details panel fades in above it.
-   - The panel has three tabs:
+   - The panel looks like the Claude desktop app: warm greys, a Plan / Claude Code switch at the top, sections as small headings over rounded cards. It has two tabs:
      - **Plan:** pace bars, reset times (as countdowns and clock times), tips, a chart of your usage across the current window with the pace line (switch between 5-hour and Week), a forecast ("at this pace you'll run out around 23:40" or "you'll use about 60% by the reset"), and Claude Code tokens used today.
-     - **Claude Code:** stats read from your Claude Code logs. "Overview" shows sessions, messages, total tokens, active days, peak hour, favourite model, a 26-week activity grid and a book comparison. "Models" shows tokens per model plus the input/output/cache split. "Projects" shows the top 5 folders. Each view can show all time, 30 days or 7 days.
-     - **Sessions:** a recap of your latest 5 Claude Code sessions: project folder, when it started, how long it ran, messages, tokens, main model and the API-price estimate. A session still going says "active now".
+     - **Claude Code:** stats read from your Claude Code logs. "Overview" shows sessions, messages, total tokens, active days, peak hour, favourite model, a 26-week activity grid and a book comparison. "Models" shows tokens per model plus the input/output/cache split. "Projects" shows the top 5 folders. "Sessions" is a recap of your latest 5 Claude Code sessions: project folder, when it started, how long it ran, messages, tokens, main model and the API-price estimate; one still going has an orange "Active" pill. The first three views can show 7 days, 30 days or all time.
    - Move the mouse onto the panel and it stays open, so you can click the tabs. Move away and it fades out.
    - The panel is the same height on every tab, so the tabs never move when you switch.
 4. **Click** the mascot to poke it. It squishes, hops, makes a happy face and pops a heart.
@@ -69,7 +70,7 @@ One thing to know: `usage.RETRY_AFTER` changes while the pet runs, so other file
 7. **Settings** opens a window laid out like the Claude desktop app's settings: a sidebar with seven pages (and a search box), and on the right each section as a card. Every option has a switch, choice buttons or a slider, plus a short description. Changes apply straight away, and a small "✓ Saved" shows for a moment. Drag the top to move it, the edges to resize it, and close it with × or Esc. Each section has its own "Reset".
    - **Mascot:** Personality (Parkour! / Lively / Normal / Chill / Statue), Take naps, Wizard when Claude works, Apprentices for parallel sessions (shown while the wizard is on), Stand on windows, Rare surprises, Animations
    - **Appearance:** a live preview, Size (slider, 0.5x–4x), Seasonal outfits, Bubble shows (both limits / 5-hour only / on hover), Bubble style (numbers / bars), Keep details open, Clock (12 / 24 hour), Dates (day or month first)
-   - **Sound & talking:** Sound effects (master switch), Volume (0–100%; plays a sample when you let go), Which sounds (every sound as an on/off chip with a ▶ to hear it: Reactions = Poke, Bounce, Scream, Wall splat; Adventures = Parachute, Eagle cry, Hay landing, Cat; Moods = Wizard magic, Dance music, Milestones), Chatter (off / sometimes / a lot), Quiet hours (with From 8 PM–midnight and Until 6–9 AM), Follow Do Not Disturb
+   - **Sound & talking:** Sound effects (master switch), Volume (0–100%; plays a sample when you let go), Which sounds (every sound as an on/off chip with a ▶ to hear it: Reactions = Poke, Bounce, Scream, Wall splat; Adventures = Parachute, Eagle cry, Hay landing, Cat; Moods = Wizard magic, Dance music, Milestones), Chatter (off / sometimes / a lot / non-stop), Quiet hours (with From 8 PM–midnight and Until 6–9 AM), Follow Do Not Disturb
    - **Usage & alerts:** Refresh every (2–5 minutes), Warn when nearly full, Yellow ring from (70–85%), Red ring from (85–95%), Early pace warning, Desktop notifications, Count tokens like the Claude app
    - **Shortcuts:** Keyboard shortcuts (on/off; off lets go of the keys so other apps can use them), then each shortcut with what it does and its keys as key caps (defaults: Ctrl + Alt + P shows or hides the mascot, Ctrl + Alt + D pins or closes the details panel, Ctrl + Alt + H calls the mascot over). Click one and press the new keys; Esc cancels, Backspace clears it. Warnings appear if the keys have no Ctrl/Alt, are already used by another shortcut, or another app already uses them.
    - **System:** Start with Windows, Tray icon, Hide during full screen, Stay on one monitor
@@ -86,6 +87,11 @@ One thing to know: `usage.RETRY_AFTER` changes while the pet runs, so other file
 - **Sleep:** if you haven't touched the mouse or keyboard for 5 minutes, it lies down, closes its eyes and floats z's. When you come back, it wakes up with a hop and a wave. It also takes short naps (20–60 seconds) now and then. Hovering or clicking wakes it up.
 - **Usage warning:** when a limit reaches 80%, the usage bubble (and its little tail) gets a yellow ring. From 90% the ring turns red. At 100% it turns black with a silver edge. Change the yellow and red levels under "Warning levels", or switch the ring off with "Warn when nearly full" in the menu. When the 5-hour limit resets, it celebrates with three happy hops and hearts.
 - **Idle habits:** it blinks, glances left and right, hops about every 30 seconds, and now and then breaks into a little dance with music notes.
+- **Idle activities** (`pet/idle.py`): when it's done standing about, a 10% chance (`ACT_CHANCE`) of one of these. Claude starting work, or being picked up, interrupts them.
+  - **Stargazing** (9 PM to 5 AM only, 25–45 s): it lies on its back with its feet in the air (kicking now and then), stars twinkle out to the sides, a crescent moon, and a shooting star every 6 seconds ("make a wish!").
+  - **Practice spell** (6 s): it puts on the wizard hat and waves its wand, sparkles fizzle out, then poof: a ring of smoke, the mascot goes sooty with its eyes shut, the hat singed and smoking, and an excuse ("*cough* that... was intentional."). Then it shakes it off and the hat comes off.
+  - **Reading a book** (15–30 s): it sits with a little red book of its own, eyes down, turning a page every 5 seconds, and comments halfway through ("chapter 7: the taskbar strikes back.").
+  - The diary counts nights stargazing, spells backfired and books read.
 - **Waking up:** a big stretch, both arms up.
 - **Limit used up (100%):** it slumps with tired eyes, stops walking and hopping, and says "hard day's work" lines.
 - **Wizard mode:** when tokens are going up, it puts on a wizard hat and casts sparkles with a wand. It notices Claude Code within about 3 seconds, by reading its logs. It notices claude.ai chat and other apps when the 5-hour % goes up, which is checked every 2 minutes.
@@ -118,9 +124,21 @@ One thing to know: `usage.RETRY_AFTER` changes while the pet runs, so other file
 - **Quiet mode:** no talking and no sounds (the bubble and notifications carry on). From the menu for an hour, during quiet hours, or while Windows is in Do Not Disturb, focus or presentation mode (if Windows reports it; see "Not tested yet"). The Plan tab says when it's quiet.
 - **Session wrap-ups:** when a Claude Code session has had nothing new for 8 minutes, it sums it up in a speech bubble ("session wrap-up: 34 min on Token Tracker, 58 messages, 2.1M tokens."). Sessions that finished while you were away come as one line when you're back. Only sessions that ended after the pet started, with at least 4 messages. The Sessions tab has the details.
 - **First start:** a short tour in five speech bubbles: the bubble, hovering, poking and throwing, and the right-click menu. Settings → About & stats → Show the tour again replays it. People who already had a memory file don't get it.
+- **Every other start:** a welcome back that fits the time of day (it counts as the morning's good morning), then, if Claude Code was used on this computer, an offer to carry on with the last session's project: "shall we continue working on Token Tracker today?" (within 3 hours: "it's still warm"; after 3 days: "it's been 5 days since..."). It waits up to 15 seconds for the logs, so it knows the project.
 - **Eyes:** when your mouse pointer is within about 420 px, it looks at it: left, right, up or down.
 - **Seasonal outfits** (if on): a jack-o'-lantern on its head from 25 to 31 October, a Santa hat from 1 to 26 December, a party hat on 31 December, 1 January and its birthday (9 October), and hearts on springs on 14 February. Each comes with a line once that day. Fireworks burst above it from 23:55 on New Year's Eve until 1 AM. The wizard hat takes the outfit's place while it works.
-- **Spell tome:** while Claude Code is reading files (its Read, Grep, Glob and similar tools, seen within the last 8 seconds), the wizard puts the wand away and reads a spell book floating in front of it, pages turning, with glowing bits rising off it.
+- **Wizard jobs** (`pet/magic.py`, pictures in `docs/wizard-jobs.png`): while it's a wizard, the last Claude Code tool it saw (by name, within 8 seconds) picks a job. The hat stays on for all of them, it holds itself to suit (hands out, wand raised, both arms up...), looks at the prop, and every job has its own particles. Props float beside it, on the side towards the middle of the screen.
+  - **Reading** (Read, Grep, Glob, LS, NotebookRead): a detailed spell tome floats beside it (leather cover, gold corners, a red capital, writing, a pulsing blue sigil, a ribbon). A page turns every 3 seconds, between two spreads, and little gold and blue runes float up off it.
+  - **Writing** (Write, Edit, MultiEdit, NotebookEdit): a quill scribbles line after line on a floating scroll, flicking ink and gold flecks; it conducts with one raised arm.
+  - **Commands** (Bash, PowerShell, BashOutput, KillShell, Monitor): green runes rain down around it in columns, brightest at the bottom like falling code, some behind it and some in front; both hands up in turn.
+  - **The web** (WebFetch, WebSearch): a crystal ball in a little gold claw cradle floats beside it, bobbing and drifting (wingardium leviosa): glass shaded lighter at the top, a pink and cyan nebula swirling inside, twinkling stars, a shine and a reflection. Its wand is raised, with a stream of sparkles from the wand to the ball.
+  - **Helper agents** (Task, Agent): a summoning circle glows on the floor beside it and a little one of itself (hat and all) rises up out of it, then waves.
+  - **Planning** (TodoWrite, plan mode, task lists): four sticky notes circle round it, tilting, passing behind and in front.
+  - **Asking you** (AskUserQuestion): a big chunky golden question mark floats beside it, with a 3D edge, a band of light sweeping across it, a dot that bounces on its own, a coin-flip spin every 3 seconds, and three tiny coloured question marks circling it. It says Claude has a question. This one lasts up to 2 minutes and keeps the hat on while Claude waits.
+  - **Add-on tools** (any `mcp__` tool): a rune circle on the floor round its feet, two rings turning opposite ways with runes riding round, sparkles rising.
+  - **Thinking** (`thinking` blocks in the log): an ornate hourglass floats beside it (gold caps, turned wooden posts with rings, glass with a shine): the sand funnels down out of the top bulb in a thin flickering stream and piles into a mound below, with a twinkle in the glass. When it runs out (4 s) the hourglass turns itself over (0.5 s) with a little burst of sparkles.
+  - **Shortening the conversation** (`compact_boundary` lines): a floating scroll rolls itself up and unrolls again, pulling sparkles in.
+  - Anything else: the wand and sparkles, as before.
 - **Apprentices** (if on): while it's a wizard and more than one Claude Code session is busy (wrote something in the last 45 seconds), little apprentice wizards stand beside it, one per extra session, up to 3.
 - **Pet diary** (Settings → About & stats): counts pokes, pick-ups, throws, little hops, jumps to windows (made and missed), leaps of faith, parachutes, wall splats, dances, naps, games of fetch, distance walked, time as a wizard, resets, 100%s of each limit, UFO abductions, cats and shiny days. "Past-midnight sessions" comes from the Claude Code logs (all time: sessions with anything between midnight and 5 AM).
 - **Rare surprises** (if on, only while you're at the computer and it's not working or asleep):
@@ -310,11 +328,11 @@ There's also 30 px of side space for z's and sparks.
 **Talking:**
 - Speech is wrapped to 190 px at 1x and types out at 30 letters a second. It stays up for 2.6 s + typing time + 0.03 s per letter.
 - `say()` has a 20 s cooldown for chit-chat (8 s on "a lot"). Lines about something that just happened skip the cooldown.
-- Small talk comes every 45–120 s (`CHAT_GAP`, divided by the chatter rate), picked by `small_talk()` from what it's doing: walking, dancing, standing on a window, or quotes and curious questions. While napping it sometimes talks in its sleep.
-- `pick()` avoids the last 25 lines it said.
+- Small talk comes every 45–120 s (`CHAT_GAP`, divided by the chatter rate), picked by `small_talk()` from what it's doing: walking (3 times in 4 while it walks), dancing, standing on a window, or quotes, curious questions and fourth-wall lines (`FOURTH_WALL`). While napping it sometimes talks in its sleep.
+- `pick()` avoids the last 60 lines it said.
 - No talking when chatter is off or the pet is hidden.
 - Random lines and quiet-time comments only happen when someone has touched the mouse or keyboard in the last minute, and not while it's working, asleep or showing the panel.
-- "Chatter" changes how often: sometimes = ×1, a lot = ×2.5.
+- "Chatter" changes how often: sometimes = ×1, a lot = ×2.5, non-stop = ×5.
 - All the lines are lists in `pet/lines.py` (`QUOTES`, `CURIOUS_LINES`, `WALK_LINES`, `HIGH_LINES`, `DANCE_LINES`, `SLEEP_LINES`, `FALL_LINES`, `LEAP_TRY`, `LEAP_OK`, `LEAP_FAIL`, `SQUISH_LINES`, `WORK_START`, `WORKING`, `WORK_DONE`, `IDLE_LINES`, `POKE_LINES`, `POKE_COUNT`, `DRAG_LINES`, `WAKE_LINES`, `RESET_LINES`, `MILESTONES` and more).
 
 **Working (wizard) detection:**
@@ -349,10 +367,10 @@ There's also 30 px of side space for z's and sparks.
 - The panel opens after 0.3 s of hovering. It closes 0.35 s after the mouse leaves the mascot, bubble and panel, unless it's pinned.
 
 **Details panel:**
-- 320 base units wide, with two tabs. It opens just above the bubble. If there isn't room (the mascot is high up on a window), it opens below the mascot, and if there's no room there either, beside it. It never covers the mascot or its bubble.
-- Its height is the tallest of Plan, Claude Code Overview and Claude Code Models (each is drawn once to measure it), so the tab buttons stay put. Shorter tabs leave space at the bottom.
+- 340 base units wide, with two tabs, drawn in the settings window's palette (`BG #262624`, cards `#30302e`, `segmented()` controls, `card()`s sent to the back after their contents). It opens just above the bubble. If there isn't room (the mascot is high up on a window), it opens below the mascot, and if there's no room there either, beside it. It never covers the mascot or its bubble.
+- Its height is the tallest of Plan and the four Claude Code views (each is drawn once to measure it), so the controls stay put. Shorter ones leave space at the bottom.
 - The **Plan** tab is the old widget's panel: bars, a pace tick, reset times and pace messages, plus "Claude Code today".
-- The **Claude Code** tab has "Overview" and "Models" views, and "All", "30d" and "7d" ranges. The selected tab, view and range are remembered.
+- The **Claude Code** tab has "Overview", "Models", "Projects" and "Sessions" views, and "7 days", "30 days" and "All time" ranges (not for Sessions). The selected tab, view and range are remembered.
 - The activity grid is 26 weeks × 7 days with Sunday at the top. Each day's colour level is 1 + min(3, int(4 × day ÷ busiest day)).
 - The book comparison picks the biggest book from a list that the total is at least twice the size of (book sizes are rough token counts).
 - It fades in and out over 0.18 s with an ease-out curve, sliding up 10 px as it appears.
@@ -584,18 +602,42 @@ There's also 30 px of side space for z's and sparks.
 - Claude Code stats only cover this computer's logs. If Claude Code deletes old logs, they disappear from the stats too.
 
 **Ideas for later:**
-- More jobs for the wizard, one per kind of Claude Code tool (the log only gives the tool's name; `JOBS` in `pet/cclog.py` maps names to jobs). The tools it could tell apart:
-  - **Reading** (Read, Grep, Glob, NotebookRead, LS): done, the spell tome.
-  - **Writing and editing** (Write, Edit, MultiEdit, NotebookEdit): a quill writing on a scroll.
-  - **Running commands** (Bash, BashOutput, KillShell): a hard hat, or a cauldron bubbling.
-  - **The web** (WebFetch, WebSearch): a crystal ball or a telescope.
-  - **Helpers** (Task / Agent, starting a subagent): summons a little familiar.
-  - **Planning** (TodoWrite, ExitPlanMode): ticks off a checklist on a scroll.
-  - **Asking you something** (AskUserQuestion): a big "?" and a wave, since Claude is waiting for you.
-  - **Other tools from add-ons** (names starting `mcp__`): a mysterious rune circle.
-  - Also visible without tool names: thinking (`thinking` blocks), a tool failing (already the worried face), a conversation being compacted (`compact_boundary` lines), and images sent.
+- Things to do when idle: the first three on the list in the 7.1 change log are built (7.2); the rest are still ideas.
 
 ## Change log
+
+- **2026-10-10 (version 7.2): three things to do when idle.**
+  - Stargazing at night, a practice spell that backfires, and reading a little book (see "Idle activities" above). New Pet part: `pet/idle.py`; new lines in `pet/lines.py`; three more counts in the diary.
+  - The usage bubble makes room for the hat during the practice spell, like it does for the wizard.
+  - Tested (test pet, scratch files, second monitor, 2x, plain backdrop): each activity started directly, with screenshots of the feet-up stargazing with stars, moon and a shooting star, the spell before and after the poof, and the book; the diary counts; and the earlier scenarios still pass. Not tested: them starting on their own timers (a 10% chance each time it finishes standing about).
+
+- **2026-10-10 (version 7.1): the wizard's jobs, a new-look panel, a welcome back, and lots more to say.**
+  - **Details panel redone** in the Claude desktop app's style (the same palette and controls as the settings window): a Plan / Claude Code switch, sections as headings over cards, rounded bars, a chart in a dark well, the overview as six tiles in one card. Sessions moved into Claude Code, beside Overview, Models and Projects.
+  - **Welcome back** on every start after the first: a greeting for the time of day, and an offer to carry on with the last Claude Code session's project.
+  - **Wizard jobs** for every kind of Claude Code tool, plus thinking and shortening the conversation (see "Wizard jobs" above, and `docs/wizard-jobs.png`). New Pet part: `pet/magic.py`. The reading tome is redrawn in much more detail and floats beside the mascot now.
+  - **Much more to say:** about 300 new lines across walking (42 now), quotes, curious questions, pokes, drags, throws, dances, windows, sleep, waking, jumps, work, attention, mornings and late nights, plus 26 that break the fourth wall. A new chatter level, **Non-stop** (5× as often), and it avoids its last 60 lines.
+  - Tested (test pet, scratch files, made-up logs, second monitor): every job at 2x (screenshots in `docs/`), the page turn's five stages, the job each tool name maps to (including `mcp__` tools, thinking blocks and compact lines), the welcome with a made-up last project, every panel view, and CPU while working: roughly 8–18% of one core with the rune rain and 7–12% with the crystal ball across runs (each animates at about 25 frames a second; it drops back when Claude stops). The earlier scenarios still pass. Not tested: real Claude Code activity driving the jobs live.
+  - **Ideas for when it's idle** (proposed, not built):
+    - stargazing at night: lies on its back, little stars twinkle above
+    - practising spells that go wrong: a tiny puff of smoke, singed hat
+    - reading a pocket book on its own, turning a page now and then
+    - fishing off the edge of a window into the taskbar
+    - juggling three little pixels
+    - building a tiny sandcastle out of taskbar pixels, then knocking it over
+    - stretching and doing push-ups (badly)
+    - chasing its own tail (it doesn't have one; it checks)
+    - waving at the mouse pointer and pretending to talk to it
+    - painting a little picture on an easel, then holding it up
+    - a cup of tea: blows on it, sips, little steam squiggles
+    - knitting a scarf that slowly gets longer over the day
+    - tapping along to the system clock, or "conducting" while you type
+    - peeking over the top of the window it's standing on
+    - hide and seek: hides behind a window edge, peeks out when you look
+    - blowing bubbles that pop on the screen edges
+    - a paper aeroplane thrown off a window, landing somewhere on the taskbar
+    - sleepwalking a few steps during a nap
+    - writing in its diary (the Pet diary) with the quill
+    - polishing its wand, or adjusting its hat in a little mirror
 
 - **2026-10-10 (version 7.0): a big batch of improvements, quality-of-life and fun.**
   - **Technical:**

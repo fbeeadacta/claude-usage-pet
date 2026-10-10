@@ -152,9 +152,22 @@ def fmt_minutes(seconds):
     return f"{m} min" if m < 60 else f"{m // 60}h {m % 60:02d}m"
 
 
-# claude code's tool names, as the jobs the mascot can show. only the reading one has a look so far;
-# the rest are listed in PROJECT_NOTES.md under ideas.
-JOBS = {"Read": "read", "Grep": "read", "Glob": "read", "NotebookRead": "read", "LS": "read"}
+# claude code's tool names, as the wizard jobs the mascot shows (pet/magic.py draws them).
+# tools from add-ons (mcp__...) are "mcp". thinking and compacting come from other kinds of log lines.
+JOBS = {"Read": "read", "Grep": "read", "Glob": "read", "NotebookRead": "read", "LS": "read",
+        "Write": "write", "Edit": "write", "MultiEdit": "write", "NotebookEdit": "write",
+        "Bash": "bash", "BashOutput": "bash", "KillShell": "bash", "KillBash": "bash", "PowerShell": "bash",
+        "Monitor": "bash",
+        "WebFetch": "web", "WebSearch": "web",
+        "Task": "agent", "Agent": "agent",
+        "TodoWrite": "plan", "ExitPlanMode": "plan", "EnterPlanMode": "plan", "TaskCreate": "plan",
+        "TaskUpdate": "plan", "TaskList": "plan",
+        "AskUserQuestion": "ask"}
+
+
+def job_for(name):
+    name = str(name)
+    return "mcp" if name.startswith("mcp__") else JOBS.get(name)
 CHUNK = 4 * 2 ** 20   # logs are read this much at a time, so a huge log never sits in memory all at once
 CACHE_VERSION = 1
 
@@ -317,7 +330,11 @@ class ClaudeCodeLog:
             d = json.loads(raw)
         except ValueError:
             return None
-        if not isinstance(d, dict) or d.get("type") not in ("user", "assistant"):
+        if not isinstance(d, dict):
+            return None
+        if self.ready and (d.get("subtype") == "compact_boundary" or d.get("isCompactSummary")):
+            self.job = (time.time(), "compact")   # the conversation is being shortened
+        if d.get("type") not in ("user", "assistant"):
             return None
         uid = d.get("uuid")
         if uid in self.seen_lines:
@@ -342,7 +359,9 @@ class ClaudeCodeLog:
         if self.ready and d["type"] == "assistant" and isinstance(m, dict) and isinstance(m.get("content"), list):
             for b in m["content"]:   # which tool claude reached for (just its name, never what it was given)
                 if isinstance(b, dict) and b.get("type") == "tool_use":
-                    self.job = (time.time(), JOBS.get(str(b.get("name"))))
+                    self.job = (time.time(), job_for(b.get("name")))
+                elif isinstance(b, dict) and b.get("type") in ("thinking", "redacted_thinking"):
+                    self.job = (time.time(), "think")
         if d["type"] == "assistant" and isinstance(m, dict) and isinstance(m.get("usage"), dict):
             u = m["usage"]
             n = [int(u.get(k) or 0) for k in ("input_tokens", "output_tokens",

@@ -18,6 +18,9 @@
 #   render.py            part of the Pet: drawing the mascot, its bubbles and effects.
 #   fun.py               part of the Pet: being called over, quiet mode, seasons, session wrap-ups, the tour,
 #                        the diary, the tray icon, fetch, and rare visitors (shiny, ufo, cat).
+#   magic.py             part of the Pet: the wizard's jobs (tome, quill, rune rain, crystal ball, summoning,
+#                        sticky notes, question mark, rune circle, hourglass, rolling scroll) and their particles.
+#   idle.py              part of the Pet: things it does when idle (stargazing, a practice spell, a book).
 #   tray.py              the tray icon (its own thread and hidden window).
 #   sprites.py           little see-through windows for things away from the mascot: the ball, the cat.
 #   mascot.py            the Pet itself: puts the parts together, its settings, and starting it up.

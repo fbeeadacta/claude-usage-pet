@@ -30,8 +30,8 @@ class MouseMixin:
             self.leap_plan = self.leaping = None
             self.diving, self.hay_t = False, 0.0
             self.chute, self.bounces, self.last_touch = False, 0, time.time()
-            if self.state == "dance":
-                self.state = "idle"
+            if self.state in ("dance", "act"):
+                self.state, self.act = "idle", None
             self.wake(hop=False)
             self.details.hide()
             self.stop_fetch()

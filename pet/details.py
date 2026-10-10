@@ -5,7 +5,7 @@ import time
 import tkinter as tk
 import tkinter.font as tkfont
 
-from .art import ORANGE, PARK, RED, TRACK
+from .art import PARK, RED
 from .cclog import compare_line, fmt_minutes, fmt_money, fmt_tokens, hour_label, pretty_model
 from .config import SESSION_DONE_MIN
 from .ui import Fader, move_window, round_corners, round_rect
@@ -15,13 +15,18 @@ from .usage import (bar_color, fmt_day, fmt_time, fmt_when, forecast, pace_info,
 
 # ---- details panel (hover the mascot) ----
 
-PANEL_W = 320
-HEAT = ["#2c2c2e", "#173c6e", "#1f57a6", "#2b74e0", "#5aa2ff"]   # empty day, then busier and busier
+PANEL_W = 340
+HEAT = ["#3a3936", "#173c6e", "#1f57a6", "#2b74e0", "#5aa2ff"]   # empty day, then busier and busier
+VIEWS = (("overview", "Overview"), ("models", "Models"), ("projects", "Projects"), ("sessions", "Sessions"))
+RANGES = (("7d", "7 days"), ("30d", "30 days"), ("all", "All time"))
 
 
 class Details:
-    BG, FG, DIM, CARD = "#1c1c1e", "#f2f2f7", "#8e8e93", "#2c2c2e"
-    FASTC, SLOWC = "#d9a441", "#5ea1ff"
+    # styled like the claude desktop app (and the settings window): warm greys, segmented controls,
+    # sections as small headings over rounded cards, claude's orange for accents
+    BG, CARD, LINE, WELL, SEL = "#262624", "#30302e", "#3d3d3a", "#1f1e1d", "#46453f"
+    FG, DIM, FAINT, ON = "#faf9f5", "#a6a39a", "#6b6a65", "#d97757"
+    FASTC, SLOWC = "#e8a33d", "#6aa9ff"
 
     def __init__(self, pet):
         self.pet = pet
@@ -102,7 +107,7 @@ class Details:
                 p.save()
                 return
 
-    # drawing helpers. positions are in base units (PANEL_W wide) times self.s.
+    # ---- drawing helpers. positions are in base units (PANEL_W wide) times self.s ----
     def font(self, size, bold=False):
         px = max(8, round(size * 4 / 3 * self.s))
         if (px, bold) not in self.fonts:
@@ -120,98 +125,127 @@ class Details:
         s = self.s
         self.canvas.create_rectangle(x1 * s, y1 * s, x2 * s, y2 * s, fill=fill, width=0)
 
+    def box(self, x1, y1, x2, y2, r, fill, bg=None):
+        s = self.s
+        round_rect(self.canvas, x1 * s, y1 * s, x2 * s, y2 * s, r * s, fill, bg or self.BG, True)
+
     def line(self, x1, y1, x2, y2, fill, width=1):
         s = self.s
         self.canvas.create_line(x1 * s, y1 * s, x2 * s, y2 * s, fill=fill, width=max(1, round(width * s)))
 
-    def pill(self, x, y, label, on, hit, right=False):
-        # a small tab button. returns its width.
-        s = self.s
-        w = self.font(8, True).measure(label) / s + 12
-        if right:
-            x -= w
-        if on:
-            round_rect(self.canvas, x * s, y * s, (x + w) * s, (y + 17) * s, 4 * s, TRACK, self.BG, True)
-        self.text(x + 6, y + 8.5, label, self.FG if on else self.DIM, 8, True, "w")
-        self.hits.append((hit, x * s, y * s, (x + w) * s, (y + 17) * s))
-        return w
+    def bar(self, x1, y, x2, frac, color, bg=None):
+        # a rounded progress bar on a darker track
+        self.box(x1, y, x2, y + 6, 3, self.WELL, bg or self.CARD)
+        if frac > 0:
+            self.box(x1, y, max(x1 + 6, x1 + (x2 - x1) * min(1.0, frac)), y + 6, 3, color, self.WELL)
 
+    def segmented(self, x0, y, x1, options, current, hit, size=8, h=26):
+        # like the claude app: options share a dark well, the chosen one sits on a lighter tab
+        f = self.font(size, True)
+        widths = [f.measure(label) / self.s + 18 for _, label in options]
+        if x1 is None:   # just as wide as it needs to be (x0 is then its right edge)
+            x1, x0 = x0, x0 - sum(widths) - 6
+        else:            # spread across the space given
+            extra = (x1 - x0 - 6 - sum(widths)) / len(options)
+            widths = [w + extra for w in widths]
+        self.box(x0, y, x1, y + h, 8, self.WELL)
+        x = x0 + 3
+        for (value, label), w in zip(options, widths):
+            on = current == value
+            if on:
+                self.box(x, y + 3, x + w, y + h - 3, 6, self.SEL, self.WELL)
+            self.text(x + w / 2, y + h / 2, label, self.FG if on else self.DIM, size, True, "center")
+            self.hits.append((f"{hit}:{value}", x * self.s, y * self.s, (x + w) * self.s, (y + h) * self.s))
+            x += w
+        return x0
+
+    def heading(self, y, label, right=None):
+        # a small section heading over a card, like the settings window
+        self.text(14, y, label, self.DIM, 8, True)
+        if right:
+            self.text(PANEL_W - 14, y, right, self.FAINT, 7.5, anchor="ne")
+        return y + 20
+
+    def card(self, y0, y1):
+        # drawn after what's in it (its height is only known then), so it's sent to the back
+        s = self.s
+        round_rect(self.canvas, 12 * s, y0 * s, (PANEL_W - 12) * s, y1 * s, 10 * s, self.CARD, self.BG, True, "card")
+        self.canvas.tag_lower("card")
+
+    # ---- the whole panel ----
     def draw(self):
         p = self.pet
         self.s = s = p.dpi * min(1.6, max(1.0, p.scale))
-        # every tab and view gets the same height, so the tabs never jump when you switch
+        # every tab and view gets the same height, so nothing jumps when you switch
         tallest = 0
-        for tab, view in (("plan", "overview"), ("cc", "overview"), ("cc", "models"), ("cc", "projects"),
-                          ("sessions", None)):
+        for tab, view in (("plan", None), ("cc", "overview"), ("cc", "models"), ("cc", "projects"),
+                          ("cc", "sessions")):
             tallest = max(tallest, self.draw_tab(tab, view))
         self.draw_tab(p.panel_tab.get(), p.cc_view.get())
-        H = tallest + 12
+        H = tallest + 10
         self.px_size = (round(PANEL_W * s), round(H * s))
         self.canvas.configure(width=self.px_size[0], height=self.px_size[1])
         self.place()
 
     def draw_tab(self, tab, view):
         # draws one tab from scratch and returns how tall it came out
-        p, s, W = self.pet, self.s, PANEL_W
+        s, W = self.s, PANEL_W
         self.canvas.delete("all")
         self.hits = []
-        x = 10
-        for name, label in (("plan", "Plan"), ("cc", "Claude Code"), ("sessions", "Sessions")):
-            x += self.pill(x, 8, label, tab == name, "tab:" + name) + 4
-        self.text(W - 16, 7, "\u00d7", self.DIM, 11, True, "n")      # close button
-        self.hits.append(("close", (W - 30) * s, 2 * s, (W - 2) * s, 28 * s))
-        if tab == "sessions":
-            return self.draw_sessions(38)
-        return self.draw_plan(38) if tab == "plan" else self.draw_cc(38, view)
+        self.segmented(12, 12, W - 44, (("plan", "Plan"), ("cc", "Claude Code")), tab, "tab", 8.5, 30)
+        self.text(W - 22, 27, "×", self.DIM, 13, False, "center")      # close button
+        self.hits.append(("close", (W - 38) * s, 10 * s, (W - 6) * s, 44 * s))
+        return self.draw_plan(54) if tab == "plan" else self.draw_cc(54, view)
 
+    # ---- plan tab ----
     def draw_plan(self, y):
         p = self.pet
         W = PANEL_W
         rows = parse_rows(p.data) if p.data else []
         now_dt = datetime.datetime.now(datetime.timezone.utc)
         now = time.time()
-        wait = "updating..." if p.busy else f"next update in {max(0, math.ceil(p.next_at - now))}s"
-        self.text(12, y, (f"updated {fmt_time(p.updated)} · " if p.updated else "") + wait, self.DIM, 8)
-        y += 22
+        wait = "updating…" if p.busy else f"next check in {max(0, math.ceil(p.next_at - now))}s"
+        y = self.heading(y, "Your plan", (f"updated {fmt_time(p.updated)} · " if p.updated else "") + wait)
         if p.quiet():   # no talking or sounds right now
             until = (f" until {fmt_time(datetime.datetime.fromtimestamp(p.hush_until))}"
                      if time.time() < p.hush_until else "")
-            self.text(12, y - 6, f"Quiet mode{until}: no talking or sounds.", self.SLOWC, 8)
-            y += 14
-        for r in rows:
+            y = self.text(14, y - 4, f"Quiet mode{until}: no talking or sounds.", self.SLOWC, 7.5) + 6
+        top = y
+        y += 12
+        for i, r in enumerate(rows):
+            if i:
+                self.line(26, y - 6, W - 26, y - 6, self.LINE)
             seen = p.seen.get(r["key"])
             unchanged = now - seen[1] if seen else 0
             el, msg, kind = pace_info(r["key"], r["pct"], r["resets"], now_dt, unchanged)
-            self.text(12, y, r["label"], self.FG, 9, True)
-            self.text(W - 12, y, f"{r['pct']:.0f}%", self.FG, 9, True, "ne")
-            self.rect_(12, y + 20, W - 12, y + 26, TRACK)
-            self.rect_(12, y + 20, 12 + (W - 24) * min(r["pct"], 100) / 100, y + 26, bar_color(r["pct"]))
+            self.text(26, y, r["label"] + " limit", self.FG, 9, True)
+            self.text(W - 26, y - 3, f"{r['pct']:.0f}%", self.FG, 13, True, "ne")
+            self.bar(26, y + 22, W - 26, r["pct"] / 100, bar_color(r["pct"]))
             if el is not None:   # the pace tick: where the clock is in this window
-                tx = 12 + (W - 24) * el / 100
-                self.line(tx, y + 16, tx, y + 30, self.FG, 2)
+                tx = 26 + (W - 52) * el / 100
+                self.line(tx, y + 18, tx, y + 32, self.FG, 2)
             when = parse_time(r["resets"])
             at = f" · {fmt_when(when.astimezone(), r['key'])}" if when else ""
-            self.text(12, y + 32, reset_text(r["resets"], now_dt) + at, self.DIM, 8)
+            y = self.text(26, y + 36, reset_text(r["resets"], now_dt).capitalize() + at, self.DIM, 7.5) + 2
             if msg:
-                y = self.text(12, y + 46, msg, self.FASTC if kind == "fast" else self.SLOWC, 8, True,
-                              width=W - 24) + 8
-            else:
-                y += 54
+                y = self.text(26, y, msg[0].upper() + msg[1:], self.FASTC if kind == "fast" else self.SLOWC, 7.5,
+                              True, width=W - 52) + 2
+            y += 14
         if p.error:   # the problem in red; any how-to-fix steps after it in plain text, easier to read
             head, _, steps = p.error.partition(chr(10) * 2)
-            y = self.text(12, y, head, RED, 8, True, width=W - 24) + 8
+            y = self.text(26, y, head[0].upper() + head[1:], RED, 8, True, width=W - 52) + 6
             if steps:
-                y = self.text(12, y, steps, self.FG, 8, width=W - 24) + 10
+                y = self.text(26, y, steps, self.FG, 7.5, width=W - 52) + 8
         elif not rows:
-            self.text(12, y, "loading...", self.DIM, 8)
-            y += 20
+            y = self.text(26, y, "Loading…", self.DIM, 8) + 12
+        self.card(top, y)
+        y += 14
         if rows:
-            y = self.draw_chart(y + 6, rows, now_dt)
+            y = self.draw_chart(y, rows, now_dt)
         st = p.cc_stats()
         if st:
-            self.text(12, y, f"Claude Code today: {fmt_tokens(st['today'])} tokens · about "
-                             f"{fmt_money(st['today_cost'])} at API prices", self.DIM, 8, width=PANEL_W - 24)
-            y += 18
+            y = self.text(14, y, f"Claude Code today: {fmt_tokens(st['today'])} tokens · about "
+                                 f"{fmt_money(st['today_cost'])} at API prices", self.FAINT, 7.5, width=W - 28) + 4
         return y
 
     def draw_chart(self, y, rows, now_dt):
@@ -220,15 +254,15 @@ class Details:
         which = p.plan_chart.get()
         key = "five_hour" if which == "5h" else "seven_day"
         r = next((r for r in rows if r["key"] == key), None)
-        self.text(12, y + 8.5, "This window", self.FG, 8.5, True, "w")
-        x = W - 10
-        for name, label in (("7d", "Week"), ("5h", "5-hour")):
-            x -= self.pill(x, y, label, which == name, "chart:" + name, right=True) + 2
-        y += 26
+        self.text(14, y + 11, "This window", self.DIM, 8, True, "w")
+        self.segmented(W - 12, y, None, (("5h", "5-hour"), ("7d", "Week")), which, "chart", 7.5, 22)
+        y += 30
+        top = y
         reset = parse_time(r["resets"]) if r else None
         if not r or reset is None:
-            self.text(12, y, "No data for this limit yet.", self.DIM, 8)
-            return y + 24
+            y = self.text(26, y + 14, "No data for this limit yet.", self.DIM, 8) + 14
+            self.card(top, y)
+            return y + 12
         period = period_seconds(key)
         start = reset.timestamp() - period
         now = time.time()
@@ -248,18 +282,18 @@ class Details:
             else:
                 est = [(start, 0.0), (first_t, first_v)]
         pts = pts + [(now, r["pct"])]
-        # the box
-        x0, x1, y0, y1 = 12, W - 12, y, y + 74
-        round_rect(self.canvas, x0 * s, y0 * s, x1 * s, y1 * s, 6 * s, self.CARD, self.BG, True)
+        # the chart, in a dark well inside the card
+        x0, x1, y0, y1 = 24, W - 24, y + 12, y + 88
+        self.box(x0, y0, x1, y1, 7, self.WELL, self.CARD)
         ix0, ix1, iy0, iy1 = x0 + 8, x1 - 8, y0 + 8, y1 - 8
         fx = lambda tt: ix0 + (ix1 - ix0) * min(1.0, max(0.0, (tt - start) / period))
         fy = lambda v: iy1 - (iy1 - iy0) * min(100.0, max(0.0, v)) / 100
         for v in (50, 100):   # faint guide lines at 50% and 100%
-            self.rect_(ix0, fy(v), ix1, fy(v) + 0.6, "#3a3a3c")
-        self.text(ix0 + 2, fy(100) + 1, "100%", "#6e6e73", 6.5)
+            self.rect_(ix0, fy(v), ix1, fy(v) + 0.6, self.LINE)
+        self.text(ix0 + 2, fy(100) + 1, "100%", self.FAINT, 6.5)
         # the pace line: where you'd be if you used it evenly until the reset
         self.canvas.create_line(fx(start) * s, fy(0) * s, fx(reset.timestamp()) * s, fy(100) * s,
-                                fill="#6e6e73", width=max(1, round(s)), dash=(3, 3))
+                                fill=self.FAINT, width=max(1, round(s)), dash=(3, 3))
         color = bar_color(r["pct"])
         if est:
             line = []
@@ -278,12 +312,11 @@ class Details:
             self.text((ix0 + ix1) / 2, iy0 + 16, "the line fills in as I check your usage", self.DIM, 7.5,
                       anchor="n")
         st_dt = datetime.datetime.fromtimestamp(start)
-        self.text(x0, y1 + 3, fmt_time(st_dt) if key == "five_hour" else fmt_day(st_dt), "#6e6e73", 7)
-        self.text(x1, y1 + 3, f"resets {fmt_when(reset.astimezone(), key)}",
-                  "#6e6e73", 7, anchor="ne")
+        self.text(x0, y1 + 4, fmt_time(st_dt) if key == "five_hour" else fmt_day(st_dt), self.FAINT, 7)
+        self.text(x1, y1 + 4, f"resets {fmt_when(reset.astimezone(), key)}", self.FAINT, 7, anchor="ne")
         if est:
-            self.text((x0 + x1) / 2, y1 + 3, "dotted = estimate", "#6e6e73", 7, anchor="n")
-        y = y1 + 20
+            self.text((x0 + x1) / 2, y1 + 4, "dotted = estimate", self.FAINT, 7, anchor="n")
+        y = y1 + 22
         # the forecast
         fc = forecast(key, r["pct"], r["resets"], now_dt)
         if fc is None:
@@ -299,116 +332,147 @@ class Details:
                 msg, col = "All used up. It comes back at the reset.", RED
             else:
                 msg, col = f"At this pace you'll use about {proj:.0f}% by the reset.", "#4caf7d"
-        return self.text(12, y, msg, col, 8, True, width=W - 24) + 12
+        y = self.text(26, y, msg, col, 8, True, width=W - 52) + 12
+        self.card(top, y)
+        return y + 12
 
+    # ---- claude code tab ----
     def draw_cc(self, y, view):
         p = self.pet
-        W, s = PANEL_W, self.s
-        rng = p.cc_range.get()
-        x = 10
-        for name, label in (("overview", "Overview"), ("models", "Models"), ("projects", "Projects")):
-            x += self.pill(x, y, label, view == name, "view:" + name) + 2
-        x = W - 10
-        for name, label in (("7d", "7d"), ("30d", "30d"), ("all", "All")):
-            x -= self.pill(x, y, label, rng == name, "range:" + name, right=True) + 2
-        y += 32
+        W = PANEL_W
+        self.segmented(12, y, W - 12, VIEWS, view, "view", 8, 28)
+        y += 40
         st = p.cc_stats()
+        if view == "sessions":
+            return self.draw_sessions(y, st)
+        rng = p.cc_range.get()
+        self.text(14, y + 11, "Showing", self.DIM, 8, True, "w")
+        self.segmented(W - 12, y, None, RANGES, rng, "range", 7.5, 22)
+        y += 32
         if st is None:
-            self.text(12, y, "reading Claude Code's logs...", self.DIM, 8)
-            return y + 20
+            return self.text(14, y, "Reading Claude Code's logs…", self.DIM, 8) + 20
         r = st["ranges"][rng]
         if not r["messages"]:
-            self.text(12, y, "No Claude Code activity on this computer in this period.", self.DIM, 8, width=W - 24)
-            return y + 34
+            return self.text(14, y, "No Claude Code activity on this computer in this period.", self.DIM, 8,
+                             width=W - 28) + 34
         if view == "overview":
-            fav = pretty_model(r["models"][0][0]) if r["models"] else "-"
-            cards = [("Sessions", f"{r['sessions']:,}"), ("Messages", f"{r['messages']:,}"),
-                     ("Total tokens", fmt_tokens(r["tokens"])), ("Active days", f"{r['days']:,}"),
-                     ("Peak hour", "-" if r["peak"] is None else hour_label(r["peak"])), ("Favorite model", fav)]
-            cw = (W - 28 - 16) / 3
-            for i, (label, val) in enumerate(cards):
-                cx, cy = 14 + (i % 3) * (cw + 8), y + (i // 3) * 50
-                round_rect(self.canvas, cx * s, cy * s, (cx + cw) * s, (cy + 42) * s, 6 * s, self.CARD, self.BG, True)
-                self.text(cx + 8, cy + 6, label, self.DIM, 7.5)
-                self.text(cx + 8, cy + 21, val, self.FG, 9.5, True)
-            y += 106
-            # activity over the last 26 weeks, one square per day, sunday at the top
-            heat, today = st["heat"], datetime.date.today()
-            start = today - datetime.timedelta(days=(today.weekday() + 1) % 7 + 7 * 25)
-            busiest = max([v for d, v in heat.items() if d >= start] or [0])
-            pitch = int((W - 28) * s // 26)            # whole pixels, so every square is the same size
-            cell = pitch - max(2, round(2 * s))
-            gx, gy = round(14 * s), round(y * s)
-            for col in range(26):
-                for row in range(7):
-                    d = start + datetime.timedelta(days=col * 7 + row)
-                    if d > today:
-                        continue
-                    v = heat.get(d, 0)
-                    lvl = 1 + min(3, int(4 * v / busiest)) if v and busiest else 0
-                    x0, y0 = gx + col * pitch, gy + row * pitch
-                    self.canvas.create_rectangle(x0, y0, x0 + cell, y0 + cell, fill=HEAT[lvl], width=0)
-            y += 7 * pitch / s + 12
-            y = self.text(14, y, compare_line(r["tokens"]), self.DIM, 8, width=W - 28) + 4
-            y = self.text(14, y, self.cost_line(r), self.DIM, 8, width=W - 28) + 12
+            y = self.draw_overview(y, st, r)
         elif view == "projects":
-            total = r["tokens"] or 1
-            for name, tok, sessions in r["projects"][:5]:
-                label = name if len(name) <= 30 else name[:29] + "…"
-                self.text(12, y, label, self.FG, 9, True)
-                self.text(W - 12, y, f"{fmt_tokens(tok)} · {100 * tok / total:.0f}%", self.FG, 9, True, "ne")
-                self.rect_(12, y + 20, W - 12, y + 25, TRACK)
-                self.rect_(12, y + 20, 12 + (W - 24) * tok / total, y + 25, "#5ea1ff")
-                self.text(12, y + 28, f"{sessions} session{'s' if sessions != 1 else ''}", self.DIM, 7)
-                y += 46
+            y = self.draw_list(y, [(name if len(name) <= 30 else name[:29] + "…", tok,
+                                    f"{n} session{'s' if n != 1 else ''}") for name, tok, n in r["projects"][:5]],
+                               r["tokens"], "#6aa9ff")
             if len(r["projects"]) > 5:
-                y = self.text(12, y, f"and {len(r['projects']) - 5} more", self.DIM, 8) + 8
+                y = self.text(14, y - 4, f"and {len(r['projects']) - 5} more", self.FAINT, 7.5) + 10
         else:
-            total = r["tokens"] or 1
-            for m, t in r["models"][:4]:
-                self.text(12, y, pretty_model(m), self.FG, 9, True)
-                self.text(W - 12, y, f"{fmt_tokens(t)} · {100 * t / total:.0f}%", self.FG, 9, True, "ne")
-                self.rect_(12, y + 20, W - 12, y + 25, TRACK)
-                self.rect_(12, y + 20, 12 + (W - 24) * t / total, y + 25, ORANGE)
-                y += 34
+            y = self.draw_list(y, [(pretty_model(m), t, None) for m, t in r["models"][:4]], r["tokens"], self.ON)
             i_, o_, w_, r_ = r["parts"]
-            self.text(12, y, f"input {fmt_tokens(i_)} · output {fmt_tokens(o_)}", self.DIM, 8)
-            self.text(12, y + 16, f"cache write {fmt_tokens(w_)} · cache read {fmt_tokens(r_)}", self.DIM, 8)
-            y = self.text(12, y + 32, self.cost_line(r), self.DIM, 8, width=W - 24) + 12
+            y = self.heading(y, "Token types")
+            top = y
+            for i, (label, n) in enumerate((("Input", i_), ("Output", o_), ("Cache write", w_), ("Cache read", r_))):
+                cx = 26 + (i % 2) * (W - 52) / 2
+                cy = y + 12 + (i // 2) * 22
+                self.text(cx, cy, label, self.DIM, 8)
+                self.text(cx + (W - 52) / 2 - 12, cy, fmt_tokens(n), self.FG, 8, True, "ne")
+            y += 12 + 44 + 4
+            self.card(top, y)
+            y = self.text(14, y + 10, self.cost_line(r), self.FAINT, 7.5, width=W - 28) + 6
         how = ("Counted like the Claude app (every logged copy), from this computer's logs." if p.cc_app.get()
                else "Real count (each answer once), from this computer's logs.")
-        return self.text(14, y, how, self.DIM, 7, width=W - 28) + 4
+        return self.text(14, y, how, self.FAINT, 7, width=W - 28) + 4
 
-    def draw_sessions(self, y):
+    def draw_overview(self, y, st, r):
+        W, s = PANEL_W, self.s
+        fav = pretty_model(r["models"][0][0]) if r["models"] else "–"
+        tiles = [("Sessions", f"{r['sessions']:,}"), ("Messages", f"{r['messages']:,}"),
+                 ("Total tokens", fmt_tokens(r["tokens"])), ("Active days", f"{r['days']:,}"),
+                 ("Peak hour", "–" if r["peak"] is None else hour_label(r["peak"])), ("Favourite model", fav)]
+        top = y
+        cw = (W - 24) / 3
+        for i, (label, val) in enumerate(tiles):   # one card, split into six tiles by thin lines
+            cx, cy = 12 + (i % 3) * cw, y + (i // 3) * 50
+            self.text(cx + 14, cy + 10, label, self.DIM, 7.5)
+            self.text(cx + 14, cy + 25, val, self.FG, 10, True)
+        y += 100
+        self.card(top, y)
+        for i in (1, 2):
+            self.line(12 + i * cw, top + 10, 12 + i * cw, y - 10, self.LINE)
+        self.line(24, top + 50, W - 24, top + 50, self.LINE)
+        y = self.heading(y + 12, "Activity", "last 26 weeks")
+        top = y
+        # one square per day, sunday at the top
+        heat, today = st["heat"], datetime.date.today()
+        start = today - datetime.timedelta(days=(today.weekday() + 1) % 7 + 7 * 25)
+        busiest = max([v for d, v in heat.items() if d >= start] or [0])
+        pitch = int((W - 52) * s // 26)            # whole pixels, so every square is the same size
+        cell = pitch - max(2, round(2 * s))
+        gx, gy = round(26 * s), round((y + 12) * s)
+        self.card(top, y + 12 + 7 * pitch / s + 12)
+        for col in range(26):
+            for row in range(7):
+                d = start + datetime.timedelta(days=col * 7 + row)
+                if d > today:
+                    continue
+                v = heat.get(d, 0)
+                lvl = 1 + min(3, int(4 * v / busiest)) if v and busiest else 0
+                x0, y0 = gx + col * pitch, gy + row * pitch
+                self.canvas.create_rectangle(x0, y0, x0 + cell, y0 + cell, fill=HEAT[lvl], width=0)
+        y += 12 + 7 * pitch / s + 22
+        y = self.text(14, y, compare_line(r["tokens"]), self.DIM, 7.5, width=W - 28) + 3
+        return self.text(14, y, self.cost_line(r), self.DIM, 7.5, width=W - 28) + 8
+
+    def draw_list(self, y, items, total, color):
+        # rows of name, tokens and share, with a bar each, in one card
+        W = PANEL_W
+        top = y
+        y += 14
+        total = total or 1
+        for i, (name, tok, sub) in enumerate(items):
+            if i:
+                self.line(26, y - 7, W - 26, y - 7, self.LINE)
+            self.text(26, y, name, self.FG, 8.5, True)
+            self.text(W - 26, y, f"{fmt_tokens(tok)} · {100 * tok / total:.0f}%", self.FG, 8.5, True, "ne")
+            self.bar(26, y + 20, W - 26, tok / total, color)
+            y += 32
+            if sub:
+                y = self.text(26, y - 2, sub, self.DIM, 7) + 2
+            y += 8
+        self.card(top, y)
+        return y + 12
+
+    def draw_sessions(self, y, st):
         # the latest claude code sessions, newest first: a recap of each
         p, W = self.pet, PANEL_W
-        st = p.cc_stats()
+        y = self.heading(y + 4, "Latest sessions", "on this computer")
         if st is None:
-            self.text(12, y, "reading Claude Code's logs...", self.DIM, 8)
-            return y + 20
+            return self.text(14, y, "Reading Claude Code's logs…", self.DIM, 8) + 20
         recent = st.get("recent", [])[:5]
-        y = self.text(12, y, "Your latest Claude Code sessions on this computer", self.FG, 8.5, True) + 10
         if not recent:
-            self.text(12, y, "No sessions yet.", self.DIM, 8)
-            return y + 24
+            return self.text(14, y, "No sessions yet.", self.DIM, 8) + 24
         now = time.time()
-        for ses in recent:
+        top = y
+        y += 14
+        for i, ses in enumerate(recent):
+            if i:
+                self.line(26, y - 7, W - 26, y - 7, self.LINE)
             start = ses["start"]
-            label = ses["project"] if len(ses["project"]) <= 28 else ses["project"][:27] + "…"
-            self.text(12, y, label, self.FG, 9, True)
-            self.text(W - 12, y, f"{fmt_tokens(ses['tokens'])} tokens", self.FG, 9, True, "ne")
+            label = ses["project"] if len(ses["project"]) <= 26 else ses["project"][:25] + "…"
+            self.text(26, y, label, self.FG, 8.5, True)
+            self.text(W - 26, y, f"{fmt_tokens(ses['tokens'])} tokens", self.FG, 8.5, True, "ne")
             busy = now - max(ses["end"].timestamp(), p.cc.active.get(ses["id"], 0.0)) < SESSION_DONE_MIN * 60
             mins = fmt_minutes((ses["end"] - start).total_seconds())
-            when = f"{fmt_day(start)} {fmt_time(start)} · {mins} · {ses['messages']} messages"
-            end = self.text(12, y + 19, when, self.DIM, 7.5)
-            if busy:   # still going
-                self.text(W - 12, y + 19, "active now", ORANGE, 7.5, True, "ne")
+            end = self.text(26, y + 19, f"{fmt_day(start)} {fmt_time(start)} · {mins} · {ses['messages']} messages",
+                            self.DIM, 7.5)
+            if busy:   # still going: a small orange pill
+                f = self.font(7, True)
+                w = f.measure("Active") / self.s + 12
+                self.box(W - 26 - w, y + 19, W - 26, y + 33, 7, "#4a3128", self.CARD)
+                self.text(W - 26 - w / 2, y + 26, "Active", self.ON, 7, True, "center")
             model = pretty_model(ses["model"]) + " · " if ses["model"] else ""
-            self.text(12, end + 1, f"{model}about {fmt_money(ses['cost'])} at API prices", self.DIM, 7.5)
-            y += 54
+            y = self.text(26, end + 1, f"{model}about {fmt_money(ses['cost'])} at API prices", self.FAINT, 7.5) + 14
+        self.card(top, y - 4)
         how = ("Tokens counted like the Claude app." if p.cc_app.get() else "Tokens counted once per answer.")
-        return self.text(14, y, how + " A session counts as finished after "
-                         f"{SESSION_DONE_MIN} minutes with nothing new.", self.DIM, 7, width=W - 28) + 4
+        return self.text(14, y + 6, how + f" A session counts as finished after {SESSION_DONE_MIN} minutes with "
+                         "nothing new.", self.FAINT, 7, width=W - 28) + 4
 
     def cost_line(self, r):
         # what these tokens would cost on the pay-as-you-go api (always counted once)

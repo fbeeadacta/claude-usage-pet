@@ -49,7 +49,8 @@ TIPS = {
     "Chatter": ("How often the mascot talks in speech bubbles.", [
         ("Off", "It never talks."),
         ("Sometimes", "A line every minute or two about whatever it's up to, plus reactions to what's happening."),
-        ("A lot", "About 2.5× more often.")]),
+        ("A lot", "About 2.5× more often."),
+        ("Non-stop", "Extra extra chatty: about 5× more often. It has a lot to say.")]),
     "Size": ("How big the mascot is, from 0.75x to 3x.", [
         ("Tip", "Ctrl + mouse wheel over the mascot fine-tunes the size.")]),
     "Bubble": ("What the bubble above its head shows.", [

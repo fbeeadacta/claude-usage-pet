@@ -101,8 +101,110 @@ OUTFITS = {"halloween": (PUMPKIN, {"o": "#f28c28", "#": "#ffcf4d", "g": "#4f7a28
            "newyear": (PARTY, {"p": "#ff6f8a", "c": "#5ad1e8", "y": "#ffe08a"}),
            "birthday": (PARTY, {"p": "#ff6f8a", "c": "#5ad1e8", "y": "#ffe08a"}),
            "valentine": (LOVE, {"#": "#ff6f8a", "s": "#2b1a14"})}
-# the spell tome (reading files): drawn in code from these colours. pages, lines of text, cover, spine
-PAGE_C, INK_C, COVER_C, SPINE_C, RUNE_C = "#f2efe8", "#9a958c", "#6c4ab6", "#4a2f80", ["#8be9fd", "#ffffff", "#b9a4ff"]
+# the spell tome (reading files): two open spreads, so turning pages shows it reading on.
+# c = leather cover, g = gold corners, p / P = page / page shadow, e / E = page edges, s = spine,
+# r = red capital, i = ink, b = glowing sigil, y = its gold heart, m = ribbon bookmark
+TOME = [
+    [
+        "..pppppppp......pppppppp..",
+        ".ppppppppppPssPpppppppppp.",
+        "gprrrpiipiiPssPppbbbbbpppg",
+        "cprprppppppPssPpbbpppbbppc",
+        "cprrpppiiipPssPpbppyppbppc",
+        "cprprppppppPssPpbpyyypbppc",
+        "cpiipiiiipiPssPpbbpppbbppc",
+        "cppppppppppPssPppbbbbbpppc",
+        "cppiiiippppPssPppppppppppc",
+        "cpiiiipiiipPssPpiipiipippc",
+        "cppppppppppPssPppppppppppc",
+        "geEeEeEeEeEessEeEeEeEeEeEg",
+        "ggeEeEeEeEeEsseEeEeEeEeEgg",
+        ".gcccccccccccmccccccccccg.",
+        ".............m............",
+        "............m.m...........",
+    ],
+    [
+        "..pppppppp......pppppppp..",
+        ".ppipiiiipiPssPpppppppppp.",
+        "gppppppppppPssPppppbpppppg",
+        "cppiiiipiipPssPppppbpppppc",
+        "cppppppppppPssPpppbpbppppc",
+        "cpiiipiiiipPssPpppbybppppc",
+        "cppppppppppPssPppbpypbpppc",
+        "cpipiiiipppPssPppbpppbpppc",
+        "cppppppppppPssPpbbbbbbbppc",
+        "cpiiiipiiiiPssPppppppppppc",
+        "cppppppppppPssPpiipiipippc",
+        "geEeEeEeEeEessEeEeEeEeEeEg",
+        "ggeEeEeEeEeEsseEeEeEeEeEgg",
+        ".gcccccccccccmccccccccccg.",
+        ".............m............",
+        "............m.m...........",
+    ],
+]
+TOME_C = {"c": "#4a2f80", "g": "#f2c14e", "p": "#f2efe8", "P": "#d9d1bf", "e": "#c9bfa9", "E": "#a99d84",
+          "s": "#2e1c55", "r": "#d8343a", "i": "#5a4a7a", "b": "#4aa3ff", "y": "#ffe08a", "m": "#e5534b"}
+SIGIL_GLOW = ("#4aa3ff", "#8fd0ff", "#c4e8ff")   # the sigil pulses through these
+# the other wizard jobs (pet/magic.py draws them)
+QUILL = [                  # writing: w = feather, v = its violet vane, g = gold nib (bottom left)
+    ".....ww",
+    "....wvw",
+    "...wvw.",
+    "..wvw..",
+    ".wvw...",
+    ".ww....",
+    "g......",
+]
+QUILL_C = {"w": "#f7f4ee", "v": "#c9b8ff", "g": "#ffd166"}
+SCROLL_C, ROLL_C, SCRIBBLE_C = "#f3e3b5", "#c9a865", "#3b3a6e"
+RUNE_GLYPHS = [            # running commands: wizard runes falling like rain (the last one is a ">_" prompt)
+    ["#.#", "##.", "#.#", "#..", "#.."], ["#.#", "#.#", ".#.", ".#.", ".#."], ["##.", "#.#", "##.", "#.#", "#.#"],
+    [".#.", "#.#", ".#.", "#.#", "#.#"], ["#..", "##.", "#.#", "##.", "#.."], [".#.", "###", "#.#", ".#.", ".#."],
+    ["#.#", "###", "#.#", "#.#", "#.#"], ["#..", ".#.", "#..", "...", "###"],
+]
+RAIN_C = ["#e9fff0", "#6ff0a0", "#2f9a5c", "#ffe08a", "#9fd3ff"]   # rune rain: brightest first, then dimmer.
+                                                                    # (the last two: runes rising off the tome)
+ORB_C = {"rim": "#2a1d5c", "top": "#8a9bff", "mid": "#5f68dd", "low": "#433fa8", "pink": "#ff9ad5",
+         "cyan": "#8be9fd", "haze": "#7a6ee8", "glint": "#b9c4ff", "shine": "#ffffff", "gold": "#f2c14e",
+         "bronze": "#b8862c"}
+PORTAL_C = ["#b98cff", "#7ff3ff", "#ffffff"]
+NOTES_C = [("#ffe58a", "#e8c45a"), ("#ff9ec7", "#e57aa8"), ("#a8f0a0", "#7fcf77"), ("#9fd3ff", "#73b2e8")]
+QMARK = [                  # asking you: the "?" (its dot is drawn on its own, bouncing)
+    "..#####..",
+    ".#######.",
+    "###...###",
+    "###...###",
+    "......###",
+    ".....###.",
+    "....###..",
+    "...###...",
+    "...###...",
+]
+QMARK_MINI = ["##.", "..#", ".#.", "...", ".#."]
+QMARK_C, QMARK_BACK, QMARK_EDGE = "#ffd166", "#e0a83a", "#9c6b1c"
+QMARK_TINTS = ("#8be9fd", "#ff9ad5", "#ffffff")
+CIRCLE_C = ["#b98cff", "#7ff3ff", "#e9d8ff"]
+RUNE_SMALL = [[".#.", "###", ".#."], ["#.#", ".#.", "#.#"], ["##.", ".##", "##."], [".#.", "#.#", ".#."]]
+HOURGLASS_C = {"G": "#ffe39a", "g": "#f2c14e", "o": "#b8862c", "w": "#8b5a2b", "W": "#5e3a1a",
+               "l": "#bfe3ff", "h": "#ffffff", "i": "#2c2350", "y": "#ffd166", "Y": "#e0a83a", "s": "#ffffff"}
+# (thinking: gold caps, wooden posts and their rings, glass and its shine, the dark inside, sand, a twinkle)
+MOTE_C = ["#ffe08a", "#8be9fd", "#ff9ad5", "#ffffff", "#b98cff", "#7ff3ff", "#6ff0a0", "#ffd166"]
+# idle activities (pet/idle.py)
+MOON = ["..###", ".##..", "##...", "##...", ".##..", "..###"]   # a crescent moon, for stargazing
+MOON_C = "#f7f0c6"
+STARS_C = ["#ffffff", "#fff3b0", "#cfe6ff"]
+POCKET_BOOK = [            # its own little book: c = red cover, p = pages, i = writing, s = spine
+    ".pppppsppppp.",
+    "cpiiipspiiipc",
+    "cpppppspppppc",
+    "cpiiipspiiipc",
+    "cpppppspppppc",
+    "ccccccscccccc",
+]
+POCKET_BOOK_C = {"c": "#b0413e", "p": "#f2efe8", "i": "#6b6a65", "s": "#7a2e2e"}
+SOOT = "#7a5246"           # the mascot right after a spell blows up in its face
+SINGED_HAT_C = {"#": "#4a4548", "y": "#7a6a3a", "*": "#9a958c"}
+SMOKE_C = ["#c9c3b5", "#8e8a82"]
 # rare visitors
 UFO = [                    # c = glass dome, w = shine, g = hull, l = blinking lights, d = feet
     "......cccccc......",

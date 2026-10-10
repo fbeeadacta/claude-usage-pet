@@ -107,7 +107,8 @@ class SettingsWindow:
                             words="poke bounce scream splat parachute eagle hay wizard magic dance music milestones")]),
                     ("Talking", ["chatter"], [
                         row("choice", "Chatter", "chatter", p.chatter, p.chatter_changed,
-                            (("off", "Off"), ("some", "Sometimes"), ("lots", "A lot")), words="speech talk lines")]),
+                            (("off", "Off"), ("some", "Sometimes"), ("lots", "A lot"), ("max", "Non-stop")),
+                            words="speech talk lines chatty")]),
                     ("Quiet", ["quiet_hours", "quiet_from", "quiet_to", "dnd"], [
                         row("toggle", "Quiet hours", "quiet_hours", p.quiet_hours, p.changed,
                             words="night mute silent sleep"),
@@ -755,7 +756,9 @@ class SettingsWindow:
                  ("Time as a wizard", f"{wiz // 60}h {wiz % 60:02d}m" if wiz >= 60 else f"{wiz}m"),
                  ("Limits reset", n("resets")), ("5-hour at 100%", n("full_5h")), ("Weekly at 100%", n("full_week")),
                  ("Past-midnight sessions", f"{st['late']:,}" if st else "…"),
-                 ("UFO abductions", n("ufo")), ("Cats met", n("cats")), ("Shiny days", n("shiny"))]
+                 ("UFO abductions", n("ufo")), ("Cats met", n("cats")), ("Shiny days", n("shiny")),
+                 ("Nights stargazing", n("stargazes")), ("Spells backfired", n("backfires")), ("Books read", n("books")),
+                 ("", "")]
         y = self.text(x0 + 16, y + 14, f"What the mascot's been up to{since}. Past-midnight sessions come from "
                       "Claude Code's logs (all time); the rest is counted by the mascot.", self.DIM, 8,
                       width=x1 - x0 - 32) + 8
