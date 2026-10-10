@@ -1194,7 +1194,9 @@ def hotkey_thread(inbox, wanted):
 SOUND_DIR = Path(tempfile.gettempdir()) / "claude_pet_sounds"
 
 
-SOUND_VERSION = 4   # bump this when a sound changes, so old saved copies aren't used
+SOUND_LEVEL = 0.07   # how loud every sound is at 100% volume (average power; all sounds levelled to this)
+SOUND_TRIM = {"eagle": 0.55, "scream": 0.6, "hay": 0.6, "spell": 0.8, "chime": 0.85, "dance": 0.75}   # by-ear adjustments
+SOUND_VERSION = 5   # bump this when a sound changes, so old saved copies aren't used
 # how the sounds are grouped and named in settings, where each one can be switched off
 SOUND_GROUPS = (("Reactions", (("pop", "Poke"), ("boing", "Bounce"), ("scream", "Scream"), ("splat", "Wall splat"))),
                 ("Adventures", (("whoosh", "Parachute"), ("eagle", "Eagle cry"), ("hay", "Hay landing"))),
@@ -1319,7 +1321,17 @@ def make_sound(kind, volume=100):
             body.append(v * swell * flap)
         mix(0.0, body)
         mix(0.02, wav(0.5, 85, 50, 0.3, attack=0.06, decay=1.8))   # the low "oom" as it fills
-    soft_all = 0.5   # every sound at half its old loudness, so even 100% stays gentle
+    # every sound is levelled to about the same loudness (measured as its average power, not its loudest
+    # peak), then trimmed by ear: high, buzzy sounds like the scream and the eagle seem louder than they
+    # measure, so they get turned down a bit more.
+    if buf:
+        rms = math.sqrt(sum(v * v for v in buf) / len(buf)) or 1.0
+        gain = SOUND_LEVEL * SOUND_TRIM.get(kind, 1.0) / rms
+        peak = max(abs(v) for v in buf) * gain
+        if peak > 0.9:
+            gain *= 0.9 / peak   # never so loud it clips
+        buf = [v * gain for v in buf]
+    soft_all = 1.0
     frames = [int(max(-1.0, min(1.0, v)) * soft_all * volume / 100 * 32767) for v in buf]
     SOUND_DIR.mkdir(exist_ok=True)
     tmp = path.with_name(f"{path.stem}_{threading.get_ident()}.tmp")
