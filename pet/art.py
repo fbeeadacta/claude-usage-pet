@@ -190,21 +190,51 @@ HOURGLASS_C = {"G": "#ffe39a", "g": "#f2c14e", "o": "#b8862c", "w": "#8b5a2b", "
 # (thinking: gold caps, wooden posts and their rings, glass and its shine, the dark inside, sand, a twinkle)
 MOTE_C = ["#ffe08a", "#8be9fd", "#ff9ad5", "#ffffff", "#b98cff", "#7ff3ff", "#6ff0a0", "#ffd166"]
 # idle activities (pet/idle.py)
-MOON = ["..###", ".##..", "##...", "##...", ".##..", "..###"]   # a crescent moon, for stargazing
-MOON_C = "#f7f0c6"
-STARS_C = ["#ffffff", "#fff3b0", "#cfe6ff"]
-POCKET_BOOK = [            # its own little book: c = red cover, p = pages, i = writing, s = spine
-    ".pppppsppppp.",
-    "cpiiipspiiipc",
-    "cpppppspppppc",
-    "cpiiipspiiipc",
-    "cpppppspppppc",
-    "ccccccscccccc",
+SMOKE_C = ["#c9c3b5", "#8e8a82"]   # smoke, and the dust it sweeps up
+BRISTLE_C, TIE_C, DUST_C = "#e3b54a", "#d8343a", "#a8a39a"   # the broom's head and its red band, specks of dust
+CANVAS_C, EASEL_C = "#f7f4ee", "#8b5a2b"
+PAINT_C = {"k": "#2b1a14", "r": "#e5534b", "o": "#f28c28", "y": "#ffd166", "g": "#4f9a3a", "l": "#8fd16a",
+           "b": "#4aa3ff", "c": "#8be9fd", "p": "#ff8fb8", "w": "#ffffff", "t": "#f3e3b5", "n": "#8b5a2b",
+           "a": "#b4b4bc", "m": "#d77757"}
+PAINTINGS = {              # the little pictures it paints (12 x 12, letters from PAINT_C, "." = bare canvas)
+    "flower": ["............", "....pppp....", "...pppppp...", "..ppyyyypp..", "..ppyyyypp..", "...pppppp...",
+               "....pppp....", ".....gg.....", "..ll.gg.....", "...llgg.ll..", ".....ggll...", "gggggggggggg"],
+    "heart": ["............", "............", "..rrr..rrr..", ".rrwrrrrrrr.", ".rwrrrrrrrr.", ".rrrrrrrrrr.",
+              "..rrrrrrrr..", "...rrrrrr...", "....rrrr....", ".....rr.....", "............", "............"],
+    "sun": ["y....yy....y", ".y........y.", "....oooo....", "...oooooo...", "..oooooooo..", "yyokkookkoyy",
+            "..oooooooo..", "..okooooko..", "...okkkko...", "....oooo....", ".y........y.", "y....yy....y"],
+    "mushroom": ["............", "....rrrr....", "..rrwwrrrr..", ".rrrwwrrwwr.", ".rrrrrrrwwr.", "rrwwrrrrrrrr",
+                 "rrwwrrrrrrrr", "...tttttt...", "...tkttkt...", "...tttttt...", "...tttttt...", "gggggggggggg"],
+    "cat": ["............", "..a......a..", "..aa....aa..", "..aaaaaaaa..", ".aaaaaaaaaa.", ".aakaaaakaa.",
+            ".aaaaaaaaaa.", ".aaaappaaaa.", "..aakaakaa..", "...aaaaaa...", "............", "............"],
+    "fish": ["...........c", "..........c.", "............", ".....oooo...", "o..ooooooo..", "ooooooookoo.",
+             "oooooooooooo", "o..ooooooo..", ".....oooo...", "............", "............", "cc..cc..cc.."],
+    "house": ["y...........", ".....rr.....", "....rrrr....", "...rrrrrr...", "..rrrrrrrr..", ".rrrrrrrrrr.",
+              "..tttttttt..", "..tbbtnntt..", "..tbbtnntt..", "..ttttnntt..", "gggggggggggg", "............"],
+    "me": ["..........y.", ".........yyy", "..........y.", "..mmmmmmmm..", "..mkmmmmkm..", "..mkmmmmkm..",
+           "mmmmmmmmmmmm", "..mmmmmmmm..", "..mmmmmmmm..", "..m.m..m.m..", "..m.m..m.m..", "............"],
+    "rainbow": ["............", "............", "....rrrr....", "..rroooorr..", ".rooyyyyoor.", ".roy....yor.",
+                "roy......yor", "roy......yor", "roy......yor", "ccc......ccc", ".c........c.", "............"],
+}
+ICE_C, WATER_C, RIPPLE_C, BOBBER_C = "#dff3ff", "#1d3b5a", "#4f7fae", ("#e5534b", "#ffffff")
+CATCHES = {                # what comes up out of the fishing hole: (picture, colours)
+    "fish": (["..####...#", ".######.##", "#k########", ".######.##", "..####...#"], {"#": "#7fb8e8", "k": "#2b1a14"}),
+    "gold": (["..####...#", ".######.##", "#k########", ".######.##", "..####...#"], {"#": "#ffd166", "k": "#2b1a14"}),
+    "boot": (["..###...", "..###...", "..###...", "..######", "########", "ssssssss"], {"#": "#8b5a2b", "s": "#3b2a1a"}),
+    "crab": ([".#....#.", "##....##", ".######.", "##k##k##", ".######.", "#.#..#.#"], {"#": "#e5534b", "k": "#2b1a14"}),
+    "bug": (["#....#", ".#..#.", "..##..", ".####.", "######", ".####.", "#....#"], {"#": "#4f9a3a"}),
+    "sock": (["sss..", "###..", "sss..", "###..", "#####", "#####"], {"#": "#f2efe8", "s": "#e5534b"}),
+}
+BALLOON_C = [("#e5534b", "#ff9a92"), ("#4aa3ff", "#a8d4ff"), ("#ffd166", "#fff0b8"), ("#ff8fb8", "#ffd0e2"),
+             ("#6fcf6a", "#bff0bc"), ("#b98cff", "#e2d1ff")]   # (balloon, its shine)
+PLANE = [                  # a paper plane flying right. # = paper, s = its shaded underside
+    "#...........",
+    "###.........",
+    ".######.....",
+    "..sssss#####",
+    "...sss##....",
 ]
-POCKET_BOOK_C = {"c": "#b0413e", "p": "#f2efe8", "i": "#6b6a65", "s": "#7a2e2e"}
-SOOT = "#7a5246"           # the mascot right after a spell blows up in its face
-SINGED_HAT_C = {"#": "#4a4548", "y": "#7a6a3a", "*": "#9a958c"}
-SMOKE_C = ["#c9c3b5", "#8e8a82"]
+PLANE_C = {"#": "#f7f4ee", "s": "#c9c3b5"}
 # rare visitors
 UFO = [                    # c = glass dome, w = shine, g = hull, l = blinking lights, d = feet
     "......cccccc......",

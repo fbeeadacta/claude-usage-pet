@@ -177,7 +177,8 @@ class Pet(ScreensMixin, MouseMixin, TalkMixin, DataMixin, MovementMixin, RenderM
         self.ball = self.cat = self.ufo = None        # fetch, and rare visitors
         self.ball_sprite = self.cat_sprite = None
         self.fetch_at, self.cur_job, self.job_since = 0.0, None, 0.0   # (the wizard's job, and since when)
-        self.act, self.act_t, self.act_said, self.shooting_at = None, 0.0, False, -99.0   # an idle activity
+        self.act, self.act_t, self.act_info = None, 0.0, {}   # an idle activity (pet/idle.py)
+        self.plane = self.plane_sprite = None         # a paper plane it threw
         self.mouse = (-10 ** 6, -10 ** 6)             # where the pointer is (its eyes follow it)
         self.shiny, self.shiny_said = st["rare"] and random.random() < SHINY_CHANCE, False
         self.dizzy_t = self.stretch_t = self.dance_t = 0.0

@@ -427,17 +427,42 @@ JOB_LINES = {
     "compact": ["tidying up the conversation. squish!", "shrinking the scroll so it fits.", "making room for more thoughts."],
 }
 # idle activities
-STARGAZE_LINES = ["so many stars tonight.", "is that one a pixel or a planet?", "*lies down* best seat in the house.",
-                  "the stars look like little tokens.", "I'm counting stars. I'm on 4. it's hard.",
-                  "somewhere up there is a bigger taskbar."]
-WISH_LINES = ["a shooting star! make a wish!", "I wished for more tokens. don't tell.", "ooh! did you see that one?",
-              "I wish... for a second monitor. oh wait, you have one."]
-PRACTICE_LINES = ["time to practise a new spell!", "watch this! brand new spell.", "*cracks knuckles* abracadabra-ish...",
-                  "I read about this one in a book. how hard can it be?", "spell practice! stand back."]
-BACKFIRE_LINES = ["*cough* that... was intentional.", "note to self: wrong end of the wand.", "my hat! my beautiful hat!",
-                  "ok, so that's what that spell does.", "*cough cough* ...nailed it.", "I'm fine! the hat is not fine."]
-BOOK_LINES = ["ooh, plot twist!", "this book is about a crab who becomes a wizard. relatable.", "*turns page* no way.",
-              "shh, I'm at the good part.", "chapter 7: the taskbar strikes back.", "I can't put it down. I don't have hands."]
+SWEEP_LINES = ["*sweep sweep*", "tidy taskbar, tidy mind.", "so many crumbs. who's eating at the computer?",
+               "dusting the taskbar. nobody else does it.", "where does all this dust come from?",
+               "a little spring cleaning. in any season."]
+SWEEP_DONE = ["*sweeps it under the taskbar*", "there. spotless. don't look under the taskbar.", "all clean! mostly.",
+              "found a stray semicolon in there. I kept it."]
+PAINT_LINES = ["art time!", "I feel inspired.", "*sets up the easel*", "painting something. no peeking.",
+               "hold still, I'm painting you. kidding."]
+PAINT_DONE = {
+    "flower": ["I call it: 'Flower'. deep, right?", "a flower for you. this one never wilts."],
+    "heart": ["it's a heart. for you. don't make it weird.", "I call it: 'Love, in 12 pixels'."],
+    "sun": ["the sun, but cooler. it has sunglasses.", "I call it: 'Mr Sunshine'."],
+    "mushroom": ["a mushroom. the friendly kind, I think.", "I call it: 'Fun Guy'."],
+    "cat": ["portrait of the cat. she wouldn't sit still.", "I call it: 'Cat, Judging You'."],
+    "fish": ["a fish. am I hungry? maybe.", "I call it: 'Still Life With Fish'."],
+    "house": ["my dream house. it has a door AND a window.", "I call it: 'Home Sweet Taskbar'."],
+    "me": ["self-portrait. I nailed the eyes.", "it's me! the resemblance is uncanny."],
+    "rainbow": ["a rainbow! I ran out of blue.", "I call it: 'After the Rain'."],
+}
+FISH_LINES = ["*cuts a hole in the taskbar* fishing time.", "taskbar fishing! the fish here are very rare.",
+              "I bet there are fish under the taskbar.", "gone fishing. back in a bit.", "shh. you'll scare the fish."]
+CATCH_LINES = {
+    "fish": ["got one! I'll let it go.", "a fish! hello, fish. bye, fish.", "look how big! ...ish."],
+    "gold": ["a GOLDEN fish!! make a wish!", "a golden one! that's the rarest catch there is."],
+    "boot": ["...a boot. again.", "a boot! whose boot is this?", "one boot. still waiting for the other one."],
+    "crab": ["a little crab! hi, cousin.", "a crab! it looks a bit like me."],
+    "bug": ["I caught a bug! good thing it wasn't in your code.", "a bug! I'll tell Claude about it."],
+    "sock": ["one sock. so this is where they go.", "a sock! the other one's down there somewhere."],
+}
+BALLOON_LINES = ["*blows up a balloon*", "balloon time!", "a party for one!", "watch how big I can make it."]
+POP_LINES = ["pop!", "bye, balloon.", "that one had a weak spot.", "ok. one more.",
+             "balloons don't last. fun does."]
+PLANE_LINES = ["*folds a paper plane*", "flight test number... I lost count.", "this one's going to fly so far.",
+               "paper plane! stand clear!"]
+PLANE_LAND = ["nice landing!", "and it sticks the landing!", "did you see that?", "the pilot is fine. there was no pilot."]
+PLANE_FAR = ["whoa, all the way over there!", "new record! probably.", "that went further than I've ever walked."]
+PLANE_FLOP = ["...it was a test flight.", "aerodynamics is hard.", "plop.", "I meant to do that."]
 MILESTONES = {
     "five_hour": {50: "halfway through your 5-hour limit!", 75: "75% of the 5-hour limit used. pace yourself!",
                   90: "90%! almost out of 5-hour juice.",

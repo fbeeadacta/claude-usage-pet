@@ -371,7 +371,7 @@ class MovementMixin:
             return 500
         if (self.held or self.pressed or self.squash_t > 0 or not self.grounded() or self.angle or self.vx
                 or (self.state == "walk" and self.walking_allowed()) or self.goto_x is not None or self.ufo
-                or (self.ball and self.ball["phase"] in ("fly", "pet"))
+                or (self.ball and self.ball["phase"] in ("fly", "pet")) or (self.plane and not self.plane["landed"])
                 or (self.plat is not None and time.perf_counter() < self.ride_until)):
             return 16
         if (self.plat is not None or self.near or self.hay_t > 0 or self.parts or self.cat or self.wave_t > 0 or self.state in ("work", "dance", "act") or self.speech
@@ -393,9 +393,11 @@ class MovementMixin:
             p["life"] -= dt
             p["x"] += p["vx"] * dt
             p["y"] += p["vy"] * dt
+            p["vy"] += p.get("g", 0.0) * dt   # (some fall, like paint and splashes)
         self.parts = [p for p in self.parts if p["life"] > 0]
         self.turn(dt, s)
         self.ball_tick(dt)
+        self.plane_tick(dt)
         self.cat_tick(dt)
         if self.ufo and self.ufo_tick(dt):
             return   # beamed up
@@ -505,7 +507,7 @@ class MovementMixin:
                         self.spawn("spark")
                         self.part_t = random.uniform(0.08, 0.2)
                 return
-        if self.state == "act":   # stargazing, practising a spell, reading (pet/idle.py)
+        if self.state == "act":   # sweeping, painting, fishing, balloons, a paper plane (pet/idle.py)
             self.act_tick(dt, s)
             return
         if self.state == "dance":

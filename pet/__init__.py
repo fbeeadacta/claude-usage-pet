@@ -20,7 +20,8 @@
 #                        the diary, the tray icon, fetch, and rare visitors (shiny, ufo, cat).
 #   magic.py             part of the Pet: the wizard's jobs (tome, quill, rune rain, crystal ball, summoning,
 #                        sticky notes, question mark, rune circle, hourglass, rolling scroll) and their particles.
-#   idle.py              part of the Pet: things it does when idle (stargazing, a practice spell, a book).
+#   idle.py              part of the Pet: things it does when idle (sweeping, painting, fishing, balloons,
+#                        a paper plane that flies off in its own little window).
 #   tray.py              the tray icon (its own thread and hidden window).
 #   sprites.py           little see-through windows for things away from the mascot: the ball, the cat.
 #   mascot.py            the Pet itself: puts the parts together, its settings, and starting it up.

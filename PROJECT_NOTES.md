@@ -2,7 +2,7 @@
 
 A small Claude mascot that walks along the top of the Windows taskbar. A bubble above its head shows Claude plan usage. If any file here gets lost or corrupted, this note has enough detail to rebuild it. You can give this file to Claude and ask it to rebuild the project.
 
-Last updated: 2026-10-10 (version 7.2)
+Last updated: 2026-10-10 (version 7.3)
 
 ## Files in this folder
 
@@ -40,7 +40,7 @@ The code is a package (`pet/`) started by `claude_pet.py`. Every file begins wit
 | `pet/ui.py` | Shared drawing helpers: rounded boxes, smooth corners, fading, text wrapping. |
 | `pet/mascot.py` | The `Pet` class: puts the parts below together; its settings and start-up. |
 | `pet/screens.py`, `mouse.py`, `talk.py`, `data.py`, `movement.py`, `render.py`, `fun.py` | The parts of the `Pet` (mixin classes): monitors, mouse handling, talking and reactions, data and ticks, physics and movement, drawing, and the extras (being called over, quiet mode, seasons, session wrap-ups, the tour, the diary, the tray icon, fetch, rare visitors). They all share one `self`. |
-| `pet/idle.py` | Things it does on its own when idle (a part of the `Pet`): stargazing, a practice spell, a book. |
+| `pet/idle.py` | Things it does on its own when idle (a part of the `Pet`): sweeping, painting, fishing, balloons, a paper plane. |
 | `pet/magic.py` | The wizard's jobs (a part of the `Pet`): which job is on, how the mascot holds itself, the props and their particles. |
 | `pet/tray.py` | The tray icon, with its own thread and hidden window. |
 | `pet/sprites.py` | Small see-through windows for things that leave the mascot's side: the fetch ball and the cat. |
@@ -88,10 +88,13 @@ One thing to know: `usage.RETRY_AFTER` changes while the pet runs, so other file
 - **Usage warning:** when a limit reaches 80%, the usage bubble (and its little tail) gets a yellow ring. From 90% the ring turns red. At 100% it turns black with a silver edge. Change the yellow and red levels under "Warning levels", or switch the ring off with "Warn when nearly full" in the menu. When the 5-hour limit resets, it celebrates with three happy hops and hearts.
 - **Idle habits:** it blinks, glances left and right, hops about every 30 seconds, and now and then breaks into a little dance with music notes.
 - **Idle activities** (`pet/idle.py`): when it's done standing about, a 10% chance (`ACT_CHANCE`) of one of these. Claude starting work, or being picked up, interrupts them.
-  - **Stargazing** (9 PM to 5 AM only, 25–45 s): it lies on its back with its feet in the air (kicking now and then), stars twinkle out to the sides, a crescent moon, and a shooting star every 6 seconds ("make a wish!").
-  - **Practice spell** (6 s): it puts on the wizard hat and waves its wand, sparkles fizzle out, then poof: a ring of smoke, the mascot goes sooty with its eyes shut, the hat singed and smoking, and an excuse ("*cough* that... was intentional."). Then it shakes it off and the hat comes off.
-  - **Reading a book** (15–30 s): it sits with a little red book of its own, eyes down, turning a page every 5 seconds, and comments halfway through ("chapter 7: the taskbar strikes back.").
-  - The diary counts nights stargazing, spells backfired and books read.
+  Props go on the side towards the middle of the screen.
+  - **Sweeping** (10–16 s): it holds a tall broom (red band, straw head) just outside its hand. The broom swings back and forth about its grip, and on each forward stroke it steps along the taskbar (about 45 px/s at 1x while pushing, never off the end of a window) and flicks dust and specks out ahead. At the end: "*sweeps it under the taskbar*".
+  - **Painting** (13–19 s): an easel with a canvas beside it. It paints one of 9 little 12×12 pictures (flower, heart, sun in sunglasses, mushroom, the cat, a fish, a house, itself, a rainbow) block by block, one colour at a time, with a same-size brush in its dabbing hand and flecks of paint. Then it admires it with happy eyes and a heart, and names it ("I call it: 'Fun Guy'.").
+  - **Fishing** (about 10–20 s): it cuts a hole in the taskbar right beside it (ice chips fly), sits down with a rod, and the bobber bobs with ripples. Two nibbles, a bite, and it reels up a fish (45%), a boot, a crab, a bug, a sock, or rarely a golden fish (5%). It holds it up on the line with a line to match, then drops it back in with a splash.
+  - **Balloons** (2 or 3 of them): it blows one up in five big breaths (eyes squeezed shut), ties it, lets go, and it drifts up and outwards a little (clear of the usage bubble), string wiggling, then pops into bits ("bye, balloon."). No scared reaction.
+  - **Paper plane**: it folds a sheet into a plane, holds it up, and throws it (usually towards the middle of the screen, sometimes the wrong way). The plane is its own little window (like the fetch ball) and flies like a glider: speed gives lift, gravity bends its path, drag slows it, and each throw gets its own trim speed, glide ratio and wobble, so paths differ (gentle glides, swoops, now and then a loop). It bonks off screen edges, lands on the taskbar, slides to a stop and stays 8 s. The mascot watches it and reacts to how far it went. One plane at a time.
+  - The diary counts sweeps, paintings, things fished out, balloons popped and paper planes.
 - **Waking up:** a big stretch, both arms up.
 - **Limit used up (100%):** it slumps with tired eyes, stops walking and hopping, and says "hard day's work" lines.
 - **Wizard mode:** when tokens are going up, it puts on a wizard hat and casts sparkles with a wand. It notices Claude Code within about 3 seconds, by reading its logs. It notices claude.ai chat and other apps when the 5-hour % goes up, which is checked every 2 minutes.
@@ -602,9 +605,16 @@ There's also 30 px of side space for z's and sparks.
 - Claude Code stats only cover this computer's logs. If Claude Code deletes old logs, they disappear from the stats too.
 
 **Ideas for later:**
-- Things to do when idle: the first three on the list in the 7.1 change log are built (7.2); the rest are still ideas.
+- Things to do when idle: 7.3 replaced the 7.2 ones with sweeping, painting, fishing, balloons and a paper plane; the rest of the list in the 7.1 change log are still ideas.
 
 ## Change log
+
+- **2026-10-10 (version 7.3): new things to do when idle.**
+  - Stargazing, the practice spell and the book are gone. In their place: sweeping, painting, fishing through a hole in the taskbar, blowing up balloons that pop, and throwing a paper plane (see "Idle activities" above). Each one is equally likely (the plane only when none is out already). `ACT_CHANCE` is unchanged.
+  - The paper plane is a new little window (`Sprite`), turned to match its heading in 15° steps.
+  - Particles can now fall (`"g"`), and there's a `"dot"` particle in any colour (paint, ice, splashes, balloon bits, dust).
+  - The diary's three old counts are replaced by five new ones (old counts stay in `pet_state.json` but aren't shown).
+  - Tested (test pet, scratch files, left monitor, plain backdrop, 1x and 2x, both sides): each activity started directly, with screenshots of each stage; the diary counts; and the plane's flight checked over many simulated throws (median about 550 px at 1x, 2–6 s in the air, about 1 in 7 loops). Not tested: them starting on their own timers, the plane bonking off screen edges on screen, and fishing or sweeping on top of a window.
 
 - **2026-10-10 (version 7.2): three things to do when idle.**
   - Stargazing at night, a practice spell that backfires, and reading a little book (see "Idle activities" above). New Pet part: `pet/idle.py`; new lines in `pet/lines.py`; three more counts in the diary.

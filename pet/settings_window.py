@@ -757,8 +757,8 @@ class SettingsWindow:
                  ("Limits reset", n("resets")), ("5-hour at 100%", n("full_5h")), ("Weekly at 100%", n("full_week")),
                  ("Past-midnight sessions", f"{st['late']:,}" if st else "…"),
                  ("UFO abductions", n("ufo")), ("Cats met", n("cats")), ("Shiny days", n("shiny")),
-                 ("Nights stargazing", n("stargazes")), ("Spells backfired", n("backfires")), ("Books read", n("books")),
-                 ("", "")]
+                 ("Sweeps", n("sweeps")), ("Paintings", n("paintings")), ("Things fished out", n("catches")),
+                 ("Balloons popped", n("balloons")), ("Paper planes", n("planes")), ("", "")]
         y = self.text(x0 + 16, y + 14, f"What the mascot's been up to{since}. Past-midnight sessions come from "
                       "Claude Code's logs (all time); the rest is counted by the mascot.", self.DIM, 8,
                       width=x1 - x0 - 32) + 8

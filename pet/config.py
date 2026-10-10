@@ -69,7 +69,7 @@ GROUND_FRICTION = 1600     # how fast it stops sliding after landing, pixels per
 CHUTE_HEIGHT = 260         # opens a parachute when falling from higher than this above the floor
 CHUTE_SPEED = 110          # falling speed with the parachute open, pixels per second
 DANCE_CHANCE = 0.05        # chance of a little dance whenever it stops walking
-ACT_CHANCE = 0.1           # ...and of something else to do: stargazing (at night), a practice spell, a book
+ACT_CHANCE = 0.1           # ...and of something else to do: sweeping, painting, fishing, balloons, a paper plane
 STALE_MIN = 10             # numbers older than this (and 3 checks) look faded in the bubble
 ERROR_LOG_KB = 200         # pet_errors.log is trimmed to stay about this small
 # keyboard shortcuts: (modifiers, key) with windows' codes. modifiers: 1 alt, 2 ctrl, 4 shift, 8 win.

@@ -209,7 +209,7 @@ class RenderMixin:
 
         side = round(30 * s)                               # room for z's, notes and sparks
         look = OUTFITS.get(outfit) if not rot else None
-        above = max((len(HAT) - 1) * pb if wiz or (act and act[0] == "practice") else 0,     # room above the head: hat, outfit, parachute, stars
+        above = max((len(HAT) - 1) * pb if wiz else 0,     # room above the head: hat, outfit, parachute, stars
                     (len(look[0]) + 1) * pb if look else 0,   # (a little gap, so the bubble's tail clears it)
                     (len(CHUTE) + 10) * pb if chute is not None else 0,
                     6 * pb if dizzy is not None else 0)
@@ -249,7 +249,7 @@ class RenderMixin:
             def emit(x1, y1, x2, y2, color):
                 c.create_rectangle(px + x1, py + y1, px + x2, py + y2, fill=color, outline="")
 
-        body_c = (act and self.act_body(act)) or (SHINY if shiny else ORANGE)
+        body_c = SHINY if shiny else ORANGE
 
         def block(col, row, cols=1, color=body_c):
             y1 = row * bh + sink
@@ -367,6 +367,8 @@ class RenderMixin:
                 self.glyph(SPARK, px + x, py + y, pb, SPARK_C[ci], shadow=False)
             elif kind == "puff":   # smoke
                 c.create_rectangle(px + x, py + y, px + x + 2 * pb, py + y + 2 * pb, fill=SMOKE_C[ci], outline="")
+            elif kind == "dot":   # paint, ice chips, splashes, bits of balloon (its colour is in ci)
+                c.create_rectangle(px + x, py + y, px + x + pb, py + y + pb, fill=ci, outline="")
             elif kind == "mote":   # a single glowing speck
                 c.create_rectangle(px + x, py + y, px + x + pb, py + y + pb, fill=MOTE_C[ci], outline="")
             elif kind == "glyph" and ci >= 100:   # a falling rune, in front of the mascot

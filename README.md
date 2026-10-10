@@ -20,7 +20,7 @@ What it does:
 - Puts on a wizard hat and casts sparkles while Claude is working.
 - Talks in little speech bubbles: encouragement, silly quotes, milestones, and comments on what's going on.
 - Click it to poke it. Drag it around (it dangles from where you grab it), or throw it: it screams, bounces, and opens a parachute on long falls.
-- Dances now and then, gets bored, and asks for attention when you ignore it. When it's idle it might read a little book, practise a spell (it backfires), or lie on its back stargazing at night.
+- Dances now and then, gets bored, and asks for attention when you ignore it. When it's idle it might sweep the floor, paint a little picture, fish through a hole in the taskbar, blow up balloons (they pop), or throw a paper plane.
 - Falls asleep when you're away, rings its bubble yellow, then red, as you near a limit, and remembers its moods across restarts.
 - Hides while something is full-screen, and can land on top of your windows when it falls.
 - Optional sound effects (with a volume slider) and desktop notifications.
