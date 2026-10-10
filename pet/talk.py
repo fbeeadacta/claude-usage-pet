@@ -1,16 +1,17 @@
 # part of the Pet: speech bubbles, sounds, moods and reactions.
 import datetime
+import math
 import random
 import threading
 import time
 import winsound
 
-from .art import BLOCK_H, BLOCK_W, HAY_C, NOTE_C, SPARK_C
+from .art import BLOCK_H, BLOCK_W, HAY_C, NOTE_C, RUNE_C, SPARK_C
 from .config import (ATTENTION_MIN, CHATTER, CHAT_GAP, CREDENTIALS, HOP_HEIGHT, IDLE_TALK_MIN,
     SLEEP_AFTER_MIN, SPEAK_CPS, WORK_HOLD)
 from .lines import (ATTENTION_LINES, BORED_LINES, CURIOUS_LINES, DANCE_LINES, FULL_LINES, HIGH_LINES,
     IDLE_LINES, LATE_LINES, MORNING_LINES, OOPS_LINES, POKE_COUNT, POKE_LINES, QUOTES, SLEEP_LINES,
-    WAKE_LINES, WALK_LINES, WORKING, WORK_DONE, WORK_START)
+    TOME_LINES, WAKE_LINES, WALK_LINES, WORKING, WORK_DONE, WORK_START)
 from .sounds import SOUNDS, make_sound
 from .storage import log_error
 from .winapi import fullscreen_screens, idle_seconds, notify
@@ -22,7 +23,7 @@ class TalkMixin:
         # shows a speech bubble. force = it's about something that just happened, so skip the cooldown.
         rate = CHATTER[self.chatter.get()]
         now = time.time()
-        if rate == 0 or self.hidden or (not force and now < self.quiet_until):
+        if rate == 0 or self.hidden or (not force and now < self.quiet_until) or self.quiet():
             return False
         self.recent.append(text)
         self.speech = {"text": text, "start": now,
@@ -37,7 +38,7 @@ class TalkMixin:
 
     def play(self, kind, preview=False, loop=False):
         # windows plays one sound at a time, so a new one cuts off the last (music included)
-        if kind in self.muted and not preview:
+        if (kind in self.muted or self.quiet()) and not preview:
             return
         if (self.sounds.get() or preview) and not self.hidden and self.volume.get() > 0:
             try:
@@ -118,6 +119,10 @@ class TalkMixin:
         elif not working and self.was_working and now - self.work_started > 45:
             self.say(self.pick(WORK_DONE), force=True)
         self.was_working = working
+        reading = working and self.reading()   # the spell tome is out: claude is reading files
+        if reading and not self.was_reading and self.state == "work" and random.random() < 0.5:
+            self.say(self.pick(TOME_LINES))
+        self.was_reading = reading
         if self.cc.last_error > self.error_seen:   # a claude code tool call just failed
             self.error_seen = self.cc.last_error
             if self.anim.get() and self.state != "sleep":
@@ -134,6 +139,7 @@ class TalkMixin:
         if present and hour < 5 and now >= self.next_late_line and not working:
             if self.say(self.pick(LATE_LINES)):
                 self.next_late_line = now + random.uniform(40, 60) * 60
+        self.fun_tick(now, present, working)
         if self.state == "sleep" and present and now >= self.next_chat:   # talks in its sleep
             if random.random() < 0.5:
                 self.say(self.pick(SLEEP_LINES))
@@ -204,6 +210,7 @@ class TalkMixin:
 
     def fall_asleep(self, reason):
         self.state, self.sleep_reason = "sleep", reason
+        self.tally("naps")
         self.state_t = random.uniform(20, 60) if reason == "nap" else 0
         self.part_t, self.wave_t, self.look_t = 0.4, 0.0, 0.0
         if random.random() < 0.5:
@@ -261,6 +268,19 @@ class TalkMixin:
             self.parts.append({"kind": "spark", "x": 17 * bw + 4 * pb, "y": self.hand() * bh - 8 * pb,
                                "vx": random.uniform(-25, 35) * s, "vy": random.uniform(-45, -5) * s,
                                "life": random.uniform(0.4, 0.8), "c": random.randrange(len(SPARK_C))})
+        elif kind == "rune":   # glowing bits rising off the spell tome's pages
+            self.parts.append({"kind": "rune", "x": random.uniform(6, 12) * bw, "y": 2 * bh - 3 * pb,
+                               "vx": random.uniform(-12, 12) * s, "vy": random.uniform(-40, -20) * s,
+                               "life": random.uniform(0.5, 0.9), "c": random.randrange(len(RUNE_C))})
+        elif kind == "glint":   # a shiny mascot twinkles now and then
+            self.parts.append({"kind": "spark", "x": random.uniform(3, 14) * bw, "y": random.uniform(0, 3) * bh,
+                               "vx": 0.0, "vy": -6 * s, "life": 0.45, "c": 3})
+        elif kind == "burst":   # new year's fireworks, high above its head
+            cx, cy = random.uniform(-6, 24) * bw, self.bubble_top - random.uniform(30, 70) * s
+            for i in range(10):
+                a = i / 10 * 2 * math.pi
+                self.parts.append({"kind": "spark", "x": cx, "y": cy, "vx": math.cos(a) * 45 * s,
+                                   "vy": math.sin(a) * 45 * s, "life": 0.9, "c": random.randrange(len(SPARK_C))})
         elif kind == "straw":   # flying out of the hay pile
             self.parts.append({"kind": "straw", "x": random.uniform(0, 17) * bw, "y": 4 * bh,
                                "vx": random.uniform(-70, 70) * s, "vy": random.uniform(-150, -50) * s,

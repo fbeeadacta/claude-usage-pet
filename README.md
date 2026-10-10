@@ -23,7 +23,10 @@ What it does:
 - Hides while something is full-screen, and can land on top of your windows when it falls.
 - Optional sound effects (with a volume slider) and desktop notifications.
 - Keyboard shortcuts: Ctrl + Alt + P hides or shows it, and Ctrl + Alt + D pins the details panel. You can change them in Settings → Shortcuts.
-- Right-click it for Refresh now, Settings and Quit. The settings window has every option and what it does, and everything can be switched off, including all animations.
+- Right-click it for Refresh now, Play fetch, Quiet for an hour, Settings and Quit. The settings window has every option and what it does, and everything can be switched off, including all animations.
+- A tray icon by the clock shows your usage when you hover it. Click it (or press Ctrl + Alt + H, or start the pet again) and the mascot comes running to your mouse, or parachutes in from above.
+- A Sessions tab recaps your latest Claude Code sessions, and it sums each one up when it finishes. It warns you early if your pace would run out before the reset.
+- Reads from a floating spell tome while Claude reads your files, gets little apprentices when several sessions run at once, wears outfits on special days, plays fetch, and keeps a diary of everything it gets up to. Every so often something rare happens.
 
 ## What you need
 

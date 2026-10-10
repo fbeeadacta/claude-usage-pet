@@ -9,7 +9,7 @@ from .config import (CHUTE_HEIGHT, CHUTE_SPEED, DANCE_CHANCE, DIVE_MIN, FPS, GRA
     HAY_TIME, HOP_HEIGHT, LEAP_POWER, LEAP_REACH, MAX_STEP_UP, NAP_CHANCE, TASKBAR_PUSH, THROW_DRAG,
     WALK_SPEED)
 from .lines import (CHUTE_LINES, DANCE_LINES, DIVE_LINES, DIZZY_LINES, FALL_LINES, HAY_LINES, LEAP_FAIL,
-    LEAP_OK, LEAP_TRY, SLAP_LINES, SQUISH_LINES)
+    LEAP_OK, LEAP_TRY, SLAP_LINES, SQUISH_LINES, UFO_BACK_LINES)
 from .winapi import list_platforms, own_usage, u32, window_box, winmm
 
 
@@ -242,6 +242,7 @@ class MovementMixin:
         self.state, self.state_t = "idle", 2.0
         self.leap_plan = (hwnd, vx)
         self.squash_t, self.pending_v = 0.14, vy0   # a big crouch first
+        self.tally("leaps")
         if random.random() < 0.6:
             self.say(self.pick(LEAP_TRY), force=True)
         return True
@@ -266,6 +267,7 @@ class MovementMixin:
         self.leaping, self.slapped = None, True   # (no parachute: it slides down the wall)
         self.dizzy_t = max(self.dizzy_t, 1.2)
         self.play("splat")
+        self.tally("splats")
         if random.random() < 0.8:
             self.say(self.pick(SLAP_LINES), force=True)
 
@@ -286,6 +288,7 @@ class MovementMixin:
         self.vy, self.vx = -math.sqrt(2 * GRAVITY * s * 45 * s), self.dir * 160 * s   # a little spring off the edge
         self.state, self.state_t = "idle", 2.0
         self.play("eagle")
+        self.tally("dives")
         if random.random() < 0.75:
             self.say(self.pick(DIVE_LINES), force=True)
         return True
@@ -367,10 +370,11 @@ class MovementMixin:
         if self.hidden:
             return 500
         if (self.held or self.pressed or self.squash_t > 0 or not self.grounded() or self.angle or self.vx
-                or (self.state == "walk" and self.walking_allowed())
+                or (self.state == "walk" and self.walking_allowed()) or self.goto_x is not None or self.ufo
+                or (self.ball and self.ball["phase"] in ("fly", "pet"))
                 or (self.plat is not None and time.perf_counter() < self.ride_until)):
             return 16
-        if (self.plat is not None or self.near or self.hay_t > 0 or self.parts or self.wave_t > 0 or self.state in ("work", "dance") or self.speech
+        if (self.plat is not None or self.near or self.hay_t > 0 or self.parts or self.cat or self.wave_t > 0 or self.state in ("work", "dance") or self.speech
                 or self.dizzy_t > 0 or self.stretch_t > 0):
             return 30
         return 80
@@ -391,6 +395,10 @@ class MovementMixin:
             p["y"] += p["vy"] * dt
         self.parts = [p for p in self.parts if p["life"] > 0]
         self.turn(dt, s)
+        self.ball_tick(dt)
+        self.cat_tick(dt)
+        if self.ufo and self.ufo_tick(dt):
+            return   # beamed up
         if self.held or self.hidden or self.pressed:
             return
         if self.plat is not None:
@@ -421,6 +429,7 @@ class MovementMixin:
                     and abs(self.angle) < 0.4 and self.leaping is None and not self.diving and not self.slapped):   # a failed jump just plops
                 self.chute = True   # a long way down: open the parachute
                 self.play("whoosh")
+                self.tally("chutes")
                 if random.random() < 0.6:
                     self.say(self.pick(CHUTE_LINES), force=True)
             if self.chute:
@@ -455,6 +464,10 @@ class MovementMixin:
             self.vx -= math.copysign(min(abs(self.vx), GROUND_FRICTION * s * dt), self.vx)
             return
         self.vx = 0.0
+        if self.goto_x is not None and self.chase(dt, s):
+            return   # called over, or after the ball
+        if self.shiny and random.random() < dt / 3:
+            self.spawn("glint")
         if self.state == "sleep":
             if self.sleep_reason == "nap":
                 self.state_t -= dt
@@ -477,15 +490,17 @@ class MovementMixin:
         if self.state == "work":
             if not casting:
                 self.state, self.state_t = "idle", 2.0
-            else:   # stand still, wave the wand, make sparkles
-                if self.cast_t >= self.next_spell:   # and a bit of magic now and then
+            else:   # stand still, wave the wand (or read the spell tome), make sparkles
+                reading = self.reading()
+                if self.cast_t >= self.next_spell and not reading:   # and a bit of magic now and then
                     self.play("spell")
                     self.next_spell = self.cast_t + random.uniform(12, 25)
                 self.cast_t += dt
+                self.tally("wizard_s", dt)
                 self.part_t -= dt
                 if self.part_t <= 0:
-                    self.spawn("spark")
-                    self.part_t = random.uniform(0.08, 0.2)
+                    self.spawn("rune" if reading else "spark")
+                    self.part_t = random.uniform(0.15, 0.3) if reading else random.uniform(0.08, 0.2)
                 return
         if self.state == "dance":
             self.dance_t += dt
@@ -516,7 +531,9 @@ class MovementMixin:
                     self.dir, self.edge_turn = -self.dir, None
         if walking:
             night = not 6 <= datetime.datetime.now().hour < 23
+            x0 = self.x
             self.move_x(self.dir * WALK_SPEED * self.prof()["speed"] * (0.7 if night else 1) * s * dt)
+            self.tally("walked", abs(self.x - x0) / self.screens[self.si].dpi)
             if self.plat is not None and not self.plat_box[1] <= self.x <= self.plat_box[3]:
                 self.plat = None   # walked off the edge
                 if random.random() < 0.5:
@@ -529,6 +546,7 @@ class MovementMixin:
             return
         if self.jump.get() and not self.full() and random.random() < dt / self.prof()["hop"]:
             self.jump_now(HOP_HEIGHT * s)
+            self.tally("hops")
         if self.state_t <= 0:
             pr = self.prof()
             if random.random() < DANCE_CHANCE and not self.full():
@@ -554,6 +572,7 @@ class MovementMixin:
         if self.anim.get():
             self.state, self.state_t, self.dance_t, self.part_t = "dance", random.uniform(8, 12), 0.0, 0.2
             self.play("dance", loop=True)
+            self.tally("dances")
             if random.random() < 0.4:
                 self.say(self.pick(DANCE_LINES))
 
@@ -586,6 +605,11 @@ class MovementMixin:
         impact = self.vy
         self.y = self.floor()
         self.through = self.slapped = False
+        if self.dropping_in:   # parachuted in after being called: hello!
+            self.dropping_in, self.wave_t = False, 1.4
+        if self.ufo_fall:      # back from the ufo
+            self.ufo_fall, self.dizzy_t = False, 2.0
+            self.say(self.pick(UFO_BACK_LINES), force=True)
         if self.diving:   # the leap of faith ends in a pile of hay. no bounce, no dizziness.
             self.diving, self.chute = False, False
             self.vx = self.vy = self.angle = self.spin = 0.0
@@ -599,6 +623,7 @@ class MovementMixin:
         if self.leaping is not None:   # how did that jump go?
             made_it = self.plat == self.leaping
             self.leaping = None
+            self.tally("leaps_made" if made_it else "leaps_missed")
             if made_it:
                 self.happy_t = 1.0
             if random.random() < 0.75:
@@ -617,6 +642,7 @@ class MovementMixin:
                 self.squash_t = 0.07   # landing squish
         if impact > 1100 * s and self.dizzy_t <= 0:
             self.dizzy_t = 2.4   # that was a hard landing: seeing stars
+            self.tally("dizzy")
             if random.random() < 0.7:
                 self.say(self.pick(DIZZY_LINES), force=True)
         self.vx *= 0.6

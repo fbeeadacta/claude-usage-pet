@@ -6,10 +6,11 @@ import time
 
 from . import usage
 from .art import DIM, RED
-from .config import DEFAULT_KEYS, NICE, RATE_LIMITED_SECONDS, SHORT, STALE_MIN
-from .lines import MILESTONES, RESET_LINES
+from .config import DEFAULT_KEYS, NICE, PACE_WARN, RATE_LIMITED_SECONDS, SHORT, STALE_MIN
+from .lines import MILESTONES, PACE_LINES, RESET_LINES
 from .storage import log_error
-from .usage import bar_color, fetch_usage, fmt_time, parse_rows, same_window, short_error
+from .usage import (bar_color, fetch_usage, fmt_time, fmt_when, forecast, parse_rows, parse_time, same_window,
+    short_error)
 from .winapi import u32
 
 
@@ -28,6 +29,13 @@ class DataMixin:
             return
         now = time.time()
         self.busy = False
+        if data is not None and not usage.looks_right(data):
+            # the undocumented usage api changed shape. say so (and log what it sent: names only, never values)
+            if not self.shape_logged:
+                self.shape_logged = True
+                names = sorted(map(str, data))[:40] if isinstance(data, dict) else [type(data).__name__]
+                log_error("the usage service's answer looks different. it had: " + ", ".join(names))
+            data, err = None, usage.SERVICE_CHANGED
         if data is not None:
             self.data, self.error = data, None
             self.checks_ok += 1
@@ -39,6 +47,7 @@ class DataMixin:
                 if r["key"] == "five_hour":
                     if self.last_5h is not None and self.last_5h >= 15 and r["pct"] <= self.last_5h - 15:
                         self.celebrate = 3    # the 5-hour limit just reset. party.
+                        self.tally("resets")
                         self.say(self.pick(RESET_LINES), force=True)
                         self.play("chime")
                         if self.last_5h >= 90:
@@ -47,6 +56,7 @@ class DataMixin:
                         self.note_usage(now, self.poll.get() + 10)   # chat or other apps are using tokens
                     self.last_5h = r["pct"]
                 self.check_milestone(r)
+                self.check_pace(r)
             self.first_result = False
             self.limited = 0
             self.last_ok = now
@@ -105,7 +115,30 @@ class DataMixin:
             self.play("chime")
             if max(new) >= 90:
                 self.toast(f"Claude usage: {NICE.get(r['key'], r['label'])} at {r['pct']:.0f}%", lines[max(new)])
+            if 100 in new:
+                self.tally("full_5h" if r["key"] == "five_hour" else "full_week")
             said.extend(new)
+
+    def check_pace(self, r):
+        # once per window: a heads-up when this pace runs out well before the reset, while there's time to slow down
+        early = PACE_WARN.get(r["key"])
+        if not early or not self.pace_warn.get() or r["pct"] < early[1] or r["pct"] >= 90:
+            return
+        known = self.pace_warned.get(r["key"])
+        if known and same_window(known, r["resets"]):
+            return
+        fc = forecast(r["key"], r["pct"], r["resets"], datetime.datetime.now(datetime.timezone.utc))
+        reset = parse_time(r["resets"])
+        if not fc or fc[1] is None or reset is None or reset.timestamp() - fc[1] < early[0]:
+            return
+        self.pace_warned[r["key"]] = r["resets"]
+        out = datetime.datetime.fromtimestamp(fc[1])
+        line = self.pick(PACE_LINES[r["key"]]).format(when=fmt_when(out, r["key"]),
+                                                     reset=fmt_when(reset.astimezone(), r["key"]))
+        self.say(line, force=True)
+        self.toast(f"Claude usage: {NICE.get(r['key'], r['label'])} limit running out early",
+                   f"At this pace you'll hit 100% around {fmt_when(out, r['key'])}. "
+                   f"It resets {fmt_when(reset.astimezone(), r['key'])}.")
 
     def data_tick(self):
         self.take_result()
@@ -146,6 +179,8 @@ class DataMixin:
                     self.details.hide()
                 elif not self.hidden:
                     self.details.show(pinned=True)
+            elif self.hotkeys.get() and val == 3:   # come over here (ctrl + alt + H unless changed)
+                self.come_here()
 
     def wanted_keys(self):
         # what the shortcut thread should listen for right now (nothing while switched off or recording)
@@ -182,6 +217,7 @@ class DataMixin:
         # 10 times a second: hover, shortcuts. twice a second: full screen. every second: moods.
         now = time.time()
         self.check_keys()
+        self.outside_tick()
         self.popup.watch()
         if self.music and (self.state != "dance" or not self.sounds.get() or self.hidden or "dance" in self.muted):
             self.stop_music()
@@ -201,6 +237,9 @@ class DataMixin:
             self.mood_tick(now)
             if now - self.screens_at >= 5:
                 self.refresh_screens()
+            self.tray_tick()
+        if self.autohide:
+            self.taskbar_tick()   # an auto-hiding taskbar slides up and down: ride along on it
         self.redraw()
         self.root.after(100, self.ui_tick)
 

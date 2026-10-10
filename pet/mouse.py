@@ -34,6 +34,12 @@ class MouseMixin:
                 self.state = "idle"
             self.wake(hop=False)
             self.details.hide()
+            self.stop_fetch()
+            self.goto_x = self.goto_why = None
+            self.dropping_in = False
+            if self.ufo:
+                self.ufo["dropped"] = True   # snatched back from the ufo, which flies off
+            self.tally("pickups")
             self.hang = self.hang_angle() if self.anim.get() else 0.0
             if random.random() < 0.5:
                 self.say(self.pick(DRAG_LINES), force=True)
@@ -78,6 +84,7 @@ class MouseMixin:
             else:   # it's heavy: it keeps only part of your mouse speed, up to a limit
                 k = min(THROW_KEEP * speed, THROW_MAX * s) / speed
                 vx, vy = vx * k, vy * k
+                self.tally("throws")
             self.follow_grip()
             self.angle = (self.angle + math.pi) % (2 * math.pi) - math.pi   # rights itself the short way
             self.plat, self.through, self.leaping, self.diving = None, False, None, False
@@ -103,6 +110,7 @@ class MouseMixin:
 
     def check_hover(self, now):
         mx, my = self.root.winfo_pointerxy()
+        self.mouse = (mx, my)   # (its eyes follow it)
         over_pet = False
         if not self.hidden and self.geo and self.geo[2] != PARK:
             ox, oy = self.geo[2], self.geo[3]

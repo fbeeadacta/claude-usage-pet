@@ -57,7 +57,7 @@ def fetch_usage():
     })
     try:
         with urllib.request.urlopen(req, timeout=10) as r:
-            return json.loads(r.read()), None
+            body = r.read()
     except urllib.error.HTTPError as e:
         if e.code == 401:
             return None, "login expired. The mascot can't see your usage until you log in again.\n\n" + LOGIN_HELP
@@ -71,15 +71,28 @@ def fetch_usage():
         return None, f"api error {e.code}."
     except Exception as e:
         return None, f"no connection ({type(e).__name__})."
+    try:
+        return json.loads(body), None
+    except ValueError:
+        return None, SERVICE_CHANGED
 
 
 RETRY_AFTER = 0   # seconds the usage service asked us to wait, from its last "slow down"
+SERVICE_CHANGED = ("the usage service changed. Its answer doesn't look like it used to, so the mascot can't read "
+                   "your usage right now.\n\nThis usually needs an update to the mascot. pet_errors.log (in its "
+                   "folder) lists the names of what the service sent back, which helps fix it. It keeps trying.")
+
+
+def looks_right(data):
+    # the usage answer still has the shape we know: a dict with a 5-hour or weekly limit in it
+    return isinstance(data, dict) and ("five_hour" in data or "seven_day" in data)
 
 
 def short_error(err):
     # a few words for the bubble. the details panel shows the whole message.
     for start, short in (("no login", "no login"), ("login expired", "login expired"),
-                         ("rate limited", "slow down"), ("no connection", "offline")):
+                         ("rate limited", "slow down"), ("no connection", "offline"),
+                         ("the usage service changed", "service changed")):
         if err.startswith(start):
             return short
     return err.rstrip(".")
@@ -94,6 +107,8 @@ def nice_name(key):
 def parse_rows(data):
     # api answer -> [{key, label, pct, resets}], most important first
     rows = []
+    if not isinstance(data, dict):
+        return rows
     for key, v in data.items():
         if isinstance(v, dict) and v.get("utilization") is not None and v.get("resets_at"):
             if ONLY_KNOWN_LIMITS and period_seconds(key) is None:
@@ -145,6 +160,20 @@ def elapsed_pct(key, resets_iso, now):
         return None
     remaining = max(0.0, (reset - now).total_seconds())
     return min(100.0, max(0.0, (period - remaining) / period * 100))
+
+
+def forecast(key, pct, resets_iso, now):
+    # where this pace ends up: (projected % at the reset, unix time it runs out or None), or None if
+    # it's too early in the window to say
+    el, reset = elapsed_pct(key, resets_iso, now), parse_time(resets_iso)
+    if el is None or reset is None or el < 3 or pct <= 0:
+        return None
+    proj = pct / el * 100
+    out = None
+    if proj >= 100 and pct < 100:
+        start = reset.timestamp() - period_seconds(key)
+        out = start + (now.timestamp() - start) * 100 / pct
+    return proj, out
 
 
 def pace_info(key, pct, resets_iso, now, unchanged_seconds):

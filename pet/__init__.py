@@ -16,6 +16,10 @@
 #   data.py              part of the Pet: fetching usage, milestones, keyboard shortcuts and the regular ticks.
 #   movement.py          part of the Pet: walking, jumping, physics, standing on windows.
 #   render.py            part of the Pet: drawing the mascot, its bubbles and effects.
+#   fun.py               part of the Pet: being called over, quiet mode, seasons, session wrap-ups, the tour,
+#                        the diary, the tray icon, fetch, and rare visitors (shiny, ufo, cat).
+#   tray.py              the tray icon (its own thread and hidden window).
+#   sprites.py           little see-through windows for things away from the mascot: the ball, the cat.
 #   mascot.py            the Pet itself: puts the parts together, its settings, and starting it up.
 #   details.py           the details panel that shows when you hover the mascot (plan and claude code tabs).
 #   menu.py              the small right-click menu.

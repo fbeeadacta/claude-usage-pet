@@ -1,11 +1,13 @@
 # reading claude code's local logs for token counts, costs and stats (only numbers, never text).
 import datetime
+import gzip
 import json
+import os
 import time
 from collections import Counter
 from pathlib import Path
 
-from .config import CC_LOGS, CC_SCAN_SECONDS
+from .config import CC_CACHE, CC_LOGS, CC_SCAN_SECONDS
 from .storage import log_error
 from .usage import parse_time
 
@@ -114,7 +116,47 @@ def build_stats(answers, lines, starts=None, real=None):
             "projects": [(name_, tok, len(proj_sessions[name_])) for name_, tok in projects.most_common()],
             "cost": cost, "unpriced": unpriced,
         }
+    out["recent"] = recent_sessions(answers, lines, real)
+    # sessions with anything between midnight and 5 am (for the pet's diary)
+    out["late"] = len({ln[1] for ln in lines if ln[0].hour < 5})
     return out
+
+
+def recent_sessions(answers, lines, real, keep=8):
+    # the latest sessions, newest first: start, end, messages, tokens, api-price cost, project and main model
+    span, msgs = {}, Counter()
+    for when, sid in lines:
+        a, b = span.get(sid, (when, when))
+        span[sid] = (min(a, when), max(b, when))
+        msgs[sid] += 1
+    latest = sorted(span, key=lambda sid: span[sid][1], reverse=True)[:keep]
+    want = set(latest)
+    tokens, cost, proj, model = Counter(), Counter(), {}, {}
+    for a in answers:
+        if a[1] in want:
+            n = a[3] + a[4] + a[5] + a[6]
+            tokens[a[1]] += n
+            proj.setdefault(a[1], Counter())[a[8] if len(a) > 8 else "?"] += n
+            if not a[2].startswith("<"):
+                model.setdefault(a[1], Counter())[a[2]] += n
+    for a in real:
+        if a[1] in want and (c := answer_cost(a)) is not None:
+            cost[a[1]] += c
+    return [{"id": sid, "start": span[sid][0], "end": span[sid][1], "messages": msgs[sid], "tokens": tokens[sid],
+             "cost": cost[sid], "project": proj[sid].most_common(1)[0][0] if sid in proj else "?",
+             "model": model[sid].most_common(1)[0][0] if sid in model else None} for sid in latest]
+
+
+def fmt_minutes(seconds):
+    m = max(1, round(seconds / 60))
+    return f"{m} min" if m < 60 else f"{m // 60}h {m % 60:02d}m"
+
+
+# claude code's tool names, as the jobs the mascot can show. only the reading one has a look so far;
+# the rest are listed in PROJECT_NOTES.md under ideas.
+JOBS = {"Read": "read", "Grep": "read", "Glob": "read", "NotebookRead": "read", "LS": "read"}
+CHUNK = 4 * 2 ** 20   # logs are read this much at a time, so a huge log never sits in memory all at once
+CACHE_VERSION = 1
 
 
 class ClaudeCodeLog:
@@ -133,13 +175,23 @@ class ClaudeCodeLog:
         self.last_growth = 0.0    # when new output tokens last appeared
         self.built_at = 0.0
         self.ready = False
+        self.job = (0.0, None)    # (when, kind) of the last tool claude used that the mascot has a look for
+        self.active = {}          # session -> when it last wrote something (live, since the pet started)
+        self.dirty, self.saved_at = False, 0.0   # for the cache file
 
     def run(self):
+        try:
+            self.load_cache()
+        except Exception:
+            log_error("reading the saved claude code numbers")
+            self.__init__()   # start from scratch: it just re-reads every log
         while True:
             try:
                 t0 = time.perf_counter()
                 self.scan()
                 self.scan_ms = (time.perf_counter() - t0) * 1000   # for the performance page
+                if self.dirty and time.time() - self.saved_at > 300:
+                    self.save_cache()
             except Exception:
                 log_error("reading claude code's logs")   # a weird log line must never stop the pet
             time.sleep(CC_SCAN_SECONDS)
@@ -158,30 +210,94 @@ class ClaudeCodeLog:
             start = self.offsets.get(str(f), 0)
             if size < start:
                 start = 0   # the file was rewritten. the seen sets stop double counting.
-            if size == start:
-                continue
-            try:
-                with open(f, "rb") as fh:
-                    fh.seek(start)
-                    chunk = fh.read(size - start)
-            except OSError:
-                continue
-            end = chunk.rfind(b"\n")
-            if end < 0:
-                continue   # only half a line so far
-            self.offsets[str(f)] = start + end + 1
-            for raw in chunk[:end].split(b"\n"):
-                got = self.take(raw)
-                if got is not None:
-                    changed = True
-                    new_output += got
+            while size > start:   # a bit at a time, so a huge log doesn't sit in memory all at once
+                try:
+                    with open(f, "rb") as fh:
+                        fh.seek(start)
+                        chunk = fh.read(min(size - start, CHUNK))
+                except OSError:
+                    break
+                end = chunk.rfind(b"\n")
+                if end < 0:
+                    if len(chunk) == CHUNK:   # one enormous line: skip it
+                        nxt = self.skip_line(f, start + CHUNK)
+                        self.offsets[str(f)], start = nxt, nxt
+                        continue
+                    break   # only half a line so far
+                start += end + 1
+                self.offsets[str(f)] = start
+                self.dirty = True
+                for raw in chunk[:end].split(b"\n"):
+                    got = self.take(raw)
+                    if got is not None:
+                        changed = True
+                        new_output += got
         if new_output and self.ready:
             self.last_growth = time.time()
         if self.stats is None or (changed and time.time() - self.built_at > 10):
             self.stats = {"real": build_stats(self.answers, self.lines),
                           "app": build_stats(self.answers + self.copies, self.lines, self.starts, self.answers)}
             self.built_at = time.time()
+        if not self.ready:
+            self.save_cache()   # the first full read is the slow one: save it straight away
         self.ready = True
+
+    def skip_line(self, f, pos):
+        # where the line that's still going at pos ends (just after its newline), or the file's end
+        with open(f, "rb") as fh:
+            fh.seek(pos)
+            while True:
+                block = fh.read(CHUNK)
+                if not block:
+                    return pos
+                i = block.find(b"\n")
+                if i >= 0:
+                    return pos + i + 1
+                pos += len(block)
+
+    # ---- the cache: numbers already read, so a restart only reads what's new ----
+    def save_cache(self):
+        t = lambda d: round(d.timestamp(), 3)
+        row = lambda a: [t(a[0])] + list(a[1:])
+        data = {"v": CACHE_VERSION, "logs": str(CC_LOGS), "offsets": self.offsets,
+                "seen_answers": [list(k) for k in self.seen_answers], "seen_lines": list(self.seen_lines),
+                "answers": [row(a) for a in self.answers], "copies": [row(a) for a in self.copies],
+                "starts": {k: t(v) for k, v in self.starts.items()}, "lines": [[t(w), s] for w, s in self.lines]}
+        tmp = CC_CACHE.with_name(CC_CACHE.name + ".tmp")
+        try:
+            with gzip.open(tmp, "wt", encoding="utf-8") as fh:
+                json.dump(data, fh, separators=(",", ":"))
+            os.replace(tmp, CC_CACHE)
+        except OSError:
+            log_error("saving the claude code numbers")
+        self.dirty, self.saved_at = False, time.time()
+
+    def load_cache(self):
+        # picks up where the last run left off. if any log it knew got shorter or disappeared, it starts over,
+        # so deleted logs drop out of the stats like before.
+        try:
+            with gzip.open(CC_CACHE, "rt", encoding="utf-8") as fh:
+                data = json.load(fh)
+        except (OSError, ValueError, EOFError):
+            return
+        if not isinstance(data, dict) or data.get("v") != CACHE_VERSION or data.get("logs") != str(CC_LOGS):
+            return
+        offsets = {str(k): int(v) for k, v in data["offsets"].items()}
+        for path, off in offsets.items():
+            try:
+                if Path(path).stat().st_size < off:
+                    return
+            except OSError:
+                return
+        when = lambda ts: datetime.datetime.fromtimestamp(float(ts)).astimezone()
+        row = lambda a: (when(a[0]), str(a[1]), str(a[2]), *(int(v) for v in a[3:8]), str(a[8]))
+        answers, copies = [row(a) for a in data["answers"]], [row(a) for a in data["copies"]]
+        lines = [(when(w), str(s)) for w, s in data["lines"]]
+        self.starts = {str(k): when(v) for k, v in data["starts"].items()}
+        self.seen_answers = {tuple(k) for k in data["seen_answers"]}
+        self.seen_lines = set(data["seen_lines"])
+        self.answers, self.copies, self.lines, self.offsets = answers, copies, lines, offsets
+        self.saved_at = time.time()
 
     def usage_curve(self, start, end):
         # claude code's token use between two times as a running total, roughly weighted by what each
@@ -216,11 +332,17 @@ class ClaudeCodeLog:
         self.lines.append((when, session))
         if session not in self.starts or when < self.starts[session]:
             self.starts[session] = when
+        if self.ready:
+            self.active[session] = time.time()   # this session is doing something right now
         m = d.get("message")
         if d["type"] == "user" and isinstance(m, dict) and isinstance(m.get("content"), list):
             if self.ready and any(isinstance(b, dict) and b.get("type") == "tool_result" and b.get("is_error")
                                   for b in m["content"]):
                 self.last_error = time.time()   # a tool call failed
+        if self.ready and d["type"] == "assistant" and isinstance(m, dict) and isinstance(m.get("content"), list):
+            for b in m["content"]:   # which tool claude reached for (just its name, never what it was given)
+                if isinstance(b, dict) and b.get("type") == "tool_use":
+                    self.job = (time.time(), JOBS.get(str(b.get("name"))))
         if d["type"] == "assistant" and isinstance(m, dict) and isinstance(m.get("usage"), dict):
             u = m["usage"]
             n = [int(u.get(k) or 0) for k in ("input_tokens", "output_tokens",

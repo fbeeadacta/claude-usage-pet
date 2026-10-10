@@ -33,7 +33,8 @@ TIPS = {
                "short naps now and then."),
         ("Off", "It always stays awake.")]),
     "Wizard when Claude works": ("Wizard mode while your tokens are going up.", [
-        ("On", "It puts on a wizard hat and casts sparkles while Claude is working."),
+        ("On", "It puts on a wizard hat and casts sparkles while Claude is working, and reads from a floating "
+               "spell tome while Claude reads your files."),
         ("Off", "It carries on as usual while Claude works.")]),
     "Warn when nearly full": ("A coloured ring around the usage bubble when a limit is nearly used up.", [
         ("On", "Yellow ring from your yellow level, red from your red level (see Warning levels), and "
@@ -88,6 +89,21 @@ TIPS = {
     "Bubble style": ("Numbers, or two small bars.", []),
     "Clock": ("How times are shown in the details panel, like when a limit resets.", []),
     "Dates": ("Day first or month first, like Fri 16/10 or Fri 10/16.", []),
+    "Apprentices for parallel sessions": ("Little apprentice wizards join in when more than one Claude Code "
+                                          "session is working at once, one for each extra session (up to 3).", []),
+    "Rare surprises": ("Every so often something unusual happens: a cat strolls by, a UFO drops in, or the "
+                       "mascot wakes up a rare colour.", []),
+    "Seasonal outfits": ("Dresses up for special days: a pumpkin at Halloween, a Santa hat in December, a party "
+                         "hat at New Year and on its birthday, and hearts on Valentine's Day.", []),
+    "Quiet hours": ("No talking and no sounds at night. The usage bubble still shows.", []),
+    "Quiet from": ("When quiet hours start.", []),
+    "Quiet until": ("When quiet hours end.", []),
+    "Follow Do Not Disturb": ("Stays quiet while Windows is in Do Not Disturb, focus or presentation mode "
+                              "(if your Windows reports it).", []),
+    "Early pace warning": ("Tells you once per window when your pace would use up a limit well before it resets, "
+                           "while there's still time to slow down.", []),
+    "Tray icon": ("A little mascot by the clock with your usage in its tooltip. Click it to call the mascot over; "
+                  "right-click it for the menu.", []),
     "Yellow ring from": ("When the warning ring turns yellow.", []),
     "Red ring from": ("When the warning ring turns red. It turns black at 100%.", []),
 }

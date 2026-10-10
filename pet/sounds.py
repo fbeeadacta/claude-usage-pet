@@ -17,9 +17,10 @@ SOUND_TRIM = {"eagle": 0.55, "scream": 0.6, "hay": 0.6, "spell": 0.8, "chime": 0
 SOUND_VERSION = 5   # bump this when a sound changes, so old saved copies aren't used
 # how the sounds are grouped and named in settings, where each one can be switched off
 SOUND_GROUPS = (("Reactions", (("pop", "Poke"), ("boing", "Bounce"), ("scream", "Scream"), ("splat", "Wall splat"))),
-                ("Adventures", (("whoosh", "Parachute"), ("eagle", "Eagle cry"), ("hay", "Hay landing"))),
+                ("Adventures", (("whoosh", "Parachute"), ("eagle", "Eagle cry"), ("hay", "Hay landing"),
+                                ("meow", "Cat"))),
                 ("Moods", (("spell", "Wizard magic"), ("dance", "Dance music"), ("chime", "Milestones"))))
-SOUNDS = ("pop", "boing", "scream", "chime", "whoosh", "eagle", "splat", "spell", "hay", "dance")
+SOUNDS = ("pop", "boing", "scream", "chime", "whoosh", "eagle", "splat", "spell", "hay", "dance", "meow")
 
 
 def make_sound(kind, volume=100):
@@ -109,6 +110,10 @@ def make_sound(kind, volume=100):
         mix(0.0, [(h - l) * 0.65 for h, l in zip(hiss, low)])   # keeps only the hissy top end: tsss
         mix(0.0, soft(wav(0.3, 0, 0, 0.25, shape="noise", attack=0.004, decay=2.5), 0.25))   # body of the straw
         mix(0.0, wav(0.1, 90, 50, 0.18, attack=0.002, decay=2.0))
+    elif kind == "meow":   # the cat, when you click it: a rising "mi", then a falling "aow"
+        mix(0.0, wav(0.14, 520, 880, 0.3, shape="saw", attack=0.02, decay=0.3, wobble=12, vib=6))
+        mix(0.12, wav(0.42, 880, 470, 0.3, shape="saw", attack=0.01, decay=1.4, wobble=18, vib=5))
+        buf[:] = soft(buf, 0.3)   # rounder, less buzzy
     elif kind == "dance":   # a bouncy little chiptune that loops while it dances (2 bars at 150 bpm)
         step = 0.2   # one eighth note
         c5 = 523.25

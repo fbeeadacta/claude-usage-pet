@@ -9,7 +9,7 @@ from collections import namedtuple
 from ctypes import wintypes
 from pathlib import Path
 
-from .config import HERE, SHORTCUTS, STARTUP_NAME
+from .config import HERE, SHORTCUTS, STARTUP_NAME, SUMMON_EVENT
 from .storage import log_error
 
 
@@ -278,6 +278,88 @@ def already_running():
     k32.CreateMutexW.restype = wintypes.HANDLE
     _lock = k32.CreateMutexW(None, False, "claude-usage-pet")
     return ctypes.get_last_error() == 183   # ERROR_ALREADY_EXISTS
+
+
+k32.CreateEventW.restype = wintypes.HANDLE
+k32.OpenEventW.restype = wintypes.HANDLE
+k32.SetEvent.argtypes = [wintypes.HANDLE]
+k32.WaitForSingleObject.argtypes = [wintypes.HANDLE, wintypes.DWORD]
+k32.CloseHandle.argtypes = [wintypes.HANDLE]
+
+
+def summon_event():
+    # a named signal the running pet watches. starting the pet again sets it, and the pet comes over.
+    return k32.CreateEventW(None, False, False, SUMMON_EVENT)   # auto-reset: each set is seen once
+
+
+def summoned(handle):
+    return bool(handle) and k32.WaitForSingleObject(handle, 0) == 0
+
+
+def summon_running():
+    # (the second start) tells the pet that's already running to come over
+    h = k32.OpenEventW(0x0002, False, SUMMON_EVENT)   # EVENT_MODIFY_STATE
+    if h:
+        k32.SetEvent(h)
+        k32.CloseHandle(h)
+    return bool(h)
+
+
+def windows_quiet():
+    # windows' own "don't bother me" state: presentation mode or quiet time (focus assist / do not disturb).
+    # 4 = presentation mode, 6 = quiet time. older or newer windows may not report it; then it's just never quiet.
+    state = ctypes.c_int(0)
+    try:
+        if ctypes.windll.shell32.SHQueryUserNotificationState(ctypes.byref(state)) != 0:
+            return False
+    except (AttributeError, OSError):
+        return False
+    return state.value in (4, 6)
+
+
+class APPBARDATA(ctypes.Structure):
+    _fields_ = [("cbSize", wintypes.DWORD), ("hWnd", wintypes.HWND), ("uCallbackMessage", wintypes.UINT),
+                ("uEdge", wintypes.UINT), ("rc", wintypes.RECT), ("lParam", wintypes.LPARAM)]
+
+
+def taskbar_autohides():
+    abd = APPBARDATA()
+    abd.cbSize = ctypes.sizeof(abd)
+    try:
+        return bool(ctypes.windll.shell32.SHAppBarMessage(4, ctypes.byref(abd)) & 1)   # ABM_GETSTATE, ABS_AUTOHIDE
+    except (AttributeError, OSError):
+        return False
+
+
+def taskbar_boxes():
+    # where every taskbar is right now (main and other monitors) as (left, top, right, bottom)
+    found = []
+
+    def cb(hwnd, lp):
+        name = ctypes.create_unicode_buffer(64)
+        u32.GetClassNameW(hwnd, name, 64)
+        if name.value in ("Shell_TrayWnd", "Shell_SecondaryTrayWnd") and u32.IsWindowVisible(hwnd):
+            r = wintypes.RECT()
+            if u32.GetWindowRect(hwnd, ctypes.byref(r)):
+                found.append((r.left, r.top, r.right, r.bottom))
+        return True
+
+    u32.EnumWindows(WNDENUMPROC(cb), 0)
+    return found
+
+
+def autohide_floors(screens, boxes):
+    # with an auto-hiding taskbar the work area is the whole screen, so the pet stands on the screen's
+    # bottom edge. when the taskbar slides up, its top becomes the floor, so the pet rides up on it.
+    out = []
+    for sc in screens:
+        floor = sc.wb
+        for l, t, r, b in boxes:
+            wide = min(r, sc.mr) - max(l, sc.ml) >= (sc.mr - sc.ml) * 0.5
+            if wide and b >= sc.mb - 2 and sc.mt < t < sc.wb - 4:   # a bottom taskbar, showing on this screen
+                floor = min(floor, t)
+        out.append(sc._replace(wb=floor))
+    return out
 
 
 def startup_path():

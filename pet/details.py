@@ -6,9 +6,10 @@ import tkinter as tk
 import tkinter.font as tkfont
 
 from .art import ORANGE, PARK, RED, TRACK
-from .cclog import compare_line, fmt_money, fmt_tokens, hour_label, pretty_model
+from .cclog import compare_line, fmt_minutes, fmt_money, fmt_tokens, hour_label, pretty_model
+from .config import SESSION_DONE_MIN
 from .ui import Fader, move_window, round_corners, round_rect
-from .usage import (bar_color, elapsed_pct, fmt_day, fmt_time, fmt_when, pace_info, parse_rows, parse_time,
+from .usage import (bar_color, fmt_day, fmt_time, fmt_when, forecast, pace_info, parse_rows, parse_time,
     period_seconds, reset_text)
 
 
@@ -140,7 +141,8 @@ class Details:
         self.s = s = p.dpi * min(1.6, max(1.0, p.scale))
         # every tab and view gets the same height, so the tabs never jump when you switch
         tallest = 0
-        for tab, view in (("plan", "overview"), ("cc", "overview"), ("cc", "models"), ("cc", "projects")):
+        for tab, view in (("plan", "overview"), ("cc", "overview"), ("cc", "models"), ("cc", "projects"),
+                          ("sessions", None)):
             tallest = max(tallest, self.draw_tab(tab, view))
         self.draw_tab(p.panel_tab.get(), p.cc_view.get())
         H = tallest + 12
@@ -154,10 +156,12 @@ class Details:
         self.canvas.delete("all")
         self.hits = []
         x = 10
-        for name, label in (("plan", "Plan"), ("cc", "Claude Code")):
+        for name, label in (("plan", "Plan"), ("cc", "Claude Code"), ("sessions", "Sessions")):
             x += self.pill(x, 8, label, tab == name, "tab:" + name) + 4
         self.text(W - 16, 7, "\u00d7", self.DIM, 11, True, "n")      # close button
         self.hits.append(("close", (W - 30) * s, 2 * s, (W - 2) * s, 28 * s))
+        if tab == "sessions":
+            return self.draw_sessions(38)
         return self.draw_plan(38) if tab == "plan" else self.draw_cc(38, view)
 
     def draw_plan(self, y):
@@ -169,6 +173,11 @@ class Details:
         wait = "updating..." if p.busy else f"next update in {max(0, math.ceil(p.next_at - now))}s"
         self.text(12, y, (f"updated {fmt_time(p.updated)} · " if p.updated else "") + wait, self.DIM, 8)
         y += 22
+        if p.quiet():   # no talking or sounds right now
+            until = (f" until {fmt_time(datetime.datetime.fromtimestamp(p.hush_until))}"
+                     if time.time() < p.hush_until else "")
+            self.text(12, y - 6, f"Quiet mode{until}: no talking or sounds.", self.SLOWC, 8)
+            y += 14
         for r in rows:
             seen = p.seen.get(r["key"])
             unchanged = now - seen[1] if seen else 0
@@ -276,13 +285,12 @@ class Details:
             self.text((x0 + x1) / 2, y1 + 3, "dotted = estimate", "#6e6e73", 7, anchor="n")
         y = y1 + 20
         # the forecast
-        el = elapsed_pct(key, r["resets"], now_dt)
-        if el is None or el < 3 or r["pct"] <= 0:
+        fc = forecast(key, r["pct"], r["resets"], now_dt)
+        if fc is None:
             msg, col = "Too early in this window for a forecast.", self.DIM
         else:
-            proj = r["pct"] / el * 100
-            if proj >= 100 and r["pct"] < 100:
-                out = start + (now - start) * 100 / r["pct"]
+            proj, out = fc
+            if out is not None:
                 left = reset.timestamp() - out
                 gap = f"{left / 3600:.0f}h" if left >= 3600 else f"{left / 60:.0f}m"
                 msg, col = (f"At this pace you'll run out around {fmt_when(datetime.datetime.fromtimestamp(out), key)}, "
@@ -370,6 +378,37 @@ class Details:
         how = ("Counted like the Claude app (every logged copy), from this computer's logs." if p.cc_app.get()
                else "Real count (each answer once), from this computer's logs.")
         return self.text(14, y, how, self.DIM, 7, width=W - 28) + 4
+
+    def draw_sessions(self, y):
+        # the latest claude code sessions, newest first: a recap of each
+        p, W = self.pet, PANEL_W
+        st = p.cc_stats()
+        if st is None:
+            self.text(12, y, "reading Claude Code's logs...", self.DIM, 8)
+            return y + 20
+        recent = st.get("recent", [])[:5]
+        y = self.text(12, y, "Your latest Claude Code sessions on this computer", self.FG, 8.5, True) + 10
+        if not recent:
+            self.text(12, y, "No sessions yet.", self.DIM, 8)
+            return y + 24
+        now = time.time()
+        for ses in recent:
+            start = ses["start"]
+            label = ses["project"] if len(ses["project"]) <= 28 else ses["project"][:27] + "…"
+            self.text(12, y, label, self.FG, 9, True)
+            self.text(W - 12, y, f"{fmt_tokens(ses['tokens'])} tokens", self.FG, 9, True, "ne")
+            busy = now - max(ses["end"].timestamp(), p.cc.active.get(ses["id"], 0.0)) < SESSION_DONE_MIN * 60
+            mins = fmt_minutes((ses["end"] - start).total_seconds())
+            when = f"{fmt_day(start)} {fmt_time(start)} · {mins} · {ses['messages']} messages"
+            end = self.text(12, y + 19, when, self.DIM, 7.5)
+            if busy:   # still going
+                self.text(W - 12, y + 19, "active now", ORANGE, 7.5, True, "ne")
+            model = pretty_model(ses["model"]) + " · " if ses["model"] else ""
+            self.text(12, end + 1, f"{model}about {fmt_money(ses['cost'])} at API prices", self.DIM, 7.5)
+            y += 54
+        how = ("Tokens counted like the Claude app." if p.cc_app.get() else "Tokens counted once per answer.")
+        return self.text(14, y, how + " A session counts as finished after "
+                         f"{SESSION_DONE_MIN} minutes with nothing new.", self.DIM, 7, width=W - 28) + 4
 
     def cost_line(self, r):
         # what these tokens would cost on the pay-as-you-go api (always counted once)

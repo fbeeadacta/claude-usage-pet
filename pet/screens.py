@@ -2,7 +2,7 @@
 import time
 
 from .art import PARK
-from .winapi import Screen, list_screens
+from .winapi import Screen, autohide_floors, list_screens, taskbar_autohides, taskbar_boxes
 
 
 class ScreensMixin:
@@ -15,7 +15,8 @@ class ScreensMixin:
         if not found:
             w, h = self.root.winfo_screenwidth(), self.root.winfo_screenheight()
             found = [Screen(0, 0, w, h, 0, 0, w, h - 48)]
-        return found
+        self.raw_screens, self.autohide = found, taskbar_autohides()
+        return autohide_floors(found, taskbar_boxes()) if self.autohide else found
 
     def find_screen(self, x, y):
         for i, sc in enumerate(self.screens):
@@ -52,11 +53,18 @@ class ScreensMixin:
         return None
 
     def refresh_screens(self):
-        new = self.get_screens()
         self.screens_at = time.time()
+        self.apply_screens(self.get_screens())
+
+    def taskbar_tick(self):
+        self.apply_screens(autohide_floors(self.raw_screens, taskbar_boxes()))
+
+    def apply_screens(self, new):
         if new == self.screens:
             return
-        self.screens, self.fs = new, [False] * len(new)
+        if len(new) != len(self.screens):
+            self.fs = [False] * len(new)
+        self.screens = new
         self.si = self.find_screen(self.x, self.y - 1)
         if self.si is None:
             self.si = self.nearest_screen(self.x, self.y - 1)

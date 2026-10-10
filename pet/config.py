@@ -73,8 +73,9 @@ STALE_MIN = 10             # numbers older than this (and 3 checks) look faded i
 ERROR_LOG_KB = 200         # pet_errors.log is trimmed to stay about this small
 # keyboard shortcuts: (modifiers, key) with windows' codes. modifiers: 1 alt, 2 ctrl, 4 shift, 8 win.
 SHORTCUTS = (("pet", "Show / hide the mascot", "Hides it completely (it keeps checking your usage), or brings it back."),
-             ("details", "Open the details panel", "Pins the Plan / Claude Code panel open, or closes it."))
-DEFAULT_KEYS = {"pet": [3, ord("P")], "details": [3, ord("D")]}   # ctrl + alt + P, ctrl + alt + D
+             ("details", "Open the details panel", "Pins the Plan / Claude Code panel open, or closes it."),
+             ("come", "Call the mascot", "It comes over to your mouse, even from another monitor."))
+DEFAULT_KEYS = {"pet": [3, ord("P")], "details": [3, ord("D")], "come": [3, ord("H")]}   # ctrl + alt + P / D / H
 KEY_NAMES = {0x20: "Space", 0x21: "Page Up", 0x22: "Page Down", 0x23: "End", 0x24: "Home", 0x25: "Left",
              0x26: "Up", 0x27: "Right", 0x28: "Down", 0x2D: "Insert", 0x2E: "Delete"}
 
@@ -106,6 +107,22 @@ AHEAD_BY = 10          # used% this far above the clock = "ahead of pace"
 SLOW_BELOW = 0.5       # used under half of what the clock says = "way under pace"
 IDLE_MIN_5H = 45       # 5-hour number unchanged this long = "not moving"
 IDLE_HOURS_WEEKLY = 12 # weekly number unchanged this long = "not moving"
+# early pace warning: says so once per window when the forecast runs out at least this long before the reset
+PACE_WARN = {"five_hour": (30 * 60, 50), "seven_day": (12 * 3600, 40)}   # (seconds early, only from this %)
+# quiet mode (menu: be quiet for an hour; settings: quiet hours)
+QUIET_FOR = 3600
+QUIET_FROM_CHOICES = (20, 21, 22, 23, 0)   # quiet hours start at this hour...
+QUIET_TO_CHOICES = (6, 7, 8, 9)            # ...and end at this one
+# coming over when called (shortcut, tray icon, or starting the pet again)
+SPRINT = 5.0               # running speed, times the walking speed
+COME_DROP = 500            # further than this (or on another monitor) it parachutes in instead of running
+# claude code sessions: a session counts as finished after this long with nothing new
+SESSION_DONE_MIN = 8
+# fun stuff
+SHINY_CHANCE = 1 / 500     # chance it starts up a rare colour
+UFO_HOURS = 12             # on average, a ufo visits once in this many hours you're at the computer
+CAT_HOURS = 6              # ...and a cat walks past about this often
+FETCH_SECONDS = 25         # the ball stays around this long after a game of fetch
 # ------------------
 
 URL = "https://api.anthropic.com/api/oauth/usage"
@@ -115,7 +132,9 @@ CC_LOGS = CONFIG_DIR / "projects"
 HERE = Path(__file__).resolve().parent.parent   # the project folder (this file is in pet/)
 SETTINGS_FILE = HERE / "pet_settings.json"
 STATE_FILE = HERE / "pet_state.json"     # moods and memories that survive a restart
+CC_CACHE = HERE / "pet_cc_cache.json.gz" # claude code's log numbers, saved so a restart doesn't re-read every log
 STARTUP_NAME = "Claude Usage Pet.lnk"
+SUMMON_EVENT = "claude-usage-pet-summon" # starting the pet again sets this, and the running one comes over
 
 NICE = {"five_hour": "5-hour", "seven_day": "Weekly"}
 SHORT = {"five_hour": "5h", "seven_day": "wk"}

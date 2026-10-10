@@ -13,7 +13,12 @@ from .winapi import u32
 class PopupMenu:
     # a small menu drawn in the same style as the details panel
     BG, FG = "#1c1c1e", "#f2f2f7"
-    ITEMS = (("Refresh now", "refresh"), ("Settings", "settings"), None, ("Quit", "quit"))
+
+    def items(self):
+        quiet = time.time() < self.pet.hush_until
+        return (("Refresh now", "refresh"), ("Play fetch", "fetch"),
+                ("Talk again" if quiet else "Quiet for an hour", "hush"), ("Settings", "settings"), None,
+                ("Quit", "quit"))
 
     def __init__(self, pet):
         self.pet = pet
@@ -85,7 +90,7 @@ class PopupMenu:
         W, rh, pad = round(170 * s), round(30 * s), round(6 * s)
         font = tkfont.Font(root=self.win, family="Segoe UI", size=-max(8, round(12 * s)))
         y, self.rows = pad, []
-        for item in self.ITEMS:
+        for item in self.items():
             if item is None:   # a thin divider
                 c.create_rectangle(round(12 * s), y + round(4 * s), W - round(12 * s), y + round(4 * s) + max(1, round(s)),
                                    fill=TRACK, width=0)
@@ -113,4 +118,5 @@ class PopupMenu:
         if action:
             self.hide()
             p = self.pet
-            {"refresh": p.refresh, "settings": p.settings.open, "quit": p.quit}[action]()
+            {"refresh": p.refresh, "fetch": p.start_fetch, "hush": p.toggle_hush, "settings": p.settings.open,
+             "quit": p.quit}[action]()

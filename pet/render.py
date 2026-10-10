@@ -3,11 +3,13 @@ import math
 import time
 import tkinter.font as tkfont
 
-from .art import (ARMS, BAND_C, BLOCK_H, BLOCK_W, BLUSH, BLUSH_C, BODY, BUBBLE, BUBBLE_TEXT, CHUTE, CHUTE_R,
-    CHUTE_W, EYE, EYES, FULL_C, FULL_EDGE, HAT, HAT_C, HAY_C, HEART, HEART_C, KEY, LEFT_WAVE, LEGS_AIR,
-    LEGS_STAND, LEGS_STEP, NOTE, NOTE_C, ORANGE, PANIC_C, RED, SHADOW, SPARK, SPARK_C, SPEECH, SPEECH_TEXT,
-    STAR_C, STRING_C, TRACK, WAND_C, WARN_C, WAVE, ZZZ, ZZZ_C)
+from .art import (ARMS, BAND_C, BEAM_C, BLOCK_H, BLOCK_W, BLUSH, BLUSH_C, BODY, BUBBLE, BUBBLE_TEXT, CHUTE,
+    CHUTE_R, CHUTE_W, COVER_C, EYE, EYES, FULL_C, FULL_EDGE, HAT, HAT_C, HAY_C, HEART, HEART_C, INK_C, KEY,
+    LEFT_WAVE, LEGS_AIR, LEGS_STAND, LEGS_STEP, NOTE, NOTE_C, ORANGE, OUTFITS, PAGE_C, PANIC_C, RED, RUNE_C,
+    SHADOW, SHINY, SPARK, SPARK_C, SPEECH, SPEECH_TEXT, SPINE_C, STAR_C, STRING_C, TRACK, UFO, UFO_C, UFO_LIGHTS,
+    WAND_C, WARN_C, WAVE, ZZZ, ZZZ_C)
 from .config import SPEAK_CPS
+from .fun import UFO_BEAM, UFO_DROP, UFO_END, UFO_GONE, season, smooth
 from .ui import round_rect, wrap
 
 
@@ -23,7 +25,8 @@ class RenderMixin:
         wiz = anim and self.state == "work" and not airborne
         full = self.full()
         squash = anim and grounded and not self.held and (self.squash_t > 0 or self.pressed)
-        walking = anim and self.state == "walk" and self.walking_allowed() and grounded and not squash
+        walking = (anim and grounded and not squash
+                   and ((self.state == "walk" and self.walking_allowed()) or self.goto_x is not None))
         beat = int(self.dance_t / 0.25) % 4 if dancing else 0
         chute = anim and self.chute and not grounded
         hay = anim and self.hay_t > 0
@@ -49,17 +52,28 @@ class RenderMixin:
             eyes = "tired"   # a hard day's work
         else:
             eyes = "open"
+        tome = None
+        if wiz and self.reading():   # reading files: the spell tome floats in front, pages flipping
+            flip = int(self.cast_t / 0.15) % 14
+            tome = (flip if flip < 4 else 0, round(math.sin(self.clock * 2.5)))
+        eye_v = 0
         if wiz:
-            eye_dir = 1   # watching the wand
+            eye_dir, eye_v = (0, 1) if tome else (1, 0)   # watching the wand, or reading
+        elif walking or (anim and self.look_t > 0 and not sleeping):
+            eye_dir = self.dir if walking else self.look_d
+        elif anim and not sleeping and eyes in ("open", "worried", "tired"):
+            eye_dir, eye_v = self.gaze()   # watching your mouse pointer
         else:
-            eye_dir = self.dir if walking else (self.look_d if anim and self.look_t > 0 and not sleeping else 0)
+            eye_dir = 0
         if sleeping or hay:
             sink = "lie"   # lying down, or sat in the hay
         elif squash or (dancing and beat in (1, 3)) or (full and grounded and self.state == "idle"):
             sink = "half"   # squished, bopping to the beat, or slumped because the limit is full
         else:
             sink = None
-        if wiz:
+        if wiz and tome:
+            arms = ARMS
+        elif wiz:
             arms = (ARMS[0],) + WAVE[1 - self.hand()]
         elif anim and self.stretch_t > 0 and not sleeping:
             arms = LEFT_WAVE[1] + WAVE[1]
@@ -88,12 +102,37 @@ class RenderMixin:
             pw, ph = self.pet_px
             gx, gy = self.grab_local if self.held else (pw / 2, ph / 2)
             rot = (round(self.angle, 2), round(gx), round(gy))
-        return (self.scale, legs, eyes, eye_dir, sink, arms, self.hand() if wiz else None, self.warn_level(),
+        outfit = season() if self.seasonal.get() and not wiz else None
+        helpers = (self.helpers(), int(self.clock * 5)) if wiz else None
+        ufo = None
+        if anim and self.ufo:
+            u, s = self.ufo, self.s()
+            t, pb, ph = u["t"], max(1, round(2 * s)), self.pet_px[1]
+            floor = self.screens[self.si].wb
+            top = floor - ph - self.ufo_lift(s) - 3 * s - len(UFO) * 2 * pb   # the saucer's top, on the screen
+            dx = 0
+            if t < UFO_BEAM:
+                top -= (1 - smooth(t / UFO_BEAM)) * 60 * s   # flying in
+            elif t > UFO_DROP:
+                k = smooth((t - UFO_DROP) / (UFO_END - UFO_DROP))   # flying off
+                top, dx = top - k * 80 * s, k * 140 * s
+            ufo = (round(top - (self.y - ph)), round(dx), UFO_BEAM <= t < UFO_DROP, UFO_GONE <= t < UFO_DROP,
+                   int(t * 4) % 2, round(floor - (self.y - ph)))
+        return (self.scale, legs, eyes, eye_dir, sink, arms, None if tome or not wiz else self.hand(), self.warn_level(),
                 wiz, parts, tuple(self.bubble_segments()), bars, bool(self.error), show, speech, rot,
                 round(math.sin(self.clock * 1.6) * 1.4) if chute else None,
                 (0, -1, 0, 1)[beat] if dancing else 0,
                 int(self.clock * 8) % 12 if anim and self.dizzy_t > 0 else None,
-                sleeping and int(self.clock / 1.4) % 2 == 1, hay)
+                sleeping and int(self.clock / 1.4) % 2 == 1, hay, eye_v, tome, outfit, helpers, ufo, self.shiny)
+
+    def gaze(self):
+        # which way to look so it's watching your mouse pointer, when the pointer's nearby
+        s = self.s()
+        dx = self.mouse[0] - self.x
+        dy = self.mouse[1] - (self.y - self.pet_px[1] * 0.7)
+        if abs(dx) > 420 * s or abs(dy) > 420 * s:
+            return 0, 0
+        return (1 if dx > 24 * s else -1 if dx < -24 * s else 0), (-1 if dy < -40 * s else 1 if dy > 24 * s else 0)
 
     def redraw(self):
         f = self.frame()
@@ -116,13 +155,13 @@ class RenderMixin:
             for r, line in enumerate(rows):
                 for i, ch in enumerate(line):
                     if ch != ".":
-                        fill = col if isinstance(col, str) else col.get(ch, col["#"])
+                        fill = col if isinstance(col, str) else col.get(ch) or col["#"]
                         self.canvas.create_rectangle(x + i * b + d, y + r * b + d, x + (i + 1) * b + d,
                                                      y + (r + 1) * b + d, fill=fill, outline="")
 
     def draw(self, f):
         (_, legs, eyes, eye_dir, sink_kind, arms, wand, warn, wiz, parts, segs, bars, err, show_bubble,
-         speech, rot, chute, shift, dizzy, breath, hay) = f
+         speech, rot, chute, shift, dizzy, breath, hay, eye_v, tome, outfit, helpers, ufo, shiny) = f
         c = self.canvas
         c.delete("all")
         s = self.s()
@@ -131,8 +170,8 @@ class RenderMixin:
         pet_w, pet_h = 18 * bw, 5 * bh
         font = self.font(max(8, round(11 * s)))
         pad = round(7 * s)
-        if rot:
-            show_bubble = False   # the usage bubble steps aside while it's tumbling about
+        if rot or ufo:
+            show_bubble = False   # the usage bubble steps aside while it's tumbling about (or being abducted)
 
         # usage bubble size: numbers, or two little bars
         if bars:
@@ -161,7 +200,9 @@ class RenderMixin:
             sp_h = len(sp_lines) * sfont.metrics("linespace") + 2 * round(5 * s)
 
         side = round(30 * s)                               # room for z's, notes and sparks
-        above = max((len(HAT) - 1) * pb if wiz else 0,     # room above the head: hat, parachute, stars
+        look = OUTFITS.get(outfit) if not rot else None
+        above = max((len(HAT) - 1) * pb if wiz else 0,     # room above the head: hat, outfit, parachute, stars
+                    (len(look[0]) + 1) * pb if look else 0,   # (a little gap, so the bubble's tail clears it)
                     (len(CHUTE) + 10) * pb if chute is not None else 0,
                     6 * pb if dizzy is not None else 0)
         # the window is ONE fixed size whatever the mascot is doing, and its middle always sits at the
@@ -200,22 +241,32 @@ class RenderMixin:
             def emit(x1, y1, x2, y2, color):
                 c.create_rectangle(px + x1, py + y1, px + x2, py + y2, fill=color, outline="")
 
-        def block(col, row, cols=1, color=ORANGE):
+        body_c = SHINY if shiny else ORANGE
+
+        def block(col, row, cols=1, color=body_c):
             y1 = row * bh + sink
             emit(col * bw, y1, (col + cols) * bw, min(y1 + bh, pet_h), color)
 
+        if ufo and ufo[2] and not rot:
+            # the tractor beam, behind the mascot: see-through stripes from the saucer down to the floor
+            top, bottom = py + ufo[0] + len(UFO) * 2 * pb, py + ufo[5]
+            mid = px + pet_w // 2 + ufo[1]
+            c.create_polygon(mid - 8 * pb, top, mid + 8 * pb, top, mid + pet_w // 2 + 3 * bw, bottom,
+                             mid - pet_w // 2 - 3 * bw, bottom, fill=BEAM_C, outline="", stipple="gray50")
+        gone = bool(ufo and ufo[3])   # inside the saucer
+
         # the mascot
-        for row, line in enumerate(BODY):
+        for row, line in enumerate(BODY if not gone else ()):
             start, end = line.index("#"), line.rindex("#") + 1
             if row == 0 and breath:
                 start, end = start + 1, end - 1   # breathing out while asleep
             block(start, row, end - start)
-        for col, row in arms:
+        for col, row in arms if not gone else ():
             block(col, row)
-        for col in legs:
+        for col in legs if not gone else ():
             block(col, 4)
-        for col in EYES:
-            x1, y1 = (col + eye_dir) * bw, bh + sink
+        for col in EYES if not gone else ():
+            x1, y1 = (col + eye_dir) * bw, bh + sink + eye_v * max(1, bh // 4)
             if eyes in ("open", "worried"):
                 emit(x1, y1, x1 + bw, y1 + bh, EYE)
             elif eyes == "tired":   # heavy eyelids
@@ -233,11 +284,21 @@ class RenderMixin:
         if eyes == "happy":
             for col in BLUSH:
                 block(col, 2, color=BLUSH_C)
+        if look and not gone:
+            # a seasonal outfit on its head (the wizard hat takes its place while it works)
+            rows_, colours = look
+            hx = px + 3 * bw + (12 * bw - len(rows_[0]) * pb) // 2
+            self.glyph(rows_, hx, py + sink - (len(rows_) - 1) * pb, pb, colours)
         if wiz and not rot:
-            # wizard hat on the head, wand in the raised hand
+            # wizard hat on the head, and the spell tome floating in front while it reads
             hx = px + 3 * bw + (12 * bw - len(HAT[0]) * pb) // 2
             self.glyph(HAT, hx, py + sink - (len(HAT) - 1) * pb, pb,
                        {"#": HAT_C, "y": BAND_C, "*": STAR_C}, shadow=False)
+            if tome:
+                self.draw_tome(px + pet_w // 2, py + sink + 2 * bh + tome[1] * pb, tome[0], max(2, round(pb * 1.5)))
+            if helpers and helpers[0]:
+                self.draw_helpers(px, py, pet_w, pet_h, bw, bh, pb, *helpers)
+        if wiz and not rot and wand is not None:   # the wand in the raised hand
             hand_y = py + sink + wand * bh
             for i in range(5):
                 x1, y1 = px + 17 * bw + i * pb, hand_y - (i + 1) * pb
@@ -288,10 +349,17 @@ class RenderMixin:
                 self.glyph(ZZZ, px + x, py + y, pb + (pb // 2 + 1 if kind == "Z" else 0), ZZZ_C)
             elif kind == "spark":
                 self.glyph(SPARK, px + x, py + y, pb, SPARK_C[ci], shadow=False)
+            elif kind == "rune":
+                self.glyph(SPARK, px + x, py + y, max(1, pb * 2 // 3), RUNE_C[ci], shadow=False)
             elif kind == "note":
                 self.glyph(NOTE, px + x, py + y, pb, NOTE_C[ci])
             elif kind == "straw":
                 c.create_rectangle(px + x, py + y, px + x + 2 * pb, py + y + pb, fill=HAY_C[ci], outline="")
+
+        if ufo and not rot:
+            # the saucer itself, in front, so the mascot disappears up into it
+            ux = px + pet_w // 2 + ufo[1] - len(UFO[0]) * pb   # (drawn twice as chunky: it's bigger than the mascot)
+            self.glyph(UFO, ux, py + ufo[0], 2 * pb, dict(UFO_C, l=UFO_LIGHTS[ufo[4]]))
 
         # the usage bubble. text only ever sits on solid bubbles, so there's no fuzzy edge
         # against the see-through colour.
@@ -343,6 +411,8 @@ class RenderMixin:
             sx, sy = (W - sp_w) // 2, by - ring - tail - round(3 * s) - sp_h
             if rot:
                 sy = cy - up - round(6 * s) - tail - sp_h
+            if ufo:   # above the saucer
+                sy = min(sy, py + ufo[0] - tail - round(3 * s) - sp_h)
             round_rect(c, sx, sy, sx + sp_w, sy + sp_h, round(6 * s), SPEECH)
             mid = W // 2
             c.create_polygon(mid - tail, sy + sp_h - 1, mid + tail, sy + sp_h - 1, mid, sy + sp_h + tail,
@@ -369,3 +439,61 @@ class RenderMixin:
         self.bubble_top = highest - py   # relative to the head: where new hearts appear
         body = (cx - hd, cy - hd, cx + hd, cy + hd) if rot else (px, py - above, px + pet_w, py + pet_h)
         self.rects = {"pet": body, "bubble": (bx, by, bx + bub_w, by + bub_h + tail) if show_bubble else None}
+
+    def draw_tome(self, mid, top, flip, pb):
+        # an open spell book: two pages with lines of writing, a purple cover and spine. flip 1-3 = a page turning.
+        c = self.canvas
+        x0 = mid - 15 * pb / 2
+
+        def r(a, b, a2, b2, col):
+            c.create_rectangle(round(x0 + a * pb), round(top + b * pb), round(x0 + a2 * pb), round(top + b2 * pb),
+                               fill=col, outline="")
+
+        r(-1, 1, 16, 6, COVER_C)                            # the cover, peeking out round the pages
+        r(0, 0, 7, 5, PAGE_C)
+        r(8, 0, 15, 5, PAGE_C)
+        r(7, 1, 8, 6, SPINE_C)
+        for row, (left, right) in ((1, (5, 4)), (3, (4, 5))):   # lines of writing
+            r(1, row, 1 + left, row + 1, INK_C)
+            r(9, row, 9 + right, row + 1, INK_C)
+        if flip == 1:
+            r(9, -1, 15, 4, PAGE_C)    # a page lifting off the right...
+        elif flip == 2:
+            r(7, -3, 9, 4, PAGE_C)     # ...standing up at the spine...
+        elif flip == 3:
+            r(0, -1, 6, 4, PAGE_C)     # ...and settling on the left
+
+    def draw_helpers(self, px, py, pet_w, pet_h, bw, bh, pb, n, beat):
+        # little apprentice wizards beside it, one for each extra claude code session that's busy
+        c, s = self.canvas, self.s()
+        mbw, mbh, mpb = max(1, bw // 2), max(1, bh // 2), max(1, pb // 2)
+        mw, mh, gap = 18 * mbw, 5 * mbh, round(8 * s)
+        sc = self.screens[self.si]
+        first = -1 if self.x > (sc.wl + sc.wr) / 2 else 1   # start on the side with more room
+        for i in range(n):
+            side, k = (first if i % 2 == 0 else -first), i // 2
+            x0 = px + pet_w + gap + k * (mw + gap) if side > 0 else px - gap - mw - k * (mw + gap)
+            y0 = py + pet_h - mh - (mpb * 2 if (beat + i * 2) % 5 == 0 else 0)   # a little hop now and then
+
+            def blk(col, row, cols=1, color=ORANGE):
+                c.create_rectangle(x0 + col * mbw, y0 + row * mbh, x0 + (col + cols) * mbw, y0 + (row + 1) * mbh,
+                                   fill=color, outline="")
+
+            for row, line in enumerate(BODY):
+                a = line.index("#")
+                blk(a, row, line.rindex("#") + 1 - a)
+            for col, row in ARMS:
+                blk(col, row)
+            for col in LEGS_STAND:
+                blk(col, 4)
+            for col in EYES:
+                blk(col, 1, color=EYE)
+            hx = x0 + 3 * mbw + (12 * mbw - len(HAT[0]) * mpb) // 2
+            self.glyph(HAT, hx, y0 - (len(HAT) - 1) * mpb, mpb, {"#": HAT_C, "y": BAND_C, "*": STAR_C}, shadow=False)
+            wx = x0 + (17 * mbw if side > 0 else 0)   # a tiny wand, with a twinkling tip
+            for j in range(3):
+                c.create_rectangle(wx + side * j * mpb, y0 + 2 * mbh - (j + 1) * mpb,
+                                   wx + side * j * mpb + mpb, y0 + 2 * mbh - j * mpb, fill=WAND_C, outline="")
+            tip = STAR_C if (beat + i) % 2 else SPARK_C[1]
+            c.create_rectangle(wx + side * 3 * mpb, y0 + 2 * mbh - 5 * mpb, wx + side * 3 * mpb + 2 * mpb,
+                               y0 + 2 * mbh - 3 * mpb, fill=tip, outline="")

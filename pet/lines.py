@@ -106,6 +106,50 @@ OOPS_LINES = ["oops, something went wrong in there.", "uh oh. a tool tripped ove
 FULL_LINES = ["100%. that's what I call a hard day's work.", "we used ALL of it. I'm so proud.",
               "the tank is empty. see you after the reset!", "*collapses dramatically*",
               "I'm exhausted. clocking out until the reset.", "not a single token left. legendary."]
+# early pace warning ({when} = when it runs out at this pace, {reset} = when the limit resets)
+PACE_LINES = {
+    "five_hour": ["at this pace you'll hit the 5-hour limit around {when}. it resets {reset}. maybe pace yourself?",
+                  "heads up: we're burning fast. 100% around {when}, reset at {reset}.",
+                  "this pace runs out around {when}, before the {reset} reset. just saying!"],
+    "seven_day": ["at this pace the weekly limit runs out {when}. it resets {reset}. careful!",
+                  "heads up: the week's limit is going fast. empty by {when}, reset {reset}."],
+}
+# when it's called over (shortcut, tray icon, starting the pet again)
+COME_LINES = ["coming!", "on my way!", "you called?", "here I am!", "*sprints*", "reporting for duty!"]
+DROP_IN_LINES = ["incoming!", "special delivery!", "did someone call?", "dropping in!"]
+# quiet mode
+QUIET_LINES = ["shh. I'll be quiet.", "*zips mouth*", "quiet mode. I'll just wave."]
+# first start: a short tour, one line after another
+TOUR_LINES = ["hi! I'm your little Claude usage buddy.",
+              "the bubble over my head shows how much of your Claude plan you've used.",
+              "hover over me for the details: reset times, a chart and Claude Code stats.",
+              "click me to say hi. you can drag me around too, or even throw me!",
+              "right-click me for settings. that's the tour. nice to meet you!"]
+# claude code session wrap-ups. {what} = "34 min on Token Tracker, 58 messages, 2.1M tokens"
+RECAP_LINES = ["session wrap-up: {what}. nice work!", "that session's done: {what}.",
+               "and that's a wrap: {what}.", "session report: {what}. *takes notes*"]
+AWAY_RECAP = "while you were away, {n} sessions wrapped up: {tokens} tokens in all. hover me for the list."
+# reading files: the wizard opens its spell tome
+TOME_LINES = ["*flips through the spell tome*", "let me look that up.", "reading, reading...",
+              "ah, chapter 3: your code.", "hmm, says here... interesting.", "studying the ancient scrolls. your files."]
+# seasons and special days
+SEASON_LINES = {
+    "halloween": ["happy halloween! boo!", "trick or treat? I'll take tokens.", "spooky season! *wobbles a pumpkin*"],
+    "christmas": ["merry christmas! ho ho ho.", "I'm on the nice list. probably.", "festive mode: on."],
+    "newyear": ["happy new year! new year, new tokens.", "let's make this year a good one!"],
+    "birthday": ["it's my birthday! I'm made of rectangles and I'm one year older.", "party hat on! it's my birthday!"],
+    "valentine": ["happy valentine's day! you're my favourite user.", "I ♥ you. and your tokens."],
+}
+# rare events
+SHINY_LINES = ["whoa. I feel... shiny today.", "is it me, or am I sparkly?"]
+UFO_LINES = ["uh oh.", "wait, what's that light?", "hey! put me down!"]
+UFO_BACK_LINES = ["they gave me back. said I'm 'too orange'.", "I've seen things. rectangular things.",
+                  "the aliens say hi.", "...did that just happen?"]
+CAT_LINES = ["a cat!", "kitty!", "here kitty kitty!", "who's a good... cat."]
+# fetch
+FETCH_START = ["fetch! fetch!", "ooh, a ball!", "I'll get it!", "*zoomies*"]
+FETCH_GOT = ["got it!", "mine!", "*proudly holds the ball*"]
+FETCH_BACK = ["again! again!", "here you go! throw it again?", "that was fun!", "best game ever."]
 MILESTONES = {
     "five_hour": {50: "halfway through your 5-hour limit!", 75: "75% of the 5-hour limit used. pace yourself!",
                   90: "90%! almost out of 5-hour juice.",

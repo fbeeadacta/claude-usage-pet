@@ -8,9 +8,11 @@ import tkinter as tk
 
 from .art import KEY
 from .cclog import ClaudeCodeLog
-from .config import MAX_SCALE, MIN_SCALE, PROFILES, SETTINGS_FILE, STATE_FILE
+from .config import MAX_SCALE, MIN_SCALE, PROFILES, SETTINGS_FILE, SHINY_CHANCE, STATE_FILE
 from .data import DataMixin
 from .details import Details
+from .fun import FunMixin
+from .lines import TOUR_LINES
 from .menu import PopupMenu
 from .mouse import MouseMixin
 from .movement import MovementMixin
@@ -21,12 +23,12 @@ from .storage import load_memory, load_settings, log_error, write_json
 from .talk import TalkMixin
 from .ui import Fader
 from .usage import CLOCK
-from .winapi import hotkey_thread, make_dpi_aware, own_usage, set_startup, startup_path, winmm
+from .winapi import hotkey_thread, make_dpi_aware, own_usage, set_startup, startup_path, summon_event, winmm
 
 
 # ---- the pet ----
 
-class Pet(ScreensMixin, MouseMixin, TalkMixin, DataMixin, MovementMixin, RenderMixin):
+class Pet(ScreensMixin, MouseMixin, TalkMixin, DataMixin, MovementMixin, RenderMixin, FunMixin):
     def __init__(self):
         make_dpi_aware()
         self.root = tk.Tk()
@@ -72,6 +74,15 @@ class Pet(ScreensMixin, MouseMixin, TalkMixin, DataMixin, MovementMixin, RenderM
         self.size_var = tk.DoubleVar(value=self.scale)
         self.pin_var = tk.BooleanVar(value=False)
         self.startup_var = tk.BooleanVar(value=startup_path().exists())
+        self.tray_on = tk.BooleanVar(value=st["tray"])
+        self.pace_warn = tk.BooleanVar(value=st["pace_warn"])     # heads-up when the pace runs out early
+        self.seasonal = tk.BooleanVar(value=st["seasonal"])       # outfits on special days
+        self.quiet_hours = tk.BooleanVar(value=st["quiet_hours"])
+        self.quiet_from = tk.IntVar(value=st["quiet_from"])
+        self.quiet_to = tk.IntVar(value=st["quiet_to"])
+        self.dnd = tk.BooleanVar(value=st["dnd"])                 # quiet while windows' do not disturb is on
+        self.rare = tk.BooleanVar(value=st["rare"])               # ufos, cats, a shiny colour
+        self.apprentices = tk.BooleanVar(value=st["apprentices"]) # little helpers for parallel sessions
 
         # usage data, plus what it remembers from last time
         mem = load_memory()
@@ -88,6 +99,14 @@ class Pet(ScreensMixin, MouseMixin, TalkMixin, DataMixin, MovementMixin, RenderM
         self.history = mem["history"]   # [(time, 5-hour %, weekly %)] for the plan tab's chart
         self.greeted = mem["greeted"]    # the date it last said good morning
         self.last_ok = 0.0               # when the last good answer arrived (old numbers look faded)
+        self.pace_warned = mem["pace_warned"]   # key -> resets_at of the window it already warned about
+        self.recapped = mem["recapped"]         # claude code sessions it already wrapped up
+        self.log, self.log_since = mem["log"], mem["log_since"]   # the diary: pokes, throws, jumps...
+        self.hush_until = mem["hush_until"]     # quiet (menu) until then
+        self.toured, self.season_said = mem["toured"], mem["season_said"]
+        self.tour, self.next_tour = ([] if self.toured else list(TOUR_LINES)), time.time() + 4
+        self.shape_logged, self.win_quiet = False, False
+        self.summon, self.tray = summon_event(), None   # starting it again calls it over; the tray icon
         self.creds_mtime = self.creds_changed_at()
         self.user_hidden = False         # hidden with ctrl + alt + P
         self.keys = queue.Queue()        # hotkey presses from the hotkey thread
@@ -148,6 +167,13 @@ class Pet(ScreensMixin, MouseMixin, TalkMixin, DataMixin, MovementMixin, RenderM
         self.slapped = False                          # hit a window's side, on the way down
         self.near = []                                # windows near it while it's on the taskbar
         self.edge_turn = None
+        self.goto_x = self.goto_why = None            # running somewhere (called over, fetch)
+        self.dropping_in = self.ufo_fall = False
+        self.ball = self.cat = self.ufo = None        # fetch, and rare visitors
+        self.ball_sprite = self.cat_sprite = None
+        self.fetch_at, self.was_reading = 0.0, False
+        self.mouse = (-10 ** 6, -10 ** 6)             # where the pointer is (its eyes follow it)
+        self.shiny, self.shiny_said = st["rare"] and random.random() < SHINY_CHANCE, False
         self.dizzy_t = self.stretch_t = self.dance_t = 0.0
         self.center_x, self.feet_win, self.body_at, self.pet_px = 0, 0, (0, 0), (72, 40)
         self.dir = random.choice((-1, 1))
@@ -212,11 +238,18 @@ class Pet(ScreensMixin, MouseMixin, TalkMixin, DataMixin, MovementMixin, RenderM
             ("notify", self.notify_on), ("sounds", self.sounds), ("hotkeys", self.hotkeys),
             ("platforms", self.platforms), ("volume", self.volume), ("muted", sorted(self.muted)), ("keys", self.binds), ("settings_size", self.settings_size), ("hide_fs", self.hide_fs),
             ("one_monitor", self.one_monitor), ("panel_tab", self.panel_tab), ("cc_view", self.cc_view),
-            ("cc_range", self.cc_range), ("plan_chart", self.plan_chart), ("x", round(self.x)), ("y", round(self.y)))}
+            ("cc_range", self.cc_range), ("plan_chart", self.plan_chart), ("x", round(self.x)), ("y", round(self.y)),
+            ("tray", self.tray_on), ("pace_warn", self.pace_warn), ("seasonal", self.seasonal),
+            ("quiet_hours", self.quiet_hours), ("quiet_from", self.quiet_from), ("quiet_to", self.quiet_to),
+            ("dnd", self.dnd), ("rare", self.rare), ("apprentices", self.apprentices))}
         write_json(SETTINGS_FILE, st)
         write_json(STATE_FILE, {"seen": self.seen, "last_5h": self.last_5h, "pokes": self.pokes,
                                 "history": self.history, "greeted": self.greeted,
-                                "milestones": self.milestones, "last_usage": self.last_usage})
+                                "milestones": self.milestones, "last_usage": self.last_usage,
+                                "pace_warned": self.pace_warned, "recapped": self.recapped,
+                                "log": {k: round(v, 1) if isinstance(v, float) else v for k, v in self.log.items()},
+                                "log_since": self.log_since, "hush_until": self.hush_until,
+                                "toured": self.toured, "season_said": self.season_said})
         self.saved_at = time.time()
 
     def changed(self):
@@ -308,5 +341,7 @@ class Pet(ScreensMixin, MouseMixin, TalkMixin, DataMixin, MovementMixin, RenderM
     def quit(self):
         if self.fine_timer and winmm:
             winmm.timeEndPeriod(1)
+        if self.tray is not None:
+            self.tray.hide()   # (or windows leaves a ghost icon by the clock until you hover it)
         self.save()
         self.root.destroy()

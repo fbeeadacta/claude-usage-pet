@@ -18,5 +18,5 @@ A Windows desktop mascot that shows Claude plan usage. `claude_pet.py` starts it
 
 ## Working on it
 - Say plainly when something is untested or uncertain.
-- Test with `SETTINGS_FILE` / `STATE_FILE` / `ERROR_LOG` pointed at a scratch folder, so tests don't clash with the user's running pet. Files import these names, so a test must patch a name in every `pet.*` module that has it, not just one.
+- Test with `SETTINGS_FILE` / `STATE_FILE` / `ERROR_LOG` / `CC_CACHE` pointed at a scratch folder, and `SUMMON_EVENT` set to another name, so tests don't clash with the user's running pet. Files import these names, so a test must patch a name in every `pet.*` module that has it, not just one.
 - The running pet only loads new code after it's quit (right-click → Quit) and started again.

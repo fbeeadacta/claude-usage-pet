@@ -64,7 +64,7 @@ if __name__ == "__main__":
     check_setup()
 
     from pet.storage import log_error
-    from pet.winapi import already_running, set_startup
+    from pet.winapi import already_running, set_startup, summon_running
     from pet.mascot import Pet
 
     ap = argparse.ArgumentParser()
@@ -75,6 +75,7 @@ if __name__ == "__main__":
         print(set_startup(a.startup))
         sys.exit(0)
     if already_running():
+        summon_running()   # one's already going: it comes over to your mouse instead
         sys.exit(0)
     try:
         Pet().root.mainloop()

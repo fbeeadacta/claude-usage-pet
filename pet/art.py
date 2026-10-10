@@ -46,6 +46,91 @@ NOTE = ["..##", "..#.", "..#.", "###.", "###."]   # a music note, for dancing
 CHUTE = ["".join(("r" if (i // 4) % 2 == 0 else "w") if abs(i - 17.5) < w / 2 else "." for i in range(36))
          for w in (12, 20, 26, 30, 34, 36)]
 
+# seasonal outfits, worn on the head like the wizard hat (all made of the same small blocks)
+PUMPKIN = [                # halloween: a jack-o'-lantern. o = pumpkin, # = glowing face, g = stem
+    "......gg......",
+    ".....gg.......",
+    "...oooooooo...",
+    ".oooooooooooo.",
+    "oo##oooooo##oo",
+    "ooo#oooooo#ooo",
+    "oooooo##oooooo",
+    "oo#oooooooo#oo",
+    ".oo########oo.",
+    "...oooooooo...",
+]
+SANTA = [                  # christmas. r = red, w = white fur
+    "...............ww.......",
+    "..............wwww......",
+    "..............rww.......",
+    "............rrr.........",
+    "...........rrrr.........",
+    "..........rrrrrr........",
+    ".........rrrrrrrr.......",
+    "........rrrrrrrrrr......",
+    ".......rrrrrrrrrrrr.....",
+    ".....wwwwwwwwwwwwwwwww..",
+    ".....wwwwwwwwwwwwwwwww..",
+]
+PARTY = [                  # new year and its birthday. p / c / y = pink, cyan, yellow stripes
+    "......yy......",
+    ".....yyyy.....",
+    "......yy......",
+    "......pp......",
+    ".....pppp.....",
+    ".....cccc.....",
+    "....cccccc....",
+    "....yyyyyy....",
+    "...yyyyyyyy...",
+    "...pppppppp...",
+    "..pppppppppp..",
+    "..cccccccccc..",
+    ".cccccccccccc.",
+]
+LOVE = [                   # valentine's day: two hearts on springs
+    ".##.##.......##.##.",
+    "#######.....#######",
+    ".#####.......#####.",
+    "..###.........###..",
+    "...s...........s...",
+    "...s...........s...",
+    "...s...........s...",
+]
+OUTFITS = {"halloween": (PUMPKIN, {"o": "#f28c28", "#": "#ffcf4d", "g": "#4f7a28"}),
+           "christmas": (SANTA, {"r": "#d8343a", "w": "#f7f4ee"}),
+           "newyear": (PARTY, {"p": "#ff6f8a", "c": "#5ad1e8", "y": "#ffe08a"}),
+           "birthday": (PARTY, {"p": "#ff6f8a", "c": "#5ad1e8", "y": "#ffe08a"}),
+           "valentine": (LOVE, {"#": "#ff6f8a", "s": "#2b1a14"})}
+# the spell tome (reading files): drawn in code from these colours. pages, lines of text, cover, spine
+PAGE_C, INK_C, COVER_C, SPINE_C, RUNE_C = "#f2efe8", "#9a958c", "#6c4ab6", "#4a2f80", ["#8be9fd", "#ffffff", "#b9a4ff"]
+# rare visitors
+UFO = [                    # c = glass dome, w = shine, g = hull, l = blinking lights, d = feet
+    "......cccccc......",
+    ".....cwcccccc.....",
+    "....cccccccccc....",
+    "..gggggggggggggg..",
+    "gglggglggglggglggg",
+    "..gggggggggggggg..",
+    "....dd......dd....",
+]
+UFO_C = {"c": "#8be9fd", "w": "#ffffff", "g": "#a7a9b4", "d": "#5b5d66"}
+UFO_LIGHTS = ("#ffe08a", "#e5534b")
+BEAM_C = "#fff3b0"
+CAT_A = [                  # a cat walking right (flipped when it walks left). e = eyes
+    "#.............#.#",
+    "#.............###",
+    "#.............e#e",
+    ".#.###########.#.",
+    "..##############.",
+    "..#############..",
+    "..#.#.......#.#..",
+]
+CAT_B = CAT_A[:6] + ["...#.#.....#.#..."]
+CAT_C = {"#": "#b4b4bc", "e": "#7bd13f"}
+BALL = [".rrrr.", "rwwrrr", "rwrrrr", "rrrrrr", "rrrrrd", ".rrdd."]
+BALL_C = {"r": "#e5534b", "w": "#ffb3ad", "d": "#a8322c"}
+SHINY = "#f0c75e"          # the rare colour
+
 ORANGE, EYE, BLUSH_C = "#d77757", "#2b1a14", "#f4a08f"
 BUBBLE, BUBBLE_TEXT = "#1f1e1d", "#f2efe8"
 SPEECH, SPEECH_TEXT = "#f2efe8", "#2b1a14"

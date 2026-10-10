@@ -6,8 +6,8 @@ import time
 import traceback
 
 from .config import (CHATTER, DEFAULT_KEYS, DEFAULT_SCALE, ERROR_LOG_KB, HERE, MAX_SCALE, MIN_SCALE,
-    PANIC_AT, PANIC_CHOICES, POLL_CHOICES, POLL_SECONDS, PROFILES, SETTINGS_FILE, SHORTCUTS, STATE_FILE,
-    WARN_AT, WARN_CHOICES, combo_ok)
+    PANIC_AT, PANIC_CHOICES, POLL_CHOICES, POLL_SECONDS, PROFILES, QUIET_FROM_CHOICES, QUIET_TO_CHOICES,
+    SETTINGS_FILE, SHORTCUTS, STATE_FILE, WARN_AT, WARN_CHOICES, combo_ok)
 from .sounds import SOUNDS
 
 
@@ -39,10 +39,14 @@ DEFAULTS = {"scale": DEFAULT_SCALE, "energy": "normal", "walk": True, "jump": Tr
             "platforms": True, "volume": 60, "muted": [], "keys": None, "settings_size": None,
             "warn_at": WARN_AT, "panic_at": PANIC_AT, "poll": POLL_SECONDS,
             "hide_fs": True, "one_monitor": False, "panel_tab": "plan", "plan_chart": "5h", "cc_view": "overview",
-            "cc_range": "all", "x": None, "y": None}
+            "cc_range": "all", "x": None, "y": None,
+            "tray": True, "pace_warn": True, "seasonal": True, "quiet_hours": False, "quiet_from": 22, "quiet_to": 7,
+            "dnd": True, "rare": True, "apprentices": True}
+BOOLS = ("walk", "jump", "naps", "anim", "wizard", "warn", "cc_app", "notify", "sounds", "hotkeys", "platforms",
+         "hide_fs", "one_monitor", "tray", "pace_warn", "seasonal", "quiet_hours", "dnd", "rare", "apprentices")
 CHOICES = {"energy": tuple(PROFILES), "bubble": ("both", "5h", "hover"), "bubble_style": ("numbers", "bars"), "clock": ("12h", "24h"), "dates": ("ddmm", "mmdd"),
-           "chatter": tuple(CHATTER), "panel_tab": ("plan", "cc"), "plan_chart": ("5h", "7d"), "cc_view": ("overview", "models", "projects"),
-           "cc_range": ("all", "30d", "7d"),
+           "chatter": tuple(CHATTER), "panel_tab": ("plan", "cc", "sessions"), "plan_chart": ("5h", "7d"),
+           "cc_view": ("overview", "models", "projects"), "cc_range": ("all", "30d", "7d"),
            }
 
 
@@ -72,8 +76,7 @@ def load_settings():
         st["scale"] = min(MAX_SCALE, max(MIN_SCALE, float(st["scale"])))
     except (TypeError, ValueError):
         st["scale"] = DEFAULT_SCALE
-    for k in ("walk", "jump", "naps", "anim", "wizard", "warn", "cc_app", "notify", "sounds", "hotkeys",
-              "platforms", "hide_fs", "one_monitor"):
+    for k in BOOLS:
         st[k] = st[k] if isinstance(st[k], bool) else DEFAULTS[k]
     for k, ok in CHOICES.items():
         if st[k] not in ok:
@@ -82,7 +85,8 @@ def load_settings():
         st["energy"] = "statue"   # from before personalities: walking was switched off
     if isinstance(st["volume"], bool) or not isinstance(st["volume"], int) or not 0 <= st["volume"] <= 100:
         st["volume"] = DEFAULTS["volume"]
-    for k, ok in (("warn_at", WARN_CHOICES), ("panic_at", PANIC_CHOICES), ("poll", POLL_CHOICES)):
+    for k, ok in (("warn_at", WARN_CHOICES), ("panic_at", PANIC_CHOICES), ("poll", POLL_CHOICES),
+                  ("quiet_from", QUIET_FROM_CHOICES), ("quiet_to", QUIET_TO_CHOICES)):
         if st[k] not in ok or isinstance(st[k], bool):
             st[k] = DEFAULTS[k]
     keys = st["keys"] if isinstance(st["keys"], dict) else {}
@@ -105,9 +109,20 @@ def load_memory():
     # moods that survive a restart: when each limit last moved, pokes, milestones already said
     m = read_json(STATE_FILE)
     out = {"seen": {}, "last_5h": None, "pokes": 0, "milestones": {}, "last_usage": time.time(), "history": [],
-           "greeted": ""}
-    if isinstance(m.get("greeted"), str):
-        out["greeted"] = m["greeted"]
+           "greeted": "", "pace_warned": {}, "recapped": [], "log": {}, "log_since": "", "hush_until": 0.0,
+           "toured": bool(m), "season_said": ""}   # (someone who already has a memory file has met the pet)
+    for k in ("greeted", "log_since", "season_said"):
+        if isinstance(m.get(k), str):
+            out[k] = m[k]
+    if isinstance(m.get("toured"), bool):
+        out["toured"] = m["toured"]
+    if isinstance(m.get("pace_warned"), dict):
+        out["pace_warned"] = {str(k): str(v) for k, v in m["pace_warned"].items()}
+    if isinstance(m.get("recapped"), list):
+        out["recapped"] = [str(v) for v in m["recapped"]][-50:]
+    if isinstance(m.get("log"), dict):   # the pet's diary: how many pokes, throws, jumps, dances...
+        out["log"] = {str(k): v for k, v in m["log"].items()
+                      if isinstance(v, (int, float)) and not isinstance(v, bool) and v >= 0}
     try:
         num = lambda v: None if v is None else float(v)
         out["history"] = [(float(h[0]), num(h[1]), num(h[2])) for h in m.get("history", [])]
@@ -121,7 +136,7 @@ def load_memory():
         out["milestones"] = {k: [str(v[0]), [int(x) for x in v[1]]] for k, v in m.get("milestones", {}).items()}
     except (TypeError, ValueError, IndexError, AttributeError):
         pass
-    for k, kind in (("last_5h", float), ("pokes", int), ("last_usage", float)):
+    for k, kind in (("last_5h", float), ("pokes", int), ("last_usage", float), ("hush_until", float)):
         try:
             if m.get(k) is not None:
                 out[k] = kind(m[k])

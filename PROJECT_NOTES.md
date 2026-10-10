@@ -2,7 +2,7 @@
 
 A small Claude mascot that walks along the top of the Windows taskbar. A bubble above its head shows Claude plan usage. If any file here gets lost or corrupted, this note has enough detail to rebuild it. You can give this file to Claude and ask it to rebuild the project.
 
-Last updated: 2026-10-10 (version 6.5)
+Last updated: 2026-10-10 (version 7.0)
 
 ## Files in this folder
 
@@ -16,7 +16,8 @@ Last updated: 2026-10-10 (version 6.5)
 | `PROJECT_NOTES.md` | This file. |
 | `.gitignore` | Tells git which files stay on this computer only. |
 | `pet_settings.json` | Saved settings: size, toggles, position. Created the first time the pet runs. Safe to delete. Not on GitHub. |
-| `pet_state.json` | The pet's memory: when each limit last moved, milestones it has already announced, and how many times you've poked it. Safe to delete (it just forgets). Not on GitHub. |
+| `pet_state.json` | The pet's memory: when each limit last moved, milestones it has already announced, how many times you've poked it, its diary, and which sessions it has wrapped up. Safe to delete (it just forgets). Not on GitHub. |
+| `pet_cc_cache.json.gz` | Claude Code's log numbers the pet has already read (times, session ids, models, token counts, project folder names), so a restart only reads what's new. Safe to delete (it re-reads the logs). Not on GitHub. |
 | `LOCAL_NOTES.md` | Details about this particular computer (paths, monitors, Python install). Not on GitHub. |
 | `pet_errors.log` | What went wrong, if anything (Python error details, never the login token). Kept under about 200 KB. Safe to delete. Not on GitHub. |
 | `docs/*.png` | Screenshots for the README, staged on a plain backdrop (nothing personal in them). |
@@ -38,7 +39,9 @@ The code is a package (`pet/`) started by `claude_pet.py`. Every file begins wit
 | `pet/sounds.py` | Making the sound effects. |
 | `pet/ui.py` | Shared drawing helpers: rounded boxes, smooth corners, fading, text wrapping. |
 | `pet/mascot.py` | The `Pet` class: puts the parts below together; its settings and start-up. |
-| `pet/screens.py`, `mouse.py`, `talk.py`, `data.py`, `movement.py`, `render.py` | The parts of the `Pet` (mixin classes): monitors, mouse handling, talking and reactions, data and ticks, physics and movement, drawing. They all share one `self`. |
+| `pet/screens.py`, `mouse.py`, `talk.py`, `data.py`, `movement.py`, `render.py`, `fun.py` | The parts of the `Pet` (mixin classes): monitors, mouse handling, talking and reactions, data and ticks, physics and movement, drawing, and the extras (being called over, quiet mode, seasons, session wrap-ups, the tour, the diary, the tray icon, fetch, rare visitors). They all share one `self`. |
+| `pet/tray.py` | The tray icon, with its own thread and hidden window. |
+| `pet/sprites.py` | Small see-through windows for things that leave the mascot's side: the fetch ball and the cat. |
 | `pet/details.py` | The hover details panel. |
 | `pet/menu.py` | The right-click menu. |
 | `pet/settings_window.py` | The settings window. |
@@ -53,23 +56,28 @@ One thing to know: `usage.RETRY_AFTER` changes while the pet runs, so other file
 2. The mascot appears on top of the taskbar. The first numbers can take a few seconds to show up.
 3. **Hover** over the mascot or its bubble:
    - It waves, and after a moment the details panel fades in above it.
-   - The panel has two tabs:
+   - The panel has three tabs:
      - **Plan:** pace bars, reset times (as countdowns and clock times), tips, a chart of your usage across the current window with the pace line (switch between 5-hour and Week), a forecast ("at this pace you'll run out around 23:40" or "you'll use about 60% by the reset"), and Claude Code tokens used today.
-     - **Claude Code:** stats read from your Claude Code logs. "Overview" shows sessions, messages, total tokens, active days, peak hour, favourite model, a 26-week activity grid and a book comparison. "Models" shows tokens per model plus the input/output/cache split. Each view can show all time, 30 days or 7 days.
+     - **Claude Code:** stats read from your Claude Code logs. "Overview" shows sessions, messages, total tokens, active days, peak hour, favourite model, a 26-week activity grid and a book comparison. "Models" shows tokens per model plus the input/output/cache split. "Projects" shows the top 5 folders. Each view can show all time, 30 days or 7 days.
+     - **Sessions:** a recap of your latest 5 Claude Code sessions: project folder, when it started, how long it ran, messages, tokens, main model and the API-price estimate. A session still going says "active now".
    - Move the mouse onto the panel and it stays open, so you can click the tabs. Move away and it fades out.
    - The panel is the same height on every tab, so the tabs never move when you switch.
 4. **Click** the mascot to poke it. It squishes, hops, makes a happy face and pops a heart.
 5. **Drag** the mascot to pick it up. It hangs from the spot you grabbed and swings as you move. Its legs wiggle.
    - **Throw it** by letting go while moving. It keeps your speed, screams, bounces off screen edges and the floor, and slides to a stop. From high up it opens a parachute. A hard landing leaves it dizzy.
-6. **Right-click** the mascot for a small menu with **Refresh now**, **Settings** and **Quit**. It opens beside the mascot (not on top of it). A click anywhere else, or right-clicking the mascot again, closes it.
-7. **Settings** opens a window in the same style as the details panel, with five tabs. Every option has a switch, buttons or a slider, plus a one-line description underneath. Changes apply straight away. Drag the title to move the window, and close it with × or Esc.
-   - **Behaviour:** Walk around, Jump now and then, Take naps, Wizard when Claude works, Stand on windows, Animations
-   - **Look:** Size (slider, 0.5x–4x), Bubble shows (both limits / 5-hour only / on hover), Bubble style (numbers / bars), Keep details open
-   - **Sound:** Sound effects (master switch), Volume (slider, 0–100%; plays a sample when you let go), Which sounds (every sound as an on/off chip, in groups: Reactions = Poke, Bounce, Scream, Wall splat; Adventures = Parachute, Eagle cry, Hay landing; Moods = Wizard magic, Dance music, Milestones), Chatter (off / sometimes / a lot). Desktop notifications moved to System.
-   - **Usage:** Refresh every (2, 3, 4 or 5 minutes), Warn when nearly full, Yellow ring from (70–85%), Red ring from (85–95%), Count tokens like the Claude app
-   - **Shortcuts:** Keyboard shortcuts (on/off; off lets go of the keys so other apps can use them), then each shortcut with what it does and its keys as key caps (defaults: Ctrl + Alt + P shows or hides the mascot, Ctrl + Alt + D pins or closes the details panel). Click one and press the new keys; Esc cancels, Backspace clears it. Warnings appear if the keys have no Ctrl/Alt, are already used by the other shortcut, or another app already uses them. Reset to defaults.
-   - **System:** Desktop notifications, Hide during full screen, Stay on one monitor, Start with Windows
+6. **Right-click** the mascot for a small menu with **Refresh now**, **Play fetch**, **Quiet for an hour** (or **Talk again** while it's quiet), **Settings** and **Quit**. It opens beside the mascot (not on top of it). A click anywhere else, or right-clicking the mascot again, closes it.
+7. **Settings** opens a window laid out like the Claude desktop app's settings: a sidebar with seven pages (and a search box), and on the right each section as a card. Every option has a switch, choice buttons or a slider, plus a short description. Changes apply straight away, and a small "✓ Saved" shows for a moment. Drag the top to move it, the edges to resize it, and close it with × or Esc. Each section has its own "Reset".
+   - **Mascot:** Personality (Parkour! / Lively / Normal / Chill / Statue), Take naps, Wizard when Claude works, Apprentices for parallel sessions (shown while the wizard is on), Stand on windows, Rare surprises, Animations
+   - **Appearance:** a live preview, Size (slider, 0.5x–4x), Seasonal outfits, Bubble shows (both limits / 5-hour only / on hover), Bubble style (numbers / bars), Keep details open, Clock (12 / 24 hour), Dates (day or month first)
+   - **Sound & talking:** Sound effects (master switch), Volume (0–100%; plays a sample when you let go), Which sounds (every sound as an on/off chip with a ▶ to hear it: Reactions = Poke, Bounce, Scream, Wall splat; Adventures = Parachute, Eagle cry, Hay landing, Cat; Moods = Wizard magic, Dance music, Milestones), Chatter (off / sometimes / a lot), Quiet hours (with From 8 PM–midnight and Until 6–9 AM), Follow Do Not Disturb
+   - **Usage & alerts:** Refresh every (2–5 minutes), Warn when nearly full, Yellow ring from (70–85%), Red ring from (85–95%), Early pace warning, Desktop notifications, Count tokens like the Claude app
+   - **Shortcuts:** Keyboard shortcuts (on/off; off lets go of the keys so other apps can use them), then each shortcut with what it does and its keys as key caps (defaults: Ctrl + Alt + P shows or hides the mascot, Ctrl + Alt + D pins or closes the details panel, Ctrl + Alt + H calls the mascot over). Click one and press the new keys; Esc cancels, Backspace clears it. Warnings appear if the keys have no Ctrl/Alt, are already used by another shortcut, or another app already uses them.
+   - **System:** Start with Windows, Tray icon, Hide during full screen, Stay on one monitor
+   - **About & stats:** the Claude login card (status, last and next check, Check now, login help), the Pet diary, live Performance graphs, the version, a GitHub link and "Show the tour again"
 8. **Ctrl + mouse wheel** over the mascot fine-tunes its size. This may only work after you've clicked the mascot once.
+9. **Call it over** from anywhere: press Ctrl + Alt + H, click the tray icon, or start the pet again (double-click `Start pet.bat` while it's running). It runs to your mouse; if your mouse is far away, on another monitor, or it's up on a window, it parachutes in right above your mouse instead. It also comes back if it was hidden with Ctrl + Alt + P.
+10. **Tray icon** (on by default, Settings → System): a little mascot by the clock with a dot in your usage colour. Hover it for your numbers, click it to call the mascot over, right-click it for the menu. Windows may put new icons in the "show hidden icons" arrow at first; drag it out onto the taskbar to keep it in view.
+11. **Play fetch** (right-click → Play fetch): a red ball flies from your mouse. The mascot runs after it, picks it up and brings it back to your mouse. You can grab the ball and throw it yourself too, even while the mascot is carrying it. The ball disappears if nobody plays with it for 25 seconds.
 
 ### Things it does on its own
 
@@ -106,14 +114,31 @@ One thing to know: `usage.RETRY_AFTER` changes while the pet runs, so other file
 - **Notifications** (if on): at 90% and 100% of a limit, when a nearly-used limit resets, and when your login expires.
 - **Sounds** (if on): a pop when poked, a scream when thrown, a chime at milestones and resets.
 - **Memory:** it remembers when each limit last moved, which milestones it has already announced, your poke count, and when it last said good morning, even after a restart.
+- **Early pace warning** (if on): once per window, when the forecast says you'd hit 100% at least 30 minutes before the 5-hour reset (12 hours for the weekly one), it says when, plus a notification. Only from 50% (weekly: 40%) and not past 90%, where the milestones take over.
+- **Quiet mode:** no talking and no sounds (the bubble and notifications carry on). From the menu for an hour, during quiet hours, or while Windows is in Do Not Disturb, focus or presentation mode (if Windows reports it; see "Not tested yet"). The Plan tab says when it's quiet.
+- **Session wrap-ups:** when a Claude Code session has had nothing new for 8 minutes, it sums it up in a speech bubble ("session wrap-up: 34 min on Token Tracker, 58 messages, 2.1M tokens."). Sessions that finished while you were away come as one line when you're back. Only sessions that ended after the pet started, with at least 4 messages. The Sessions tab has the details.
+- **First start:** a short tour in five speech bubbles: the bubble, hovering, poking and throwing, and the right-click menu. Settings → About & stats → Show the tour again replays it. People who already had a memory file don't get it.
+- **Eyes:** when your mouse pointer is within about 420 px, it looks at it: left, right, up or down.
+- **Seasonal outfits** (if on): a jack-o'-lantern on its head from 25 to 31 October, a Santa hat from 1 to 26 December, a party hat on 31 December, 1 January and its birthday (9 October), and hearts on springs on 14 February. Each comes with a line once that day. Fireworks burst above it from 23:55 on New Year's Eve until 1 AM. The wizard hat takes the outfit's place while it works.
+- **Spell tome:** while Claude Code is reading files (its Read, Grep, Glob and similar tools, seen within the last 8 seconds), the wizard puts the wand away and reads a spell book floating in front of it, pages turning, with glowing bits rising off it.
+- **Apprentices** (if on): while it's a wizard and more than one Claude Code session is busy (wrote something in the last 45 seconds), little apprentice wizards stand beside it, one per extra session, up to 3.
+- **Pet diary** (Settings → About & stats): counts pokes, pick-ups, throws, little hops, jumps to windows (made and missed), leaps of faith, parachutes, wall splats, dances, naps, games of fetch, distance walked, time as a wizard, resets, 100%s of each limit, UFO abductions, cats and shiny days. "Past-midnight sessions" comes from the Claude Code logs (all time: sessions with anything between midnight and 5 AM).
+- **Rare surprises** (if on, only while you're at the computer and it's not working or asleep):
+  - about 1 start in 500, it's a shiny gold colour that day, with little twinkles.
+  - about once every 12 hours you're there, a UFO flies in, beams it up, keeps it a couple of seconds and drops it back (dizzy). Picking it up mid-abduction rescues it.
+  - about once every 6 hours, a grey cat walks along the taskbar. It stops to say hi to the mascot. Click it and it meows and runs off.
+- **Auto-hiding taskbar:** it stands on the bottom edge of the screen, and rides up on the taskbar when it slides up (checked 10 times a second only while auto-hide is on).
+- **Usage service changed:** if the usage answer stops looking like it used to (no 5-hour or weekly limit, or not even JSON), the bubble says "service changed", the panel explains, and `pet_errors.log` gets the names of what came back (never the values). It keeps trying.
 
-Only one pet runs at a time. Starting it again while it's already running does nothing, so **quit the old one first** (right-click → Quit) after updating the file.
+Only one pet runs at a time. Starting it again while it's already running calls the running one over to your mouse, so **quit the old one first** (right-click → Quit) after updating the files.
 
 ## Fixing problems
 
 - **The pet acts strangely or won't start:** delete `pet_settings.json` and start it again. All settings go back to their defaults.
 - **The pet won't start at all:** to see the error message, open this folder in File Explorer, click the address bar, type `cmd`, press Enter, then type `py claude_pet.py` and press Enter. The error appears in that window.
-- **Nothing happens when you start it:** a pet is probably already running. It may be hidden because something is full-screen, or sitting on your other monitor.
+- **Nothing happens when you start it:** a pet is probably already running. Starting it again calls it over to your mouse (a pet from before version 7.0 doesn't know how). It may be hidden because something is full-screen.
+- **The bubble says "service changed":** Anthropic changed the undocumented usage service. Look in `pet_errors.log` for the names it sent back, and give them to Claude to update `pet/usage.py`.
+- **It's silent and doesn't talk:** check the Plan tab for "Quiet mode", the menu for "Talk again", and Settings → Sound & talking → Quiet.
 - **"Rate limited" / the bubble says "slow down":** the usage service answered "too many requests". This used to happen with the old 30-second and 1-minute refresh settings, and can still happen after restarting the pet several times in a row (each start checks straight away). Your last numbers stay on screen. It waits 3 minutes, then 6, 12 and so on (up to 30, or longer if the service asks), and goes back to normal after the next successful check.
 - **The bubble says "login expired":** open Claude Code once so it refreshes your login. The pet notices the renewed login file and checks again straight away.
 - **Something seems broken:** look in `pet_errors.log` in this folder, or send it to Claude. It never contains your login token.
@@ -145,9 +170,10 @@ Only one pet runs at a time. Starting it again while it's already running does n
 - **Switched off (real count):** each `(message.id, requestId)` pair is counted once, about 3× lower, and "Peak hour" is the hour with the most messages.
 - "Messages" counts every user and assistant line (each `uuid` once), which matches Claude Code's own count.
 - "Total tokens" is input + output + cache write + cache read.
-- Only numbers are kept from the logs (times, session ids, model names and token counts), never message text.
+- Only numbers are kept from the logs (times, session ids, model names, token counts and the project folder's name), never message text. Live, it also notes which tool Claude just used, by name only (`message.content[].name` of a `tool_use`), never what the tool was given.
+- **The cache:** after the first full read, everything kept above is saved to `pet_cc_cache.json.gz` with how far into each log it got, and saved again every 5 minutes when something changed. On start the pet loads it and only reads what's new. If any log it knew got shorter or disappeared, the cache is thrown away and every log is read again, so deleted logs drop out of the stats as before. Logs are read 4 MB at a time, and a single line bigger than that is skipped.
 - Claude.ai chat has no local token log, so there are no token numbers for chat. Only the plan % covers it.
-- **Cost estimate:** what the same tokens would cost on the pay-as-you-go API (your plan covers them, so it's only for comparison). Always counted once per answer, whichever counting mode is on. Prices are in `PRICES` near the top of `claude_pet.py` (dollars per million: input, output, cache read). Cache writes cost 1.25× input for the 5-minute cache and 2× for the 1-hour cache, using the 1-hour amount the logs record. Models with no price are left out, and the panel says so.
+- **Cost estimate:** what the same tokens would cost on the pay-as-you-go API (your plan covers them, so it's only for comparison). Always counted once per answer, whichever counting mode is on. Prices are in `PRICES` near the top of `pet/cclog.py` (dollars per million: input, output, cache read). Cache writes cost 1.25× input for the 5-minute cache and 2× for the 1-hour cache, using the 1-hour amount the logs record. Models with no price are left out, and the panel says so.
 - **Projects:** each answer's `cwd` (the folder Claude Code was working in). The Projects view shows the top 5 by tokens, with session counts.
 - **Tool errors:** user lines whose `message.content` has a `tool_result` with `is_error: true`.
 
@@ -307,7 +333,7 @@ There's also 30 px of side space for z's and sparks.
 
 **Memory file (`pet_state.json`):**
 - Holds `seen` (per limit: %, when it last changed, `resets_at`), `last_5h`, `pokes`, `milestones`, `last_usage` and `history`.
-- Also `greeted` (the date of the last "good morning").
+- Also `greeted` (the date of the last "good morning"), `pace_warned` (per limit: the window it already warned about), `recapped` (the last 50 sessions it wrapped up), `log` and `log_since` (the diary's counts and when it started), `hush_until` (quiet from the menu until then), `toured` (the tour is done; true for anyone who had a memory file before) and `season_said` (the date of the last seasonal line).
 - `history` is `[time, 5-hour %, weekly %]` from each successful check: every check for the last 6 hours, then one per 10 minutes, kept for 8 days.
 - Saved every 60 s and when you quit.
 - Bad values are ignored.
@@ -369,19 +395,29 @@ There's also 30 px of side space for z's and sparks.
 
 **Error log:** `log_error()` appends a time stamp and traceback to `pet_errors.log`, trimming to the newest half when it's over `ERROR_LOG_KB`. Tk callback errors, log-reading errors, notification and sound errors, and crashes all go there.
 
-**Settings window:** a borderless window drawn on one canvas, in the details panel's style (same colours, Segoe UI sizes, pill buttons, rounded corners).
-- Five tabs; every tab gets the height of the tallest one, so the tabs never move. The "Changes apply straight away" note sits at the bottom.
-- Each option is a row from `rows()`:
-  - **Switches** are a pill-shaped track (orange when on) with a round knob; the whole row is clickable.
-  - **Choices** are pill buttons.
-  - **Sliders** have an orange fill and a round knob you drag.
-- The descriptions come from `TIPS`. The window moves when you drag its title.
+**Settings window:** a borderless window drawn on one canvas (see the version 6.0 change log for the full design).
+- A darker sidebar with the search box and seven pages (`SettingsWindow.PAGES`); on the right the page title, then each section from `sections()` as a heading (with "Reset") over a rounded card.
+- Each row is a dict from `row()`: **toggle** (an orange switch; the whole row is clickable), **choice** (a segmented control, beside the label when it fits, below it when it doesn't), **slider**, or a special row (preview, sounds, keys, login, diary, perf, about). A row's `show` hides it until it matters.
+- The descriptions come from `TIPS` in `pet/tips.py`. Search matches a row's label, description, section, page, options and extra `words`.
+- Resizable (580–1100 wide), scrolls, and works from the keyboard (Tab, arrows, Space/Enter, Ctrl + F).
 
-**Right-click menu:** a small borderless window drawn the same way (`PopupMenu`): Refresh now, Settings, a divider, Quit. It highlights the row under the mouse. When you right-click the mascot, it opens to the mascot's right (or left if there's no room), level with its feet, so it never covers the mascot. Opening it closes an unpinned details panel, and hovering doesn't open the panel while the menu is open (the panel used to pop up over the menu and catch its clicks). It's moved with `move_window()`, which checks the window really arrived and uses `SetWindowPos` if Tk held the move back (that was why the menu only worked once). Ten times a second it checks for a mouse press outside itself (`GetAsyncKeyState`) and closes if it finds one. Esc closes it too.
+**Right-click menu:** a small borderless window drawn the same way (`PopupMenu`): Refresh now, Play fetch, Quiet for an hour / Talk again, Settings, a divider, Quit (`items()`). It highlights the row under the mouse. When you right-click the mascot, it opens to the mascot's right (or left if there's no room), level with its feet, so it never covers the mascot. Opening it closes an unpinned details panel, and hovering doesn't open the panel while the menu is open (the panel used to pop up over the menu and catch its clicks). It's moved with `move_window()`, which checks the window really arrived and uses `SetWindowPos` if Tk held the move back (that was why the menu only worked once). Ten times a second it checks for a mouse press outside itself (`GetAsyncKeyState`) and closes if it finds one. Esc closes it too.
 
 **Dancing:** a 5% chance whenever it stops walking (or when it's bored). It lasts 3.5–6 s. The beat is 0.25 s: arms up left, down, up right, both up. It bops down on beats 2 and 4 and sways half a block, with music notes floating up.
 
-**Single instance:** a named mutex, `claude-usage-pet`.
+**Single instance:** a named mutex, `claude-usage-pet`. A second start opens the named event `claude-usage-pet-summon` (`SUMMON_EVENT`) and sets it, then quits; the running pet checks it 10 times a second (`WaitForSingleObject` with no wait) and comes over.
+
+**Tray icon (`pet/tray.py`):** its own thread registers a window class and makes a hidden window (not message-only, so it also hears `TaskbarCreated` when Explorer restarts and puts the icon back), then runs a message loop. `Shell_NotifyIconW` adds the icon with a callback message; button-up clicks go to a queue the pet reads 10 times a second. The icon is the 16×16 mascot in `ICON`, drawn at 32×32 into a 32-bit DIB with alpha and made with `CreateIconIndirect`; the corner dot uses the usage colour of the higher limit and is redrawn when it changes. The tooltip (up to 127 characters) has both limits, any error and "quiet for now". Quitting removes the icon.
+
+**Being called over:** `come_here()`. Same monitor, on the taskbar and within 500 px (`COME_DROP`): it sprints there at 5× walking speed (`SPRINT`, the `goto_x` / `chase()` code, which ignores the personality). Otherwise it's placed in the air above the mouse, `CHUTE_HEIGHT` + 90 px above the floor, falling at 200 px/s, so the parachute opens; it waves when it lands.
+
+**Auto-hiding taskbar:** `SHAppBarMessage(ABM_GETSTATE)` says if it auto-hides. If so, `autohide_floors()` looks at every `Shell_TrayWnd` / `Shell_SecondaryTrayWnd` rectangle: one that's at least half the screen wide, reaches the screen's bottom and has slid up into view makes its top that screen's floor (`wb`). Hidden, it leaves the floor at the screen bottom.
+
+**Fetch:** the ball (`BALL`, drawn at 3 px blocks) is a `Sprite` window. Gravity as for the mascot, bounces off the screen's sides and top (60%) and the floor (50%, until it's slower than 140 px/s), then rolls with 750 px/s² friction. The mascot chases with `goto_x` following the ball, picks it up within 26 px, then runs to the mouse and drops it. Dragging the ball and letting go throws it with 70% of the mouse speed (up to 2200 px/s).
+
+**The UFO:** a timeline in `fun.py` (`UFO_BEAM` … `UFO_END`): flies in for 1.5 s, beam on, lifts the mascot 56 px into the saucer over 2 s, keeps it 2 s, drops it, then flies off up and to the right. The saucer (`UFO`, drawn at double block size) is fixed on the screen while the mascot's window moves, so it's drawn at an offset worked out from the mascot's height. The beam is a polygon with Tk's `gray50` stipple: every other pixel is the see-through key colour, so it looks like light. The usage bubble steps aside and speech goes above the saucer.
+
+**The cat:** a `Sprite` that walks along the taskbar of the mascot's screen at 60 px/s with two leg frames (`CAT_A`, `CAT_B`, flipped when walking left), stops 2.5 s when it reaches the mascot, and runs at 200 px/s after a click.
 
 **Settings file:**
 - `pet_settings.json` holds:
@@ -392,7 +428,8 @@ There's also 30 px of side space for z's and sparks.
   - `warn_at` (70/75/80/85) and `panic_at` (85/90/95), the yellow and red ring levels
   - `bubble` ("both" / "5h" / "hover") and `bubble_style` ("numbers" / "bars")
   - `chatter` ("off" / "some" / "lots")
-  - the panel's `panel_tab`, `plan_chart` ("5h" / "7d"), `cc_view` and `cc_range`
+  - the panel's `panel_tab` ("plan" / "cc" / "sessions"), `plan_chart` ("5h" / "7d"), `cc_view` and `cc_range`
+  - `tray`, `pace_warn`, `seasonal`, `quiet_hours`, `dnd`, `rare`, `apprentices` (on/off), and `quiet_from` (20–23 or 0) and `quiet_to` (6–9), the quiet hours
 - It's written to a temporary file first, then swapped in, so a crash can't leave half a file.
 - Bad or missing values fall back to the defaults.
 
@@ -403,7 +440,7 @@ There's also 30 px of side space for z's and sparks.
 ## Setup
 
 - Windows 10 or 11 (tested on Windows 11).
-- Python 3.10 or newer with tkinter (tested with Python 3.14). No pip installs. The code's syntax was checked against 3.8 to 3.14, but it has only been run on 3.14.
+- Python 3.10 or newer with tkinter (tested with Python 3.14). No pip installs. Runs on 3.14 (Tk 8.6) and 3.15 (Tk 9.0). The code's syntax was checked down to 3.8, but nothing older than 3.14 has been run.
 - Claude Code installed and signed in on the same computer.
 - The development computer has two 1920×1080 monitors side by side, with the taskbar at the bottom of both.
 - Everything specific to one computer (paths, monitors, the Python install) goes in `LOCAL_NOTES.md`, which git ignores.
@@ -508,6 +545,24 @@ There's also 30 px of side space for z's and sparks.
 - A window ending exactly at the taskbar slid over it: pushed. One that goes behind the taskbar: not pushed.
 - Success rates now that the side counts: 150 px up 10/10, 280 px up 7/12, 390 px up 0/6. Window to window 5/5.
 
+**Version 7.0, tested on 2026-10-10** (a separate test pet with scratch settings, memory, error log and cache, fake usage numbers and made-up Claude Code logs, on the second monitor; Python 3.15, and 3.14 for imports and the UFO):
+- Screenshots: the Sessions tab, the new menu, all four outfits (Halloween, Christmas, New Year, Valentine's), fireworks, the shiny colour, the spell tome with two apprentices (three busy sessions), the wand with one session, eyes following a pretend pointer left, right-and-up and down, the UFO arriving, lifting and gone, the cat meeting the mascot, the ball in flight, the quiet line and menu, the new settings rows on every page, and the Pet diary.
+- Being called over: a run of 300 px, a parachute drop 800 px away, a drop onto the other monitor and back. A real second start (a separate process setting the summon signal) brought it over. A real Ctrl + Alt + H press called it (the real running pet held P and D, so those showed "another app").
+- Fetch: the chase, "got it!", grabbing the ball back from the mascot by pretend mouse drag, and a throw that crossed to the other monitor (it followed).
+- The tray icon: added, tooltip with both limits, a pretend left click called the mascot, a right click opened the menu at the pointer, switching it off removed it.
+- Quiet mode from the menu (speech and sounds blocked, back after "Talk again"), and quiet hours at eight different times, across and not across midnight.
+- The early pace warning (70% with 3 hours left): one line and one notification, and not again on the next check. Session wrap-ups: two finished sessions as one "while you were away" line.
+- "Service changed": the bubble, the panel, and the error log listing only the names it got.
+- The log cache on the real logs: the same numbers after a restart, which read in 0.04 s instead of 0.25 s. With 64 KB chunks: every answer read, a 300 KB line skipped, a deleted log throwing the cache away, and only new lines read after a restart.
+- `autohide_floors()` with made-up taskbar positions (hidden, slid up, on one of two monitors, on the side). The forecast gives the same answer as before. The tour, all five lines in order.
+
+**Not tested yet (version 7.0):**
+- A real auto-hiding taskbar (this computer doesn't have one), and Windows' Do Not Disturb (Windows 11 may not report it to apps at all; presentation mode should).
+- Real mouse clicks on the tray icon (tested with pretend clicks), and Explorer restarting with the icon showing.
+- The meow and the other sounds actually heard, and the seasons on their real dates.
+- Real Claude Code reading tools and parallel sessions triggering the tome and the apprentices (tested by setting what the log reader saw).
+- The rare events on their real timers (tested by starting them directly).
+
 **Not tested yet:**
 - Real API data inside the pet.
 - Wizard mode triggered by real Claude Code activity (it was tested by calling it directly).
@@ -522,15 +577,52 @@ There's also 30 px of side space for z's and sparks.
 - A taskbar on the side of the screen.
 
 **Known limits:**
-- It sits at the bottom of the screen if the taskbar auto-hides.
+- With an auto-hiding taskbar it stands on the screen's bottom edge and rides up when the taskbar slides up (not tried on a real one yet).
+- Windows plays one sound at a time, so a new sound cuts off the last one (dance music included).
 - If a monitor has different display scaling, the pet keeps its size in real pixels, so it looks smaller or bigger there.
 - No automatic login refresh: the pet only notices when Claude Code renews the login. Doing the renewal itself would mean sending the refresh token to Anthropic's login server (not api.anthropic.com) and could clash with Claude Code, so it's left out unless you decide otherwise.
 - Claude Code stats only cover this computer's logs. If Claude Code deletes old logs, they disappear from the stats too.
 
 **Ideas for later:**
-- Dim the bubble when the data is stale.
+- More jobs for the wizard, one per kind of Claude Code tool (the log only gives the tool's name; `JOBS` in `pet/cclog.py` maps names to jobs). The tools it could tell apart:
+  - **Reading** (Read, Grep, Glob, NotebookRead, LS): done, the spell tome.
+  - **Writing and editing** (Write, Edit, MultiEdit, NotebookEdit): a quill writing on a scroll.
+  - **Running commands** (Bash, BashOutput, KillShell): a hard hat, or a cauldron bubbling.
+  - **The web** (WebFetch, WebSearch): a crystal ball or a telescope.
+  - **Helpers** (Task / Agent, starting a subagent): summons a little familiar.
+  - **Planning** (TodoWrite, ExitPlanMode): ticks off a checklist on a scroll.
+  - **Asking you something** (AskUserQuestion): a big "?" and a wave, since Claude is waiting for you.
+  - **Other tools from add-ons** (names starting `mcp__`): a mysterious rune circle.
+  - Also visible without tool names: thinking (`thinking` blocks), a tool failing (already the worried face), a conversation being compacted (`compact_boundary` lines), and images sent.
 
 ## Change log
+
+- **2026-10-10 (version 7.0): a big batch of improvements, quality-of-life and fun.**
+  - **Technical:**
+    - The usage service changing shape is spotted and explained ("service changed"), with only the names it sent written to the error log.
+    - Claude Code's log numbers are cached in `pet_cc_cache.json.gz`, so a restart only reads new lines; logs are read 4 MB at a time.
+    - An auto-hiding taskbar is handled: the floor follows it up and down.
+    - The notes are brought up to date: the settings window's real pages, where `PRICES` lives, and an idea that was already done.
+  - **Quality of life:**
+    - A tray icon with your usage in its tooltip; click to call the mascot, right-click for the menu.
+    - Call the mascot over with Ctrl + Alt + H, the tray icon, or by starting the pet again. It runs to your mouse or parachutes in.
+    - Quiet mode: for an hour from the menu, quiet hours, and following Do Not Disturb.
+    - An early pace warning when you'd run out well before the reset.
+    - Session wrap-ups in a speech bubble, and a new Sessions tab recapping the latest five sessions.
+    - A short tour on the very first start, replayable from settings.
+  - **Fun:**
+    - Seasonal outfits (Halloween, Christmas, New Year, its birthday, Valentine's Day) and New Year fireworks.
+    - Its eyes follow your mouse pointer.
+    - A floating spell tome while Claude reads files.
+    - Apprentice wizards for parallel Claude Code sessions.
+    - A pet diary counting everything it gets up to.
+    - Play fetch.
+    - Rare surprises: a shiny colour, a UFO abduction, and a cat (with a meow).
+  - New files: `pet/fun.py`, `pet/tray.py`, `pet/sprites.py`. The settings window's version is now 7.0.
+
+- **2026-10-10 (version 6.6): tested on Python 3.15.**
+  - Python 3.15 comes with Tk 9.0 (3.14 has Tk 8.6). Ran the real pet on both, on the second monitor with scratch settings and made-up usage numbers: the pet, both details panel tabs, the settings window, speech bubbles and the menu look the same, and nothing was logged as an error. All pet files load on 3.15 with warnings turned into errors.
+  - `Start pet.bat` and the startup shortcut picked up 3.15 on their own once it was installed. No code changes were needed.
 
 - **2026-10-10 (version 6.5): tidy-up.**
   - `Start pet.bat` replaces the hand-made `Start Claude Pet` shortcut, which pointed at one Python version.

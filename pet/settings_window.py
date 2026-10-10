@@ -1,4 +1,5 @@
 # the settings window (sidebar, pages, search, keyboard control).
+import datetime
 import math
 import time
 import tkinter as tk
@@ -6,20 +7,24 @@ import tkinter.font as tkfont
 import webbrowser
 
 from .art import ARMS, BLOCK_H, BLOCK_W, BODY, BUBBLE, BUBBLE_TEXT, EYE, EYES, LEGS_STAND, ORANGE, TRACK
-from .config import (MAX_SCALE, MIN_SCALE, PANIC_CHOICES, POLL_CHOICES, PROFILE_NAMES, SHORTCUTS,
-    WARN_CHOICES, combo_parts, key_name)
+from .config import (MAX_SCALE, MIN_SCALE, PANIC_CHOICES, POLL_CHOICES, PROFILE_NAMES, QUIET_FROM_CHOICES,
+    QUIET_TO_CHOICES, SHORTCUTS, WARN_CHOICES, combo_parts, key_name)
 from .sounds import SOUND_DIR, SOUND_GROUPS
 from .storage import DEFAULTS
 from .tips import TIPS
 from .ui import round_corners, round_rect
-from .usage import fmt_time
+from .usage import fmt_day, fmt_time
 from .winapi import u32
 
 
 # ---- settings window (right-click > settings) ----
 
+def hour_name(h):
+    return "Midnight" if h == 0 else f"{h % 12 or 12} {'AM' if h < 12 else 'PM'}"
+
+
 PERF_POINTS = 90   # 3 minutes of performance history, one point every 2 seconds
-VERSION = "6.0"
+VERSION = "7.0"
 PROJECT_URL = "https://github.com/have-you-tried-restarting/claude-usage-pet"
 ICON_FONT = "Segoe MDL2 Assets"   # windows' own icon font
 
@@ -65,16 +70,22 @@ class SettingsWindow:
             return [("Movement", ["energy"], [
                         row("choice", "Personality", "energy", p.energy, p.energy_changed, PROFILE_NAMES,
                             words="parkour lively normal chill statue move walk jump")]),
-                    ("Behaviour", ["naps", "wizard", "platforms", "anim"], [
+                    ("Behaviour", ["naps", "wizard", "apprentices", "platforms", "rare", "anim"], [
                         row("toggle", "Take naps", "naps", p.naps, p.naps_changed, words="sleep"),
-                        row("toggle", "Wizard when Claude works", "wizard", p.wizard, p.changed, words="hat magic"),
+                        row("toggle", "Wizard when Claude works", "wizard", p.wizard, p.changed,
+                            words="hat magic tome book reading"),
+                        row("toggle", "Apprentices for parallel sessions", "apprentices", p.apprentices, p.changed,
+                            show=lambda: bool(p.wizard.get()), words="helpers sessions wizard"),
                         row("toggle", "Stand on windows", "platforms", p.platforms, p.changed, words="jump ledge"),
+                        row("toggle", "Rare surprises", "rare", p.rare, p.changed, words="ufo cat shiny alien"),
                         row("toggle", "Animations", "anim", p.anim, p.anim_changed, words="still motion")])]
         if page == "appearance":
             return [("Preview", None, [row("preview", "Preview", words="look size bubble")]),
-                    ("Mascot", ["scale"], [
+                    ("Mascot", ["scale", "seasonal"], [
                         row("slider", "Size", "scale", p.size_var, p.set_scale, (MIN_SCALE, MAX_SCALE, 0.05, "{:.2f}x"),
-                            words="big small scale")]),
+                            words="big small scale"),
+                        row("toggle", "Seasonal outfits", "seasonal", p.seasonal, p.changed,
+                            words="halloween christmas hat pumpkin holiday")]),
                     ("Usage bubble", ["bubble", "bubble_style"], [
                         row("choice", "Bubble shows", "bubble", p.bubble_mode, p.changed,
                             (("both", "Both limits"), ("5h", "5-hour only"), ("hover", "On hover"))),
@@ -96,18 +107,29 @@ class SettingsWindow:
                             words="poke bounce scream splat parachute eagle hay wizard magic dance music milestones")]),
                     ("Talking", ["chatter"], [
                         row("choice", "Chatter", "chatter", p.chatter, p.chatter_changed,
-                            (("off", "Off"), ("some", "Sometimes"), ("lots", "A lot")), words="speech talk lines")])]
+                            (("off", "Off"), ("some", "Sometimes"), ("lots", "A lot")), words="speech talk lines")]),
+                    ("Quiet", ["quiet_hours", "quiet_from", "quiet_to", "dnd"], [
+                        row("toggle", "Quiet hours", "quiet_hours", p.quiet_hours, p.changed,
+                            words="night mute silent sleep"),
+                        row("choice", "Quiet from", "quiet_from", p.quiet_from, p.changed,
+                            [(v, hour_name(v)) for v in QUIET_FROM_CHOICES], show=lambda: bool(p.quiet_hours.get())),
+                        row("choice", "Quiet until", "quiet_to", p.quiet_to, p.changed,
+                            [(v, hour_name(v)) for v in QUIET_TO_CHOICES], show=lambda: bool(p.quiet_hours.get())),
+                        row("toggle", "Follow Do Not Disturb", "dnd", p.dnd, p.changed,
+                            words="focus assist presentation mute meeting")])]
         if page == "usage":
             warn_on = lambda: bool(p.warn.get())
             return [("Checking", ["poll"], [
                         row("choice", "Refresh every", "poll", p.poll, p.poll_changed,
                             [(v, f"{v // 60} min") for v in POLL_CHOICES], words="update interval")]),
-                    ("Warnings", ["warn", "warn_at", "panic_at", "notify"], [
+                    ("Warnings", ["warn", "warn_at", "panic_at", "pace_warn", "notify"], [
                         row("toggle", "Warn when nearly full", "warn", p.warn, p.changed, words="ring"),
                         row("choice", "Yellow ring from", "warn_at", p.warn_at, p.changed,
                             [(v, f"{v}%") for v in WARN_CHOICES], show=warn_on),
                         row("choice", "Red ring from", "panic_at", p.panic_at, p.changed,
                             [(v, f"{v}%") for v in PANIC_CHOICES], show=warn_on),
+                        row("toggle", "Early pace warning", "pace_warn", p.pace_warn, p.changed,
+                            words="forecast run out fast"),
                         row("toggle", "Desktop notifications", "notify", p.notify_on, p.changed, words="toast alert")]),
                     ("Claude Code", ["cc_app"], [
                         row("toggle", "Count tokens like the Claude app", "cc_app", p.cc_app, p.cc_changed,
@@ -120,12 +142,15 @@ class SettingsWindow:
         if page == "system":
             return [("Startup", None, [
                         row("toggle", "Start with Windows", None, p.startup_var, p.startup_changed, words="boot login")]),
+                    ("Tray", ["tray"], [
+                        row("toggle", "Tray icon", "tray", p.tray_on, p.changed, words="notification area clock")]),
                     ("Screens", ["hide_fs", "one_monitor"], [
                         row("toggle", "Hide during full screen", "hide_fs", p.hide_fs, p.hide_fs_changed,
                             words="video game"),
                         row("toggle", "Stay on one monitor", "one_monitor", p.one_monitor, p.changed,
                             words="display screen")])]
         return [("Claude login", None, [row("login", "Claude login", words="account sign in expired token check")]),
+                ("Pet diary", None, [row("diary", "Pet diary", words="stats pokes throws jumps dances log count")]),
                 ("Performance", None, [row("perf", "Performance", words="cpu memory fps frame rate stats")]),
                 ("About", None, [row("about", "About", words="version github project")])]
 
@@ -396,6 +421,8 @@ class SettingsWindow:
             return self.draw_login(x0, x1, y)
         if kind == "perf":
             return self.draw_perf(x0, x1, y)
+        if kind == "diary":
+            return self.draw_diary(x0, x1, y)
         return self.draw_about(x0, x1, y)
 
     def switch(self, right, y, on):
@@ -699,7 +726,46 @@ class SettingsWindow:
         w = self.font(8, True).measure(label) / self.s
         end = self.text(x0 + 16, y + 10, label, self.ON, 8, True)
         self.hit(("link",), x0 + 12, y + 6, x0 + 20 + w, end + 4, (("link",), lambda: webbrowser.open(PROJECT_URL)))
+        label = "Show the tour again"
+        w = self.font(8, True).measure(label) / self.s
+        y = end + 6
+        end = self.text(x0 + 16, y + 4, label, self.ON, 8, True)
+        self.hit(("tour",), x0 + 12, y, x0 + 20 + w, end + 4, (("tour",), self.pet.restart_tour))
         return end + 14
+
+    def draw_diary(self, x0, x1, y):
+        # everything the mascot has been up to, two to a line
+        p = self.pet
+        log, st = p.log, p.cc_stats()
+        n = lambda k: f"{int(log.get(k, 0)):,}"
+        metres = log.get("walked", 0) * 0.0254 / 96   # screen pixels at 100% scaling, as real distance
+        wiz = int(log.get("wizard_s", 0) // 60)
+        since = ""
+        if p.log_since:
+            try:
+                since = f" since {fmt_day(datetime.date.fromisoformat(p.log_since))}"
+            except ValueError:
+                pass
+        items = [("Pokes", f"{p.pokes:,}"), ("Picked up", n("pickups")), ("Throws", n("throws")),
+                 ("Little hops", n("hops")),
+                 ("Jumps to windows", f"{n('leaps_made')} made · {n('leaps_missed')} missed"),
+                 ("Leaps of faith", n("dives")), ("Parachutes", n("chutes")), ("Wall splats", n("splats")),
+                 ("Dances", n("dances")), ("Naps", n("naps")), ("Games of fetch", n("fetches")),
+                 ("Walked", f"{metres:,.0f} m" if metres < 1000 else f"{metres / 1000:,.2f} km"),
+                 ("Time as a wizard", f"{wiz // 60}h {wiz % 60:02d}m" if wiz >= 60 else f"{wiz}m"),
+                 ("Limits reset", n("resets")), ("5-hour at 100%", n("full_5h")), ("Weekly at 100%", n("full_week")),
+                 ("Past-midnight sessions", f"{st['late']:,}" if st else "…"),
+                 ("UFO abductions", n("ufo")), ("Cats met", n("cats")), ("Shiny days", n("shiny"))]
+        y = self.text(x0 + 16, y + 14, f"What the mascot's been up to{since}. Past-midnight sessions come from "
+                      "Claude Code's logs (all time); the rest is counted by the mascot.", self.DIM, 8,
+                      width=x1 - x0 - 32) + 8
+        col_w = (x1 - x0 - 32 - 16) / 2
+        for i, (label, value) in enumerate(items):
+            cx = x0 + 16 + (i % 2) * (col_w + 16)
+            ry = y + (i // 2) * 22
+            self.text(cx, ry, label, self.DIM, 8)
+            self.text(cx + col_w, ry, value, self.FG, 8, True, "ne")
+        return y + (len(items) + 1) // 2 * 22 + 8
 
     # ---- search ----
     def search_in(self, e=None):
@@ -853,6 +919,8 @@ class SettingsWindow:
             return
         elif kind == "link":
             webbrowser.open(PROJECT_URL)
+        elif kind == "tour":
+            self.pet.restart_tour()
         elif kind == "slide":
             self.drag = hit
             self.slide_to(e.x)
