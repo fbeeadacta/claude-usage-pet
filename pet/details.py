@@ -8,7 +8,7 @@ import tkinter.font as tkfont
 from .art import PARK, RED
 from .cclog import compare_line, fmt_minutes, fmt_money, fmt_tokens, hour_label, pretty_model
 from .config import SESSION_DONE_MIN
-from .ui import Fader, move_window, round_corners, round_rect
+from .ui import Canvas, Fader, move_window, round_corners, round_rect
 from .usage import (bar_color, fmt_day, fmt_time, fmt_when, forecast, pace_info, parse_rows, parse_time,
     period_seconds, reset_text)
 
@@ -36,7 +36,7 @@ class Details:
         self.win.attributes("-alpha", 0.0)
         self.win.configure(bg=self.BG)
         self.win.geometry(f"10x10+{PARK}+{PARK}")   # starts parked off screen
-        self.canvas = tk.Canvas(self.win, bg=self.BG, highlightthickness=0)
+        self.canvas = Canvas(self.win, bg=self.BG, highlightthickness=0)
         self.canvas.pack(fill="both", expand=True)
         self.canvas.bind("<ButtonRelease-1>", self.click)
         self.canvas.bind("<Button-3>", pet.show_menu)

@@ -23,7 +23,7 @@ from .screens import ScreensMixin
 from .settings_window import PERF_POINTS, SettingsWindow
 from .storage import load_memory, load_settings, log_error, write_json
 from .talk import TalkMixin
-from .ui import Fader
+from .ui import Canvas, Fader
 from .usage import CLOCK
 from .winapi import hotkey_thread, make_dpi_aware, own_usage, set_startup, startup_path, summon_event, winmm
 
@@ -40,7 +40,7 @@ class Pet(ScreensMixin, MouseMixin, TalkMixin, DataMixin, MovementMixin, RenderM
         self.root.configure(bg=KEY)
         self.root.attributes("-transparentcolor", KEY)
         self.dpi = self.root.winfo_fpixels("1i") / 96   # 1.0 at 100% display scaling, 1.5 at 150%
-        self.canvas = tk.Canvas(self.root, bg=KEY, highlightthickness=0, bd=0)
+        self.canvas = Canvas(self.root, bg=KEY, highlightthickness=0, bd=0)
         self.canvas.pack()
         self.fonts, self.wraps = {}, {}
 

@@ -2,6 +2,7 @@
 import tkinter as tk
 
 from .art import KEY, PARK, SHADOW
+from .ui import Canvas
 
 
 class Sprite:
@@ -14,7 +15,7 @@ class Sprite:
         w.configure(bg=KEY)
         w.attributes("-transparentcolor", KEY)
         w.geometry(f"1x1+{PARK}+{PARK}")
-        self.canvas = tk.Canvas(w, bg=KEY, highlightthickness=0, bd=0)
+        self.canvas = Canvas(w, bg=KEY, highlightthickness=0, bd=0)
         self.canvas.pack()
         self.look, self.size, self.geo = None, (1, 1), None
 

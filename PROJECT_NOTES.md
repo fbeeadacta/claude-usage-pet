@@ -2,7 +2,7 @@
 
 A small Claude mascot that walks along the top of the Windows taskbar. A bubble above its head shows Claude plan usage. If any file here gets lost or corrupted, this note has enough detail to rebuild it. You can give this file to Claude and ask it to rebuild the project.
 
-Last updated: 2026-10-10 (version 7.3)
+Last updated: 2026-10-10 (version 7.4)
 
 ## Files in this folder
 
@@ -37,7 +37,7 @@ The code is a package (`pet/`) started by `claude_pet.py`. Every file begins wit
 | `pet/storage.py` | The settings file (`DEFAULTS`), the memory file, the error log. |
 | `pet/winapi.py` | Windows calls: monitors, windows, idle time, notifications, the shortcut thread, startup, single instance. |
 | `pet/sounds.py` | Making the sound effects. |
-| `pet/ui.py` | Shared drawing helpers: rounded boxes, smooth corners, fading, text wrapping. |
+| `pet/ui.py` | Shared drawing helpers: the `Canvas` every window uses (it reuses items, see 7.4), rounded boxes, smooth corners, fading, text wrapping. |
 | `pet/mascot.py` | The `Pet` class: puts the parts below together; its settings and start-up. |
 | `pet/screens.py`, `mouse.py`, `talk.py`, `data.py`, `movement.py`, `render.py`, `fun.py` | The parts of the `Pet` (mixin classes): monitors, mouse handling, talking and reactions, data and ticks, physics and movement, drawing, and the extras (being called over, quiet mode, seasons, session wrap-ups, the tour, the diary, the tray icon, fetch, rare visitors). They all share one `self`. |
 | `pet/idle.py` | Things it does on its own when idle (a part of the `Pet`): sweeping, painting, fishing, balloons, a paper plane. |
@@ -461,7 +461,7 @@ There's also 30 px of side space for z's and sparks.
 ## Setup
 
 - Windows 10 or 11 (tested on Windows 11).
-- Python 3.10 or newer with tkinter (tested with Python 3.14). No pip installs. Runs on 3.14 (Tk 8.6) and 3.15 (Tk 9.0). The code's syntax was checked down to 3.8, but nothing older than 3.14 has been run.
+- Python 3.10 or newer with tkinter (tested with Python 3.14). No pip installs. Runs on 3.14 (Tk 8.6) and 3.15 (Tk 9.0). Tk 9.0 leaks memory for every deleted canvas item, so all canvases are `ui.Canvas`, which reuses items instead (see 7.4 in the change log). New windows should use it too. The code's syntax was checked down to 3.8, but nothing older than 3.14 has been run.
 - Claude Code installed and signed in on the same computer.
 - The development computer has two 1920×1080 monitors side by side, with the taskbar at the bottom of both.
 - Everything specific to one computer (paths, monitors, the Python install) goes in `LOCAL_NOTES.md`, which git ignores.
@@ -608,6 +608,11 @@ There's also 30 px of side space for z's and sparks.
 - Things to do when idle: 7.3 replaced the 7.2 ones with sweeping, painting, fishing, balloons and a paper plane; the rest of the list in the 7.1 change log are still ideas.
 
 ## Change log
+
+- **2026-10-10 (version 7.4): fixed the memory leak on Python 3.15.**
+  - The pet kept using more memory the longer it ran (about 1 MB every 4 seconds, faster during rune rain). Python 3.15 comes with Tk 9.0, and Tk 9.0 leaks a little memory (around 80 bytes) for every canvas item that's deleted, whatever kind it is (rectangles, lines, polygons, ovals, text; images don't). The pet redraws everything up to 60 times a second by deleting all items and making new ones, so it leaked all the time. Rune rain draws the most pieces per frame, so it leaked fastest. Tk 8.6 (Python 3.14) doesn't leak, and the pet's own Python memory stayed flat throughout.
+  - Fix: every canvas is now `ui.Canvas`, which reuses its items. `delete("all")` only hides them (one call), and the next `create_*` of the same kind with the same option names takes a hidden one back: new coordinates, new options, shown and raised to the top, so the drawing order is the same as before. Embedded widgets (the settings search box) are still made and deleted for real. Nothing else in the drawing code changed.
+  - Tested (test pets with scratch files on the left monitor, every wizard job and idle activity forced in turn for 30 s each, 3.14 and 3.15 side by side): before the fix, 3.15 grew about 95 MB in 5 minutes while 3.14 stayed flat. After it, both stay flat apart from one-off steps (the first full read of Claude Code's logs, a new font size, the 5-minute cache save). CPU and frame rate were the same on both. A screenshot of the fixed pet looked right. Not tested: the settings window and details panel over a long time (they also use `ui.Canvas` now, but only redraw when something changes).
 
 - **2026-10-10 (version 7.3): new things to do when idle.**
   - Stargazing, the practice spell and the book are gone. In their place: sweeping, painting, fishing through a hole in the taskbar, blowing up balloons that pop, and throwing a paper plane (see "Idle activities" above). Each one is equally likely (the plane only when none is out already). `ACT_CHANCE` is unchanged.

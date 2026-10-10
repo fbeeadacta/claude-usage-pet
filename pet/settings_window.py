@@ -12,7 +12,7 @@ from .config import (MAX_SCALE, MIN_SCALE, PANIC_CHOICES, POLL_CHOICES, PROFILE_
 from .sounds import SOUND_DIR, SOUND_GROUPS
 from .storage import DEFAULTS
 from .tips import TIPS
-from .ui import round_corners, round_rect
+from .ui import Canvas, round_corners, round_rect
 from .usage import fmt_day, fmt_time
 from .winapi import u32
 
@@ -166,7 +166,7 @@ class SettingsWindow:
         w.attributes("-topmost", True)
         w.configure(bg=self.BG)
         self.fonts = {}
-        self.canvas = tk.Canvas(w, bg=self.BG, highlightthickness=0, takefocus=0)
+        self.canvas = Canvas(w, bg=self.BG, highlightthickness=0, takefocus=0)
         self.canvas.pack()
         self.canvas.bind("<ButtonPress-1>", self.press)
         self.canvas.bind("<B1-Motion>", self.motion)

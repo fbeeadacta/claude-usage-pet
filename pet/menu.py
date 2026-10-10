@@ -4,7 +4,7 @@ import tkinter as tk
 import tkinter.font as tkfont
 
 from .art import PARK, TRACK
-from .ui import Fader, move_window, round_corners, round_rect
+from .ui import Canvas, Fader, move_window, round_corners, round_rect
 from .winapi import u32
 
 
@@ -28,7 +28,7 @@ class PopupMenu:
         w.attributes("-alpha", 0.0)
         w.configure(bg=self.BG)
         w.geometry(f"10x10+{PARK}+{PARK}")
-        self.canvas = tk.Canvas(w, bg=self.BG, highlightthickness=0)
+        self.canvas = Canvas(w, bg=self.BG, highlightthickness=0)
         self.canvas.pack()
         self.canvas.bind("<Motion>", lambda e: self.set_hover(self.row_at(e.y)))
         self.canvas.bind("<Leave>", lambda e: self.set_hover(None))

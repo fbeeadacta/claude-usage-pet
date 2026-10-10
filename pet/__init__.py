@@ -9,7 +9,8 @@
 #   storage.py           the settings file, the memory file and the error log.
 #   winapi.py            windows bits through ctypes: screens, windows, idle time, notifications, shortcuts, startup.
 #   sounds.py            the sound effects, made from maths (no sound files to ship).
-#   ui.py                small drawing helpers shared by every window: rounded boxes, smooth corners, fading, wrapping.
+#   ui.py                small drawing helpers shared by every window: the canvas they all use (reuses its items),
+#                        rounded boxes, smooth corners, fading, wrapping.
 #   screens.py           part of the Pet: which monitor it's on, the work areas, hiding.
 #   mouse.py             part of the Pet: hovering, poking, dragging and throwing.
 #   talk.py              part of the Pet: speech bubbles, sounds, moods and reactions.

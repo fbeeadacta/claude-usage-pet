@@ -1,4 +1,4 @@
-# small drawing helpers shared by every window: rounded boxes, smooth corners, fading, wrapping.
+# small drawing helpers shared by every window: the canvas they all use, rounded boxes, smooth corners, fading, wrapping.
 import ctypes
 import time
 import tkinter as tk
@@ -19,6 +19,42 @@ def round_corners(win):
         dwm.DwmSetWindowAttribute(hwnd, 33, ctypes.byref(pref), ctypes.sizeof(pref))
     except (OSError, tk.TclError):
         pass
+
+
+class Canvas(tk.Canvas):
+    # a canvas that reuses its items. tk 9 (python 3.15+) leaks a little memory for every canvas item
+    # that's deleted, and the pet redraws everything up to 30 times a second, so it kept growing.
+    # here delete("all") only hides the items, and the next create_* of the same kind (same options)
+    # takes one of those back: moved, restyled and put on top, so it looks just like a new one.
+    def __init__(self, *args, **kw):
+        super().__init__(*args, **kw)
+        self.pools, self.used, self.real = {}, {}, []   # (kind, option names) -> items, how many in use, window items
+
+    def _create(self, kind, args, kw):
+        if kind == "window":   # (holds a real widget, so it's made and deleted for real)
+            item = super()._create(kind, args, kw)
+            self.real.append(item)
+            return item
+        key = (kind, tuple(sorted(kw)))
+        pool, n = self.pools.setdefault(key, []), self.used.get(key, 0)
+        self.used[key] = n + 1
+        if n == len(pool):
+            pool.append(super()._create(kind, args, kw))
+            return pool[n]
+        item = pool[n]
+        self.tk.call(self._w, "coords", item, *tk._flatten(args))
+        self.tk.call(self._w, "itemconfigure", item, "-state", "normal", *self._options(kw))
+        self.tk.call(self._w, "raise", item)
+        return item
+
+    def delete(self, *items):
+        if items != ("all",):
+            return super().delete(*items)
+        if self.real:
+            super().delete(*self.real)
+            self.real = []
+        self.tk.call(self._w, "itemconfigure", "all", "-state", "hidden")
+        self.used = {}
 
 
 _corners = {}
