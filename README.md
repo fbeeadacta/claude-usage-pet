@@ -39,6 +39,8 @@ py claude_pet.py
 
 Use `pyw claude_pet.py` (or `pythonw`) to run it without a console window. To start it when you sign in to Windows, right-click the mascot, open **Settings → System** and turn on **Start with Windows**.
 
+The code lives in the `pet/` folder; `pet/__init__.py` explains what each file does.
+
 ## Privacy
 
 - Your login token is read from `~/.claude/.credentials.json` on your own computer.

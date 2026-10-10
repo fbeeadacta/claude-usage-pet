@@ -1,0 +1,130 @@
+# the settings file, the memory file and the error log.
+import datetime
+import json
+import os
+import time
+import traceback
+
+from .config import (CHATTER, DEFAULT_KEYS, DEFAULT_SCALE, ERROR_LOG_KB, HERE, MAX_SCALE, MIN_SCALE,
+    PANIC_AT, PANIC_CHOICES, POLL_CHOICES, POLL_SECONDS, PROFILES, SETTINGS_FILE, SHORTCUTS, STATE_FILE,
+    WARN_AT, WARN_CHOICES, combo_ok)
+from .sounds import SOUNDS
+
+
+# ---- error log ----
+
+ERROR_LOG = HERE / "pet_errors.log"
+
+
+def log_error(what, exc=None):
+    # writes what went wrong (with the python traceback) to pet_errors.log, kept small.
+    # the login token is never in here: tracebacks don't include it.
+    try:
+        text = "".join(traceback.format_exception(*exc)) if exc else traceback.format_exc()
+        if text.strip() in ("NoneType: None", ""):
+            text = ""
+        stamp = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        old = ERROR_LOG.read_text(encoding="utf-8") if ERROR_LOG.exists() else ""
+        if len(old) > ERROR_LOG_KB * 1024:
+            old = old[-ERROR_LOG_KB * 512:]   # keep the newer half
+        ERROR_LOG.write_text(old + f"[{stamp}] {what}\n{text}\n", encoding="utf-8")
+    except Exception:
+        pass
+
+
+# ---- settings and memory files ----
+
+DEFAULTS = {"scale": DEFAULT_SCALE, "energy": "normal", "walk": True, "jump": True, "naps": True, "anim": True,
+            "bubble": "both", "bubble_style": "numbers", "clock": "12h", "dates": "ddmm", "chatter": "some", "wizard": True, "warn": True, "cc_app": True, "notify": True, "sounds": True, "hotkeys": True,
+            "platforms": True, "volume": 60, "muted": [], "keys": None, "settings_size": None,
+            "warn_at": WARN_AT, "panic_at": PANIC_AT, "poll": POLL_SECONDS,
+            "hide_fs": True, "one_monitor": False, "panel_tab": "plan", "plan_chart": "5h", "cc_view": "overview",
+            "cc_range": "all", "x": None, "y": None}
+CHOICES = {"energy": tuple(PROFILES), "bubble": ("both", "5h", "hover"), "bubble_style": ("numbers", "bars"), "clock": ("12h", "24h"), "dates": ("ddmm", "mmdd"),
+           "chatter": tuple(CHATTER), "panel_tab": ("plan", "cc"), "plan_chart": ("5h", "7d"), "cc_view": ("overview", "models", "projects"),
+           "cc_range": ("all", "30d", "7d"),
+           }
+
+
+def read_json(path):
+    try:
+        data = json.loads(path.read_text())
+        return data if isinstance(data, dict) else {}
+    except (OSError, ValueError):
+        return {}   # missing or broken file
+
+
+def write_json(path, data):
+    # write to a temp file first, then swap it in, so a crash mid-write can't leave a broken file
+    tmp = path.with_suffix(".tmp")
+    try:
+        tmp.write_text(json.dumps(data, indent=1))
+        os.replace(tmp, path)
+    except OSError:
+        pass
+
+
+def load_settings():
+    saved = read_json(SETTINGS_FILE)
+    st = dict(DEFAULTS)
+    st.update({k: saved[k] for k in DEFAULTS if k in saved})
+    try:
+        st["scale"] = min(MAX_SCALE, max(MIN_SCALE, float(st["scale"])))
+    except (TypeError, ValueError):
+        st["scale"] = DEFAULT_SCALE
+    for k in ("walk", "jump", "naps", "anim", "wizard", "warn", "cc_app", "notify", "sounds", "hotkeys",
+              "platforms", "hide_fs", "one_monitor"):
+        st[k] = st[k] if isinstance(st[k], bool) else DEFAULTS[k]
+    for k, ok in CHOICES.items():
+        if st[k] not in ok:
+            st[k] = DEFAULTS[k]
+    if "energy" not in saved and saved.get("walk") is False:
+        st["energy"] = "statue"   # from before personalities: walking was switched off
+    if isinstance(st["volume"], bool) or not isinstance(st["volume"], int) or not 0 <= st["volume"] <= 100:
+        st["volume"] = DEFAULTS["volume"]
+    for k, ok in (("warn_at", WARN_CHOICES), ("panic_at", PANIC_CHOICES), ("poll", POLL_CHOICES)):
+        if st[k] not in ok or isinstance(st[k], bool):
+            st[k] = DEFAULTS[k]
+    keys = st["keys"] if isinstance(st["keys"], dict) else {}
+    st["keys"] = {name: (keys[name] if name in keys and (keys[name] is None or combo_ok(keys[name]))
+                         else list(DEFAULT_KEYS[name])) for name, _, _ in SHORTCUTS}
+    size = st["settings_size"]
+    if not (isinstance(size, list) and len(size) == 2 and all(isinstance(v, int) and not isinstance(v, bool)
+                                                               for v in size)):
+        st["settings_size"] = None
+    if not isinstance(st["muted"], list):
+        st["muted"] = []
+    st["muted"] = [k for k in st["muted"] if k in SOUNDS]
+    for k in ("x", "y"):
+        if isinstance(st[k], bool) or not isinstance(st[k], (int, float)):
+            st[k] = None
+    return st
+
+
+def load_memory():
+    # moods that survive a restart: when each limit last moved, pokes, milestones already said
+    m = read_json(STATE_FILE)
+    out = {"seen": {}, "last_5h": None, "pokes": 0, "milestones": {}, "last_usage": time.time(), "history": [],
+           "greeted": ""}
+    if isinstance(m.get("greeted"), str):
+        out["greeted"] = m["greeted"]
+    try:
+        num = lambda v: None if v is None else float(v)
+        out["history"] = [(float(h[0]), num(h[1]), num(h[2])) for h in m.get("history", [])]
+    except (TypeError, ValueError, IndexError):
+        pass
+    try:
+        out["seen"] = {k: (float(v[0]), float(v[1]), str(v[2])) for k, v in m.get("seen", {}).items()}
+    except (TypeError, ValueError, IndexError, AttributeError):
+        pass
+    try:
+        out["milestones"] = {k: [str(v[0]), [int(x) for x in v[1]]] for k, v in m.get("milestones", {}).items()}
+    except (TypeError, ValueError, IndexError, AttributeError):
+        pass
+    for k, kind in (("last_5h", float), ("pokes", int), ("last_usage", float)):
+        try:
+            if m.get(k) is not None:
+                out[k] = kind(m[k])
+        except (TypeError, ValueError):
+            pass
+    return out

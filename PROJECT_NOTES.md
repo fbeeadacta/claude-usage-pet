@@ -2,13 +2,14 @@
 
 A small Claude mascot that walks along the top of the Windows taskbar. A bubble above its head shows Claude plan usage. If any file here gets lost or corrupted, this note has enough detail to rebuild it. You can give this file to Claude and ask it to rebuild the project.
 
-Last updated: 2026-10-10 (version 6.1)
+Last updated: 2026-10-10 (version 6.2)
 
 ## Files in this folder
 
 | File | What it is |
 | --- | --- |
-| `claude_pet.py` | The pet. This is the main program. |
+| `claude_pet.py` | Starts the pet. Run this one (the shortcut and "Start with Windows" point at it). |
+| `pet/` | The pet's code, split into small parts. `pet/__init__.py` lists what each file does and where new things go. See "Code layout" below. |
 | `README.md` | Short intro for the GitHub page. |
 | `PROJECT_NOTES.md` | This file. |
 | `usage_widget.py` | The original panel-style widget, kept as a backup. It still works on its own. |
@@ -19,6 +20,32 @@ Last updated: 2026-10-10 (version 6.1)
 | `LOCAL_NOTES.md` | Details about this particular computer (paths, monitors, Python install). Not on GitHub. |
 | `pet_errors.log` | What went wrong, if anything (Python error details, never the login token). Kept under about 200 KB. Safe to delete. Not on GitHub. |
 | `docs/*.png` | Screenshots for the README, staged on a plain backdrop (nothing personal in them). |
+
+## Code layout
+
+The code is a package (`pet/`) started by `claude_pet.py`. Every file begins with a one-line summary and imports exactly what it uses from the others.
+
+| File | What's in it |
+| --- | --- |
+| `pet/config.py` | Tweakable numbers: speeds, timings, limits, personalities (`PROFILES`), file locations, default shortcut keys. |
+| `pet/lines.py` | Everything the mascot says. |
+| `pet/tips.py` | The descriptions next to each setting. |
+| `pet/art.py` | The mascot's pixel shapes and all colours. |
+| `pet/usage.py` | Login token, the usage API call, parsing, time and date formatting, login help text. |
+| `pet/cclog.py` | Claude Code's local logs: token counts, costs, stats. |
+| `pet/storage.py` | The settings file (`DEFAULTS`), the memory file, the error log. |
+| `pet/winapi.py` | Windows calls: monitors, windows, idle time, notifications, the shortcut thread, startup, single instance. |
+| `pet/sounds.py` | Making the sound effects. |
+| `pet/ui.py` | Shared drawing helpers: rounded boxes, smooth corners, fading, text wrapping. |
+| `pet/mascot.py` | The `Pet` class: puts the parts below together; its settings and start-up. |
+| `pet/screens.py`, `mouse.py`, `talk.py`, `data.py`, `movement.py`, `render.py` | The parts of the `Pet` (mixin classes): monitors, mouse handling, talking and reactions, data and ticks, physics and movement, drawing. They all share one `self`. |
+| `pet/details.py` | The hover details panel. |
+| `pet/menu.py` | The right-click menu. |
+| `pet/settings_window.py` | The settings window. |
+
+`pet/__init__.py` also says where new things go (a new setting, animation, sound, settings page or Pet part).
+
+One thing to know: `usage.RETRY_AFTER` changes while the pet runs, so other files read it as `usage.RETRY_AFTER`, never by importing the name on its own.
 
 ## How to use it
 
@@ -262,7 +289,7 @@ There's also 30 px of side space for z's and sparks.
 - No talking when chatter is off or the pet is hidden.
 - Random lines and quiet-time comments only happen when someone has touched the mouse or keyboard in the last minute, and not while it's working, asleep or showing the panel.
 - "Chatter" changes how often: sometimes = ×1, a lot = ×2.5.
-- All the lines are lists near the top of `claude_pet.py` (`QUOTES`, `CURIOUS_LINES`, `WALK_LINES`, `HIGH_LINES`, `DANCE_LINES`, `SLEEP_LINES`, `FALL_LINES`, `LEAP_TRY`, `LEAP_OK`, `LEAP_FAIL`, `SQUISH_LINES`, `WORK_START`, `WORKING`, `WORK_DONE`, `IDLE_LINES`, `POKE_LINES`, `POKE_COUNT`, `DRAG_LINES`, `WAKE_LINES`, `RESET_LINES`, `MILESTONES` and more).
+- All the lines are lists in `pet/lines.py` (`QUOTES`, `CURIOUS_LINES`, `WALK_LINES`, `HIGH_LINES`, `DANCE_LINES`, `SLEEP_LINES`, `FALL_LINES`, `LEAP_TRY`, `LEAP_OK`, `LEAP_FAIL`, `SQUISH_LINES`, `WORK_START`, `WORKING`, `WORK_DONE`, `IDLE_LINES`, `POKE_LINES`, `POKE_COUNT`, `DRAG_LINES`, `WAKE_LINES`, `RESET_LINES`, `MILESTONES` and more).
 
 **Working (wizard) detection:**
 - A background thread reads only the new bytes of each log file every 3 s.
@@ -504,6 +531,12 @@ There's also 30 px of side space for z's and sparks.
 - Dim the bubble when the data is stale.
 
 ## Change log
+
+- **2026-10-10 (version 6.2): the code is split into small files.**
+  - `claude_pet.py` (about 4,900 lines) became a 45-line starter plus the `pet/` package (20 files, mostly 100–400 lines; the biggest is the settings window at about 1,000). Nothing about how the pet looks or behaves changed. The shortcut, "Start with Windows" and the settings, memory and error-log files are all where they were.
+  - The `Pet` class is split into themed parts (mixins) that combine into one class.
+  - Done by a script that cut the file at its section lines and worked out each file's imports. It then checked that no line of code went missing, no name is unresolved, there are no import loops and no method is defined twice.
+  - Tested old and new side by side: sounds and dance music, small talk, times and dates, the login help, shortcuts (including a real key press), the whole settings window, the details panel placement, riding and being pushed by windows, jumps, wall slaps, the leap of faith, personalities, poking, dragging, throwing, the menu and refresh. Results matched; the only differences were random ones.
 
 - **2026-10-10 (version 6.1):**
   - Sounds are levelled to about the same loudness: each is scaled to the same average power (`SOUND_LEVEL`), not its loudest peak, and never clips. High, buzzy or hissy sounds seem louder than they measure, so the eagle cry, scream and hay are trimmed further by ear (`SOUND_TRIM`). Measured average power is now 4–7% for every sound; the eagle and scream were the loudest-sounding before. `SOUND_VERSION` is now 5.
