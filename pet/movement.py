@@ -509,7 +509,7 @@ class MovementMixin:
             self.spawn("heart")
             self.jump_now(HOP_HEIGHT * 1.3 * s)
             return
-        casting = self.wizard.get() and time.time() < self.working_until
+        casting = self.wizard_casting()   # (pet/dev.py: dev mode can pretend claude's working)
         if casting and self.state in ("idle", "walk", "dance", "act"):
             self.state, self.cast_t, self.next_spell = "work", 0.0, 0.0
         if self.state == "work":

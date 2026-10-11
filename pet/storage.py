@@ -55,10 +55,10 @@ DEFAULTS = {"scale": DEFAULT_SCALE, "energy": "normal", "walk": True, "jump": Tr
             "hide_fs": True, "one_monitor": False, "panel_tab": "plan", "plan_chart": "5h", "cc_view": "overview",
             "cc_range": "all", "x": None, "y": None,
             "tray": True, "pace_warn": True, "seasonal": True, "quiet_hours": False, "quiet_from": 22, "quiet_to": 7,
-            "dnd": True, "rare": True, "apprentices": True, "bedtime": True, "bedtime_at": 23}
+            "dnd": True, "rare": True, "apprentices": True, "bedtime": True, "bedtime_at": 23, "dev": False}
 BOOLS = ("walk", "jump", "naps", "anim", "wizard", "warn", "cc_app", "notify", "sounds", "hotkeys", "platforms",
          "hide_fs", "one_monitor", "tray", "pace_warn", "seasonal", "quiet_hours", "dnd", "rare", "apprentices",
-         "bedtime")
+         "bedtime", "dev")
 CHOICES = {"energy": tuple(PROFILES), "bubble": ("both", "5h", "hover"), "bubble_style": ("numbers", "bars"), "clock": ("12h", "24h"), "dates": ("ddmm", "mmdd"),
            "chatter": tuple(CHATTER), "panel_tab": ("plan", "cc"), "plan_chart": ("5h", "7d"),
            "cc_view": ("overview", "models", "projects", "sessions"), "cc_range": ("all", "30d", "7d"),

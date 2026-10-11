@@ -13,6 +13,7 @@ from .config import (FAKE_USAGE_ENV, MAX_SCALE, MIN_FETCH_GAP, MIN_SCALE, PROFIL
     STATE_FILE)
 from .data import DataMixin
 from .details import Details
+from .dev import DevMixin
 from .fun import FunMixin
 from .gags import GagsMixin
 from .hay import HayMixin
@@ -36,7 +37,7 @@ from .winapi import hotkey_thread, make_dpi_aware, own_usage, set_startup, start
 # ---- the pet ----
 
 class Pet(ScreensMixin, MouseMixin, TalkMixin, DataMixin, MovementMixin, RenderMixin, FunMixin, MagicMixin,
-          IdleMixin, TravelMixin, HayMixin, GagsMixin):
+          IdleMixin, TravelMixin, HayMixin, GagsMixin, DevMixin):
     def __init__(self):
         make_dpi_aware()
         self.root = tk.Tk()
@@ -93,6 +94,7 @@ class Pet(ScreensMixin, MouseMixin, TalkMixin, DataMixin, MovementMixin, RenderM
         self.apprentices = tk.BooleanVar(value=st["apprentices"]) # little helpers for parallel sessions
         self.bedtime = tk.BooleanVar(value=st["bedtime"])         # nightcap and candle at night
         self.bedtime_at = tk.IntVar(value=st["bedtime_at"])
+        self.dev_setup(st["dev"])                                 # dev mode (pet/dev.py)
 
         # usage data, plus what it remembers from last time
         mem = load_memory()
@@ -268,7 +270,7 @@ class Pet(ScreensMixin, MouseMixin, TalkMixin, DataMixin, MovementMixin, RenderM
             ("tray", self.tray_on), ("pace_warn", self.pace_warn), ("seasonal", self.seasonal),
             ("quiet_hours", self.quiet_hours), ("quiet_from", self.quiet_from), ("quiet_to", self.quiet_to),
             ("dnd", self.dnd), ("rare", self.rare), ("apprentices", self.apprentices),
-            ("bedtime", self.bedtime), ("bedtime_at", self.bedtime_at))}
+            ("bedtime", self.bedtime), ("bedtime_at", self.bedtime_at), ("dev", self.dev_on))}
         write_json(SETTINGS_FILE, st)
         write_json(STATE_FILE, {"seen": self.seen, "last_5h": self.last_5h, "pokes": self.pokes,
                                 "history": self.history, "greeted": self.greeted,

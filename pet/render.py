@@ -118,10 +118,10 @@ class RenderMixin:
             pw, ph = self.pet_px
             gx, gy = self.grab_local if self.held else (pw / 2, ph / 2)
             rot = (round(self.angle, 2), round(gx), round(gy))
-        night = self.bedtime_now()
+        night = self.bedtime_now() if self.dev_outfit is None else self.dev_outfit == "bedtime"   # (dev mode's pick)
         lead = 1 if self.dir > 0 else 0   # the hand on the side it's heading (or last headed): 0 left, 1 right
         cap = "bedtime_right" if lead else "bedtime"   # (the bobble flops out behind it)
-        outfit = None if wiz else cap if night else season() if self.seasonal.get() else None
+        outfit = None if wiz else cap if night else self.dev_outfit or (season() if self.seasonal.get() else None)
         candle = None   # at bedtime: held in its lead hand, or put down on that side while it sleeps
         if night and not wiz and not hay and not dancing and not act and not trip:
             where = "floor" if sleeping else "hold" if ARMS[lead] in arms else None

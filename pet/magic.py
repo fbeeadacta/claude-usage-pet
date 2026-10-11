@@ -8,7 +8,7 @@ import random
 import time
 
 from .art import (ARMS, BODY, CIRCLE_C, EYE, EYES, HAT, HAT_C, HAT_COLOURS, HOURGLASS_C, LEFT_WAVE, LEGS_STAND,
-    NOTES_C, ORANGE, ORB_C, PORTAL_C, QMARK, QMARK_BACK, QMARK_C, QMARK_EDGE, QMARK_MINI, QMARK_TINTS, QUILL,
+    NOTES_C, ORANGE, ORB_C, SUMMON_C, QMARK, QMARK_BACK, QMARK_C, QMARK_EDGE, QMARK_MINI, QMARK_TINTS, QUILL,
     QUILL_C, RAIN_C, ROLL_C, RUNE_GLYPHS, RUNE_SMALL, SCRIBBLE_C, SCROLL_C, SIGIL_GLOW, STAR_C, TOME, TOME_C,
     WAND_C, WAVE)
 from .fun import smooth
@@ -23,6 +23,8 @@ SIDE_JOBS = ("read", "write", "web", "agent", "ask", "think", "compact")   # the
 class MagicMixin:
     def job(self):
         # what claude code is doing right now, as a wizard job (None = just the wand and sparkles)
+        if self.dev_job is not None:   # (pretend work from dev mode)
+            return self.dev_job[1]
         when, kind = self.cc.job
         return kind if kind and time.time() - when < JOB_HOLD.get(kind, 8) else None
 
@@ -245,7 +247,7 @@ class MagicMixin:
                                fill=STAR_C, outline="")
         elif kind == "agent":
             gx, gy, rx, ry = at["portal"]
-            self.ellipse_ring(px + gx, py + gy, rx, ry, pb, t * 3, PORTAL_C, "back" if stage == "back" else "front")
+            self.ellipse_ring(px + gx, py + gy, rx, ry, pb, t * 3, SUMMON_C, "back" if stage == "back" else "front")
             if stage == "front":   # a little one of itself, rising out of the circle
                 mbw, mbh, mpb = max(1, bw // 2), max(1, bh // 2), max(1, pb // 2)
                 rise = min(1.0, jt / 1.6)

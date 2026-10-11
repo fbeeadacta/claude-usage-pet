@@ -206,7 +206,7 @@ RAIN_C = ["#e9fff0", "#6ff0a0", "#2f9a5c", "#ffe08a", "#9fd3ff"]   # rune rain: 
 ORB_C = {"rim": "#2a1d5c", "top": "#8a9bff", "mid": "#5f68dd", "low": "#433fa8", "pink": "#ff9ad5",
          "cyan": "#8be9fd", "haze": "#7a6ee8", "glint": "#b9c4ff", "shine": "#ffffff", "gold": "#f2c14e",
          "bronze": "#b8862c"}
-PORTAL_C = ["#b98cff", "#7ff3ff", "#ffffff"]
+SUMMON_C = ["#b98cff", "#7ff3ff", "#ffffff"]   # the summoning circle (PORTAL_C further down is the portal trip's)
 NOTES_C = [("#ffe58a", "#e8c45a"), ("#ff9ec7", "#e57aa8"), ("#a8f0a0", "#7fcf77"), ("#9fd3ff", "#73b2e8")]
 QMARK = [                  # asking you: the "?" (its dot is drawn on its own, bouncing)
     "..#####..",

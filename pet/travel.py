@@ -76,7 +76,7 @@ class TravelMixin:
         to = self.stacked()
         return bool(to) and self.start_trip(random.choice(to))
 
-    def start_trip(self, to, how=None, win=None, tx=None):
+    def start_trip(self, to, how=None, win=None, tx=None, exact=False):
         # off to screen `to` (or onto window `win`, a (hwnd, left, top, right, bottom) on this screen), one way
         # or another. everything is worked out from where the screens and windows are right now.
         # returns True if it set off.
@@ -124,6 +124,8 @@ class TravelMixin:
                 cx = min(max(self.x, lo), hi) if lo <= hi else None
             if cx is not None and here[0] - 1 <= cx <= here[1] + 1:
                 ways += ["rope", "ladder", "beanstalk"] + (["boxes"] if rise < 800 * s else [])
+        if exact and how not in ways:
+            return False   # (dev mode: that way or not at all)
         how = how if how in ways else random.choice(ways)
         if how in CLIMBERS and kind != "side":
             tx = cx   # it climbs right up onto the spot

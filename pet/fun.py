@@ -113,6 +113,8 @@ class FunMixin:
     # ---- what claude code is up to ----
     def helpers(self):
         # one little apprentice for each extra claude code session busy right now (up to 3)
+        if self.dev_job is not None:   # (pretend work from dev mode)
+            return self.dev_job[2]
         if not self.apprentices.get():
             return 0
         now = time.time()
@@ -171,6 +173,8 @@ class FunMixin:
     # ---- the diary ----
     def tally(self, key, n=1):
         # counts things for the pet's diary (settings > about & stats)
+        if self.dev_now:
+            return   # (not what dev mode makes it do)
         self.log[key] = self.log.get(key, 0) + n
         if not self.log_since:
             self.log_since = datetime.date.today().isoformat()

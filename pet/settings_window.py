@@ -7,6 +7,7 @@ import tkinter.font as tkfont
 import webbrowser
 
 from .art import ARMS, BLOCK_H, BLOCK_W, BODY, BUBBLE, BUBBLE_TEXT, EYE, EYES, IDLE_C, LEGS_STAND, ORANGE, TRACK
+from .dev import DEV_GROUPS
 from .config import (IDLE_AFTER_MIN, IDLE_POLL_SECONDS, MAX_SCALE, MIN_SCALE, PANIC_CHOICES, POLL_CHOICES, PROFILE_NAMES, QUIET_FROM_CHOICES,
     QUIET_TO_CHOICES, BEDTIME_CHOICES, SHORTCUTS, WARN_CHOICES, combo_parts, key_name)
 from .sounds import SOUND_DIR, SOUND_GROUPS
@@ -45,6 +46,7 @@ class SettingsWindow:
              ("sound", "Sound & talking", ""), ("usage", "Usage & alerts", ""),
              ("shortcuts", "Shortcuts", ""), ("system", "System", ""),
              ("about", "About & stats", ""))
+    DEV_PAGE = ("dev", "Developer", "\ue943")   # only in dev mode (ctrl + shift + D in here)
 
     def __init__(self, pet):
         self.pet, self.win, self.tab, self.fonts = pet, None, "mascot", {}
@@ -55,7 +57,11 @@ class SettingsWindow:
         self.resizing, self.redraw_job, self.sized = None, None, False
         self.query, self.search = "", None
         self.focusables, self.focus_key, self.kb = [], None, False   # keyboard focus
-        self.saved_until, self.saved_job = 0.0, None
+        self.saved_until, self.saved_job, self.saved_label = 0.0, None, "Saved"
+        self.dev_job, self.dev_seen = None, None   # (the dev page keeps itself up to date)
+
+    def pages(self):
+        return self.PAGES + ((self.DEV_PAGE,) if self.pet.dev_on else ())
 
     # ---- what's on each page ----
     def sections(self, page):
@@ -156,6 +162,11 @@ class SettingsWindow:
                             words="video game"),
                         row("toggle", "Stay on one monitor", "one_monitor", p.one_monitor, p.changed,
                             words="display screen")])]
+        if page == "dev":
+            return ([("Every animation", None, [row("devall", "Play every animation", words="all test debug")])]
+                    + [(group, None, [row("devanims", group, extra=items, words=" ".join(n for _, n in items))])
+                       for group, items in DEV_GROUPS]
+                    + [("Right now", None, [row("devinfo", "Dev mode", words="state debug leave exit")])])
         return [("Claude login", None, [row("login", "Claude login", words="account sign in expired token check")]),
                 ("Pet diary", None, [row("diary", "Pet diary", words="stats pokes throws jumps dances log count")]),
                 ("Performance", None, [row("perf", "Performance", words="cpu memory fps frame rate stats")]),
@@ -213,6 +224,9 @@ class SettingsWindow:
         self.key_note = None
         if self.win is not None:
             self.tooltip.hide()
+            if self.dev_job:
+                self.win.after_cancel(self.dev_job)
+                self.dev_job = None
             self.win.destroy()
             self.win = None
 
@@ -253,9 +267,9 @@ class SettingsWindow:
         if focus:
             self.focusables.append((focus[0], (x0, y0, x1, y1), focus[1], focus[2] if len(focus) > 2 else None))
 
-    def changed_saved(self):
+    def changed_saved(self, label="Saved"):
         # the little "saved" note in the corner after each change
-        self.saved_until = time.time() + 1.6
+        self.saved_until, self.saved_label = time.time() + 1.6, label
         if self.saved_job:
             self.win.after_cancel(self.saved_job)
         self.saved_job = self.win.after(1700, lambda: (setattr(self, "saved_job", None),
@@ -298,7 +312,7 @@ class SettingsWindow:
                       (("resize", 1, 0), (W - 5) * s, self.TOP * s, W * s, H * s),
                       (("resize", 0, 1), self.SB * s, (H - 5) * s, W * s, H * s)]
         if time.time() < self.saved_until:
-            label = "✓  Saved"
+            label = f"✓  {self.saved_label}"
             w = self.font(8, True).measure(label) / s + 24
             self.box(W - 24 - w, H - 44, W - 24, H - 18, 8, self.SEL)
             self.text(W - 24 - w / 2, H - 31, label, self.GOOD, 8, True, "center")
@@ -313,6 +327,8 @@ class SettingsWindow:
                                    width=max(1, round(1.5 * s)))
         self.size = (round(W * s), round(H * s))
         self.canvas.configure(width=self.size[0], height=self.size[1])
+        if self.tab == "dev" and not self.query and self.dev_job is None:
+            self.dev_job = self.win.after(250, self.dev_watch)
 
     def draw_sidebar(self):
         s, c, H = self.s, self.canvas, self.H
@@ -330,7 +346,7 @@ class SettingsWindow:
                         width=(x1 - x0 - 34) * s, height=(y1 - y0 - 10) * s)
         # pages
         y = 92
-        for name, label, icon in self.PAGES:
+        for name, label, icon in self.pages():
             on = self.tab == name and not self.query
             if on:
                 self.box(10, y, self.SB - 10, y + 32, 8, self.SEL, self.SIDE)
@@ -343,7 +359,7 @@ class SettingsWindow:
         # the page title, then each section as a heading and a card
         if self.query:
             return self.draw_results(x0, x1, y)
-        title = next(label for name, label, _ in self.PAGES if name == self.tab)
+        title = next(label for name, label, _ in self.pages() if name == self.tab)
         y = self.text(x0, y + 6, title, self.FG, 15, True) + 18
         for heading, reset, rows in self.sections(self.tab):
             rows = [r for r in rows if not r["show"] or r["show"]()]
@@ -433,6 +449,12 @@ class SettingsWindow:
             return self.draw_perf(x0, x1, y)
         if kind == "diary":
             return self.draw_diary(x0, x1, y)
+        if kind == "devall":
+            return self.draw_dev_all(x0, x1, y)
+        if kind == "devanims":
+            return self.draw_dev_anims(x0, x1, y, extra)
+        if kind == "devinfo":
+            return self.draw_dev_info(x0, x1, y)
         return self.draw_about(x0, x1, y)
 
     def switch(self, right, y, on):
@@ -789,6 +811,109 @@ class SettingsWindow:
             self.text(cx + col_w, ry, value, self.FG, 8, True, "ne")
         return y + (len(items) + 1) // 2 * 22 + 8
 
+    # ---- the developer page (dev mode only) ----
+    def pill(self, right, y, label, key, act):
+        # a button, right-aligned
+        w = self.font(8, True).measure(label) / self.s + 28
+        self.box(right - w, y, right, y + 28, 8, self.ON, self.CARD)
+        self.text(right - w / 2, y + 14, label, self.FG, 8, True, "center")
+        self.hit(("do", act), right - w, y, right, y + 28, (("do", key), act))
+
+    def draw_dev_all(self, x0, x1, y):
+        p = self.pet
+        now, prog = p.dev_status()
+        busy = bool(now or p.dev_queue)
+        top = y
+        self.pill(x1 - 16, y + 12, "Stop" if busy else "Play all", "devall", self.dev_all)
+        y = self.text(x0 + 16, y + 14, "Plays every animation below, one after another. Ones it can't do from where "
+                      "it is get skipped. Nothing played here goes in the diary.", self.DIM, 8, width=x1 - x0 - 140)
+        y = max(y, top + 40) - 8   # (not up against the button)
+        if now or prog:
+            line = f"Now: {now or '…'}" + (f"   ({prog[0]} of {prog[1]})" if prog else "")
+            y = self.text(x0 + 16, y + 8, line, self.FG, 8.5, True)
+        elif p.dev_note and p.dev_note[0] == "all":
+            y = self.text(x0 + 16, y + 8, p.dev_note[1], self.GOOD, 8, width=x1 - x0 - 32)
+        return y + 18
+
+    def draw_dev_anims(self, x0, x1, y, items):
+        # every animation in this group as a chip: tap one to play it now
+        p, s = self.pet, self.s
+        x, y = x0 + 16, y + 14
+        f = self.font(8, True)
+        for k, name in items:
+            w = f.measure(name) / s + 34
+            if x + w > x1 - 16 and x > x0 + 16:
+                x, y = x0 + 16, y + 30
+            on = p.dev_now == k or (k == "shiny" and p.shiny) or (k.startswith("look:") and p.dev_outfit == k[5:])
+            self.box(x, y, x + w, y + 24, 12, self.CHIP_ON if on else self.CHIP_OFF, self.CARD)
+            self.text(x + 13, y + 12, "▶", self.ON if on else self.DIM, 6.5, anchor="center")
+            self.text(x + 22, y + 12, name, self.FG if on else self.DIM, 8, True, "w")
+            act = lambda k=k: self.dev_play(k)
+            self.hit(("do", act), x, y, x + w, y + 24, (("devchip", k), act))
+            x += w + 6
+        y += 24
+        note = p.dev_note if p.dev_note and any(p.dev_note[0] == k for k, _ in items) else None
+        if note:
+            name = next(n for k, n in items if k == note[0])
+            y = self.text(x0 + 16, y + 8, f"{name}: {note[1]}", self.WARN, 7.5, width=x1 - x0 - 32)
+        return y + 16
+
+    def draw_dev_info(self, x0, x1, y):
+        # what it's up to, for checking things, and the way out
+        p = self.pet
+        where = ("in the air" if not p.grounded() else "on a window" if p.plat is not None else "on the taskbar")
+        bits = [f"State: {p.state}" + (f" ({p.act})" if p.act else ""), where,
+                f"screen {p.si + 1} of {len(p.screens)}"]
+        if p.trip:
+            bits.append(f"trip: {p.trip['how']} ({p.trip['stage'] or 'starting'})")
+        y = self.text(x0 + 16, y + 14, "  ·  ".join(bits), self.FG, 8, width=x1 - x0 - 32)
+        y = self.text(x0 + 16, y + 6, "Ctrl + Shift + D (with settings open) switches dev mode on and off.",
+                      self.DIM, 8, width=x1 - x0 - 32)
+        label = "Leave dev mode"
+        w = self.font(8, True).measure(label) / self.s
+        end = self.text(x0 + 16, y + 10, label, self.ON, 8, True)
+        self.hit(("do", self.toggle_dev), x0 + 12, y + 6, x0 + 20 + w, end + 4, (("do", "leave"), self.toggle_dev))
+        return end + 14
+
+    def dev_play(self, key):
+        self.pet.dev_play(key)
+        self.draw()
+
+    def dev_all(self):
+        p = self.pet
+        if p.dev_now or p.dev_queue:
+            p.dev_stop()
+        else:
+            p.dev_play_all()
+        self.draw()
+
+    def toggle_dev(self):
+        p = self.pet
+        if p.dev_on:
+            p.dev_leave()
+            if self.tab == "dev":
+                self.tab, self.scroll = "mascot", 0
+        else:
+            p.dev_on = True
+            p.save()
+            self.go("dev")
+        self.changed_saved("Dev mode on" if p.dev_on else "Dev mode off")
+        self.draw()
+
+    def dev_watch(self):
+        # while the dev page is open it redraws itself when the mascot's doing something new
+        self.dev_job = None
+        if self.win is None or self.tab != "dev" or self.query:
+            return
+        p = self.pet
+        seen = (p.dev_status(), p.dev_note, p.state, p.act, p.trip and (p.trip["how"], p.trip["stage"]), p.si,
+                p.plat is not None, p.grounded(), p.shiny, p.dev_outfit, bool(p.dev_queue))
+        if seen != self.dev_seen and not (self.drag or self.resizing):
+            self.dev_seen = seen
+            self.draw()
+        elif self.dev_job is None:
+            self.dev_job = self.win.after(250, self.dev_watch)
+
     # ---- search ----
     def search_in(self, e=None):
         if self.placeholder:
@@ -822,7 +947,7 @@ class SettingsWindow:
         y = self.text(x0, y + 6, "Search", self.FG, 15, True) + 4
         y = self.text(x0, y, f"Results for “{self.search_var.get().strip()}”", self.DIM, 8.5) + 18
         found = 0
-        for page, page_label, _ in self.PAGES:
+        for page, page_label, _ in self.pages():
             for heading, reset, rows in self.sections(page):
                 hits = []
                 for r in rows:
@@ -877,7 +1002,7 @@ class SettingsWindow:
             elif k == "scale":
                 p.set_scale(DEFAULTS["scale"])
             else:
-                for page, _, _ in self.PAGES:
+                for page, _, _ in self.pages():
                     for _, _, rows in self.sections(page):
                         for r in rows:
                             if r["key"] == k and r["var"].get() != DEFAULTS[k]:
@@ -944,6 +1069,9 @@ class SettingsWindow:
             webbrowser.open(PROJECT_URL)
         elif kind == "tour":
             self.pet.restart_tour()
+        elif kind == "do":
+            hit[1]()
+            return
         elif kind == "slide":
             self.drag = hit
             self.slide_to(e.x)
@@ -1053,6 +1181,9 @@ class SettingsWindow:
             return self.record_key(e)
         in_search = self.win.focus_get() is self.search
         ctrl = u32.GetAsyncKeyState(0x11) & 0x8000
+        if ctrl and u32.GetAsyncKeyState(0x10) & 0x8000 and e.keysym.lower() == "d":   # (the hidden dev mode)
+            self.toggle_dev()
+            return "break"
         if ctrl and e.keysym.lower() == "f":
             self.search.focus_set()
             self.draw()

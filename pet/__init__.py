@@ -28,6 +28,8 @@
 #   gags.py             part of the Pet: coding jokes it acts out when idle (a phone call from the api, cookies,
 #                        a rubber duck, a stack overflow of pancakes, a lost semicolon, a 404...).
 #   hay.py              part of the Pet: the haystack at the bottom of a leap of faith.
+#   dev.py              part of the Pet: dev mode (a hidden settings page, ctrl + shift + D in settings): playing
+#                        any animation on demand, or all of them in a row.
 #   tray.py              the tray icon (its own thread and hidden window).
 #   sprites.py           little see-through windows for things away from the mascot: the ball, the cat.
 #   mascot.py            the Pet itself: puts the parts together, its settings, and starting it up.
@@ -38,7 +40,8 @@
 # where new things go:
 #   a new setting       its default in storage.py (DEFAULTS), a row in settings_window.py (sections), a line in
 #                       tips.py, and the behaviour in the Pet part it belongs to.
-#   a new animation     the state in movement.py, how it looks in render.py (frame + draw).
+#   a new animation     the state in movement.py, how it looks in render.py (frame + draw), and a chip for it in
+#                       dev.py (DEV_GROUPS, and how to start it in dev_start).
 #   new things to say   lines.py, then pick them in talk.py.
 #   a new sound         make it in sounds.py (and add it to SOUNDS / SOUND_GROUPS), play it with self.play(...).
 #   a new settings page a name in SettingsWindow.PAGES and its sections in settings_window.py.
