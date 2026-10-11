@@ -10,6 +10,7 @@ from .art import (ARMS, BALLOON_C, BOBBER_C, BRISTLE_C, CANVAS_C, CATCHES, DUST_
 from .config import ACT_CHANCE
 from .lines import (BALLOON_LINES, CATCH_LINES, FISH_LINES, PAINT_DONE, PAINT_LINES, PLANE_FAR, PLANE_FLOP,
     PLANE_LAND, PLANE_LINES, POP_LINES, SWEEP_DONE, SWEEP_LINES)
+from .gags import GAGS
 from .sprites import Sprite
 
 KINDS = ("sweep", "paint", "fish", "balloon", "plane")
@@ -62,11 +63,13 @@ class IdleMixin:
         if not self.anim.get() or self.held or not self.grounded():
             return False
         if kind is None:
-            kind = random.choice([k for k in KINDS if k != "plane" or self.plane is None])
+            kind = random.choice([k for k in KINDS + tuple(GAGS) if k != "plane" or self.plane is None])
         elif kind == "plane" and self.plane is not None:
             return False   # (one plane at a time)
         a = {"side": self.job_side(), "said": False}
-        if kind == "sweep":
+        if kind in GAGS:   # a coding joke (pet/gags.py)
+            self.gag_start(kind, a)
+        elif kind == "sweep":
             a["dur"] = random.uniform(10, 16)
             self.tally("sweeps")
         elif kind == "paint":
@@ -100,7 +103,8 @@ class IdleMixin:
             a["dur"] = 30.0
         self.state, self.act, self.act_t, self.act_info = "act", kind, 0.0, a
         self.state_t = a["dur"]
-        self.say(self.pick(START_LINES[kind]))
+        if kind in START_LINES:   # (the jokes say their own lines as they go)
+            self.say(self.pick(START_LINES[kind]))
         return True
 
     def maybe_act(self):
@@ -180,7 +184,9 @@ class IdleMixin:
         side = a["side"]
         self.state_t -= dt
         pb = max(1, round(2 * s))
-        if kind == "sweep":
+        if kind in GAGS:
+            self.gag_tick(kind, a, t0, t, dt, s)
+        elif kind == "sweep":
             if t < a["dur"] - 1.5 and self.pushing(t):   # sweeping its way along
                 lo, hi = self.x_limits()
                 if self.plat is not None:   # (not off the end of a window)
@@ -352,10 +358,17 @@ class IdleMixin:
             return None
         return (self.act, int(self.act_t * 20), self.act_info["side"])
 
+    def act_room(self, act):
+        # room needed above its head for this activity (the usage bubble moves up)
+        kind, step, _ = act
+        return self.gag_room(kind, step / 20) if kind in GAGS else 0
+
     def act_pose(self, act):
         # overrides for how it looks: {sink, eyes, eye_dir, eye_v, arms, legs, shift}
         kind, step, side = act
         t, a = step / 20, self.act_info
+        if kind in GAGS:
+            return self.gag_pose(kind, t, a, side)
         if kind == "sweep":   # looking down at the broom, stepping along on each push
             push = self.pushing(t) and t < a["dur"] - 1.5
             return {"eyes": "open", "eye_dir": side, "eye_v": 1, "arms": ARMS,
@@ -422,6 +435,8 @@ class IdleMixin:
         kind, step, side = act
         t, c, a = step / 20, self.canvas, self.act_info
         s = self.s()
+        if kind in GAGS:
+            return self.gag_draw(kind, t, a, side, px, py, sink, bw, bh, pb, pet_w, pet_h)
         if kind == "sweep":
             gx, gy, swing, down = self.broom(t, side)
             gx, gy = px + gx, py + sink + gy

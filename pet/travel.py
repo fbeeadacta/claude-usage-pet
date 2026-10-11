@@ -8,9 +8,9 @@
 import math
 import random
 
-from .art import (ARMS, BALLOON_C, BAND_C, BEAM_C, BOX_C, CANNON_C, FLASH_C, GUN, GUN_C, HAT, HAT_C,
-    HATCH_C, HOOK, HOOK_C, JET_C, LADDER_C, LEFT_WAVE, LEGS_AIR, LEGS_STAND, LEGS_STEP, PORTAL_C, ROPE_C,
-    SMOKE_C, SOIL_C, SPARK_C, STALK_C, STAR_C, STRING_C, UFO, UFO_C, UFO_LIGHTS, WAND_C, WAVE, WING_C, WINGS)
+from .art import (ARMS, BALLOON_C, BEAM_C, BOX_C, CANNON_C, FLASH_C, GUN, GUN_C, HAT, HAT_COLOURS, HATCH_C, HOOK,
+    HOOK_C, JET_C, LADDER_C, LEFT_WAVE, LEGS_AIR, LEGS_STAND, LEGS_STEP, PORTAL_C, ROPE_C, SMOKE_C, SOIL_C, SPARK_C,
+    STALK_C, STAR_C, STRING_C, UFO, UFO_C, UFO_LIGHTS, WAND_C, WAVE, WING_C, WINGS)
 from .config import GRAVITY, WALK_EASE, WALK_SPEED
 from .lines import (BALLOON_DROP, BALLOON_RIDE, BEAN_LINES, BEAN_TOP, BOX_LINES, BOX_TOP, CANNON_LAND,
     CANNON_LINES, HATCH_LINES, JET_LAND, JET_LINES, LADDER_LINES, LADDER_TOP, PORTAL_LINES, PORTAL_OUT,
@@ -1383,7 +1383,7 @@ class TravelMixin:
             if k > 0.3:   # the wizard hat drops on (and comes off at the end), and a wand in the raised hand
                 hx = px + 3 * bw + (12 * bw - len(HAT[0]) * pb) // 2
                 self.glyph(HAT, hx, py + sink - (len(HAT) - 1) * pb - round((1 - k) * 12 * s), pb,
-                           {"#": HAT_C, "y": BAND_C, "*": STAR_C}, shadow=False)
+                           HAT_COLOURS, shadow=False)
             if stage != "done":
                 hy = py + sink
                 for i in range(5):

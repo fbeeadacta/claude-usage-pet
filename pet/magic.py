@@ -7,9 +7,10 @@ import math
 import random
 import time
 
-from .art import (ARMS, BAND_C, BODY, CIRCLE_C, EYE, EYES, HAT, HAT_C, HOURGLASS_C, LEFT_WAVE,
-    LEGS_STAND, NOTES_C, ORANGE, ORB_C, PORTAL_C, QMARK, QMARK_BACK, QMARK_C, QMARK_EDGE, QMARK_MINI, QMARK_TINTS, QUILL, QUILL_C, RAIN_C, ROLL_C, RUNE_GLYPHS,
-    RUNE_SMALL, SCRIBBLE_C, SCROLL_C, SIGIL_GLOW, STAR_C, TOME, TOME_C, WAND_C, WAVE)
+from .art import (ARMS, BODY, CIRCLE_C, EYE, EYES, HAT, HAT_C, HAT_COLOURS, HOURGLASS_C, LEFT_WAVE, LEGS_STAND,
+    NOTES_C, ORANGE, ORB_C, PORTAL_C, QMARK, QMARK_BACK, QMARK_C, QMARK_EDGE, QMARK_MINI, QMARK_TINTS, QUILL,
+    QUILL_C, RAIN_C, ROLL_C, RUNE_GLYPHS, RUNE_SMALL, SCRIBBLE_C, SCROLL_C, SIGIL_GLOW, STAR_C, TOME, TOME_C,
+    WAND_C, WAVE)
 from .fun import smooth
 
 # how long a job's look stays after claude last used that kind of tool (seconds)
@@ -513,4 +514,4 @@ class MagicMixin:
             blk(col, 1, color=EYE)
         if clip is None or y0 < clip:
             hx = x0 + 3 * mbw + (12 * mbw - len(HAT[0]) * mpb) // 2
-            self.glyph(HAT, hx, y0 - (len(HAT) - 1) * mpb, mpb, {"#": HAT_C, "y": BAND_C, "*": STAR_C}, shadow=False)
+            self.glyph(HAT, hx, y0 - (len(HAT) - 1) * mpb, mpb, HAT_COLOURS, shadow=False)

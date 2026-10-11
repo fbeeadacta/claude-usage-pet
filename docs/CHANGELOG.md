@@ -2,6 +2,13 @@
 
 Newest first. The spec and how everything works are in `PROJECT_NOTES.md`.
 
+- **2026-10-11 (version 7.20): coding jokes, and a fancier wizard hat.**
+  - 14 new things it does on its own when idle, each with props, particles and programming jokes (new `pet/gags.py`, picked alongside sweeping, painting, fishing, balloons and the paper plane): a phone call from the API, a cookie (it accepts all of them), rubber duck debugging (with a lightbulb moment), coffee ("this is my Java"), a bug hunt with a net ("it's not a bug, it's a feature"), an infinite loop that makes it dizzy, a stack overflow of pancakes, counting sheep off by one, a fortune cookie, a merge conflict between two sticky notes, a recursive hand mirror, a lost semicolon found with a magnifying glass, digging up a 404 sign, and a tiny keyboard that ends in ctrl+z. Lines are in `lines.py`; pictures and colours in `art.py`.
+  - The usage bubble moves up when something is over its head during an activity (`act_room`, `gag_room`).
+  - New sounds `ring`, `crunch`, `typing` (a new "Coding jokes" group of on/off chips), and "Coding jokes" in the diary.
+  - The wizard hat is more detailed: lit and shaded sides, a crescent moon, a star and twinkles, a bent tip, a buckle on the band and a two-tone brim (`HAT_COLOURS`, used everywhere the hat is drawn). It's 23 blocks wide (was 24) with the cone and brim centred in it, so it sits centred on the head; the first version leaned to the right.
+  - Tested: every joke on a test pet (scratch files, `PET_FAKE_USAGE=ok`, left monitor) with screenshots once a second; every joke run start to finish facing both ways at 1x, 1.5x and 2x (no errors). Fixed while testing: props too small, the bulb, loop arrow, mirror and sticky notes hidden behind the usage bubble, the bug hunt wandering too far, and the found semicolon invisible on a light wallpaper. Not tested: the new sounds by ear.
+
 - **2026-10-11 (version 7.19): smoother light on the haystack.**
   - The haystack had straight up-and-down lines in its shading: each spot was lit by whichever lump was nearest (a hard seam where that switched), and mostly by how far across it was. Now the light comes from how the outline slopes at that spot (rising faces the light, falling away is in shade), counts most near the top, uses a smooth blend of the two lumps so the dip is a soft crease, and a light checker blends one shade into the next (`hay.py`).
   - Tested: screenshots of a leap of faith on a test pet (scratch files, `PET_FAKE_USAGE=ok`, left monitor) with the tall lump on each side, zoomed in.

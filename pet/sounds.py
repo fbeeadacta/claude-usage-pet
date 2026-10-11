@@ -20,9 +20,10 @@ SOUND_GROUPS = (("Reactions", (("pop", "Poke"), ("boing", "Bounce"), ("scream", 
                 ("Adventures", (("whoosh", "Parachute"), ("eagle", "Eagle cry"), ("hay", "Hay landing"),
                                 ("meow", "Cat"), ("clink", "Grappling hook"), ("flap", "Wings"),
                                 ("zap", "Portal gun"), ("boom", "Cannon"), ("jet", "Jetpack"), ("thud", "Boxes"))),
-                ("Moods", (("spell", "Wizard magic"), ("dance", "Dance music"), ("chime", "Milestones"))))
+                ("Moods", (("spell", "Wizard magic"), ("dance", "Dance music"), ("chime", "Milestones"))),
+                ("Coding jokes", (("ring", "Phone"), ("crunch", "Cookies"), ("typing", "Typing"))))
 SOUNDS = ("pop", "boing", "scream", "chime", "whoosh", "eagle", "splat", "spell", "hay", "dance", "meow", "clink",
-          "flap", "zap", "boom", "jet", "thud")
+          "flap", "zap", "boom", "jet", "thud", "ring", "crunch", "typing")
 
 
 def make_sound(kind, volume=100):
@@ -139,6 +140,19 @@ def make_sound(kind, volume=100):
     elif kind == "thud":    # a cardboard box landing: a hollow "tok"
         mix(0.0, wav(0.12, 230, 140, 0.5, attack=0.002, decay=2.5))
         mix(0.0, soft(wav(0.08, 0, 0, 0.35, shape="noise", attack=0.001, decay=3.0), 0.4))
+    elif kind == "ring":    # a phone: a quick warbling trill, twice
+        for i in range(2):
+            for j in range(8):
+                f_ = 1450 if j % 2 else 1150
+                mix(i * 0.45 + j * 0.04, wav(0.04, f_, f_, 0.25, shape="square", attack=0.002, decay=0.2))
+    elif kind == "crunch":  # a bite of cookie: a few crumbly bursts
+        for i, d in enumerate((0.0, 0.07, 0.15)):
+            mix(d, soft(wav(0.07, 0, 0, 0.6 - i * 0.12, shape="noise", attack=0.002, decay=2.0), 0.55))
+    elif kind == "typing":  # clackety keys
+        r = random.Random(5)
+        for i in range(14):
+            mix(i * 0.075 + r.uniform(0, 0.03), soft(wav(0.025, 0, 0, 0.5, shape="noise", attack=0.001, decay=3.0), 0.8))
+            mix(i * 0.075, wav(0.02, 1800, 1500, 0.08, attack=0.001, decay=3.0))
     elif kind == "dance":   # a bouncy little chiptune that loops while it dances (2 bars at 150 bpm)
         step = 0.2   # one eighth note
         c5 = 523.25

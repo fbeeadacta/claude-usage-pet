@@ -14,6 +14,7 @@ from .config import (FAKE_USAGE_ENV, MAX_SCALE, MIN_FETCH_GAP, MIN_SCALE, PROFIL
 from .data import DataMixin
 from .details import Details
 from .fun import FunMixin
+from .gags import GagsMixin
 from .hay import HayMixin
 from .idle import IdleMixin
 from .magic import MagicMixin
@@ -35,7 +36,7 @@ from .winapi import hotkey_thread, make_dpi_aware, own_usage, set_startup, start
 # ---- the pet ----
 
 class Pet(ScreensMixin, MouseMixin, TalkMixin, DataMixin, MovementMixin, RenderMixin, FunMixin, MagicMixin,
-          IdleMixin, TravelMixin, HayMixin):
+          IdleMixin, TravelMixin, HayMixin, GagsMixin):
     def __init__(self):
         make_dpi_aware()
         self.root = tk.Tk()

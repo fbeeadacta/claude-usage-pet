@@ -506,3 +506,52 @@ MILESTONES = {
                   90: "90% of the week used. careful!",
                   100: "the whole week's limit. legendary effort."},
 }
+
+# coding jokes (pet/gags.py)
+PHONE_HELLO = ["hello, API! long time no see.", "hello? ...oh, hi localhost!", "hello, this is the mascot. how may I help?",
+               "API! buddy! how's the latency?"]
+PHONE_MORE = ["no, I can't do 1,000 requests a second. I'm one mascot.",
+              "you're number 429 in the queue. please try again later.", "sorry, wrong number. this is the frontend.",
+              "uh huh... uh huh... have you tried turning it off and on again?",
+              "yes, I'm still rate limited. no, I don't know why either."]
+COOKIE_LINES = ["I love cookies. I accept all of them.", "cookie time! *accepts all cookies*",
+                "this site uses cookies. this mascot eats them."]
+COOKIE_END = ["mmm. third-party cookies. the forbidden kind.", "that cookie had no expiry date. ate it anyway.",
+              "session cookie: finished. session: also finished."]
+DUCK_START = ["ok duck. so. this function takes a list...", "listen, duck. the bug is NOT in my code...",
+              "duck, I need you to follow along carefully..."]
+DUCK_END = ["OH. never mind. thanks, duck!", "...wait. I see it now. good talk, duck.", "duck, you're a genius."]
+COFFEE_LINES = ["coffee in, code out.", "*sips coffee*", "first, coffee. then, bugs."]
+COFFEE_END = ["this is my Java.", "now I can hear colours.", "ok. I'm ready to refactor everything."]
+BUG_START = ["a bug! hold still...", "there's a bug in production!", "come here, little bug..."]
+BUG_END = ["it's not a bug, it's a feature!", "works on my machine.", "caught it! ...now what?"]
+BUG_FREE = ["go on. be free. become someone else's problem.", "*releases bug into the wild*"]
+LOOP_LINES = ["while (true) { walk(); }", "for (;;) step();", "just one more lap..."]
+LOOP_END = ["who wrote this loop? ...oh. me.", "forgot the break statement.", "*stack frame spinning*"]
+PANCAKE_LINES = ["one more pancake can't hurt.", "push(pancake). push(pancake). push(pancake)...",
+                 "a stack of pancakes, last in, first out."]
+PANCAKE_END = ["stack overflow!", "StackOverflowError: pancakes", "too many pancakes on the stack!"]
+PANCAKE_MORE = ["...let me look that up.", "someone must have asked this already.", "marked as duplicate. rude."]
+SHEEP_START = ["counting sheep. 1...", "can't sleep. counting sheep. 1..."]
+SHEEP_MID = ["3... wait. that one came back.", "3... hey, no going back!"]
+SHEEP_DOUBT = ["...was that 4? or 5? did I start at 0?", "index out of range. of sheep."]
+SHEEP_END = ["there are 2 hard things in coding: naming things, cache invalidation and off-by-one errors.",
+             "...I'll just say there were n sheep."]
+FORTUNE_START = ["*cracks open a fortune cookie*", "a fortune cookie! let's see..."]
+FORTUNE_LINES = ["'your code will compile on the first try.'", "'a bug you fixed will come back. on a friday.'",
+                 "'you will find the missing semicolon.'", "'today's lucky number is 0x2A.'",
+                 "'git push --force brings bad luck.'"]
+FORTUNE_END = ["*laughs nervously*", "...that's not funny.", "I'm keeping this one."]
+MERGE_LINES = ["merge conflict! accept incoming? accept current?", "<<<<<<< HEAD ...uh oh.",
+               "two branches walk into a bar..."]
+MERGE_END = ["...accept both. what could go wrong?", "...accept chaos.", "fine. I'll pick this one."]
+RECURSION_LINES = ["to understand recursion, you must first understand recursion.", "mirror, mirror, in my hand..."]
+RECURSION_END = ["it's mascots all the way down.", "base case? never heard of it."]
+SEMI_LINES = ["has anyone seen my semicolon?", "I lost a semicolon. it's around here somewhere..."]
+SEMI_MORE = ["it was right here. end of line 42.", "it's small. looks like a comma that's been to the gym."]
+SEMI_END = ["found it! now everything compiles. probably.", "got it! ...the JavaScript didn't even need it."]
+DIG_LINES = ["looking for that file...", "it's in here somewhere...", "*digs through the file system*"]
+DIG_END = ["404: file not found. classic.", "404. it was never here.", "well, that page doesn't exist."]
+KEY_LINES = ["*types furiously*", "10x developer mode: on.", "tiny keyboard, huge ideas."]
+KEY_UNDO = ["ctrl+z. ctrl+z. ctrl+z. ctrl+z...", "*undoes everything*", "hm. no. ctrl+z."]
+KEY_END = ["ok. back where I started. perfect.", "great session. zero lines changed.", "shipped it. (the undo.)"]

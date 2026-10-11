@@ -3,12 +3,10 @@ import math
 import time
 import tkinter.font as tkfont
 
-from .art import (ARMS, BAND_C, BEAM_C, BLOCK_H, BLOCK_W, BLUSH, BLUSH_C, BODY, BUBBLE, BUBBLE_TEXT, CANDLE,
-    CANDLE_BASE, CANDLE_C, CHUTE, GLOW_C,
-    CHUTE_R, CHUTE_W, EYE, EYES, FULL_C, FULL_EDGE, HAT, HAT_C, HAY_C, HEART, HEART_C, KEY,
-    LEFT_WAVE, LEGS_AIR, LEGS_STAND, LEGS_STEP, NOTE, NOTE_C, ORANGE, OUTFITS, PANIC_C, RED,
-    SHADOW, SHINY, SPARK, SPARK_C, SPEECH, SPEECH_TEXT, STAR_C, STRING_C, TRACK, UFO, UFO_C, UFO_LIGHTS,
-    MOTE_C, SMOKE_C,
+from .art import (ARMS, BEAM_C, BLOCK_H, BLOCK_W, BLUSH, BLUSH_C, BODY, BUBBLE, BUBBLE_TEXT, CANDLE, CANDLE_BASE,
+    CANDLE_C, CHUTE, CHUTE_R, CHUTE_W, EYE, EYES, FULL_C, FULL_EDGE, GLOW_C, HAT, HAT_COLOURS, HAY_C, HEART,
+    HEART_C, KEY, LEFT_WAVE, LEGS_AIR, LEGS_STAND, LEGS_STEP, MOTE_C, NOTE, NOTE_C, ORANGE, OUTFITS, PANIC_C, RED,
+    SHADOW, SHINY, SMOKE_C, SPARK, SPARK_C, SPEECH, SPEECH_TEXT, STAR_C, STRING_C, TRACK, UFO, UFO_C, UFO_LIGHTS,
     WAND_C, WARN_C, WAVE, ZZZ, ZZZ_C)
 from .config import HAY_TIME, SPEAK_CPS
 from .fun import UFO_BEAM, UFO_DROP, UFO_END, UFO_GONE, season, smooth
@@ -237,6 +235,7 @@ class RenderMixin:
                     (len(CHUTE) + 10) * pb if chute is not None else 0,
                     6 * pb if dizzy is not None else 0,
                     self.trip_room(trip, pb) if trip else 0,
+                    self.act_room(act) if act else 0,
                     self.hay_lift((hay - 1) / 30, s) + ((len(look[0]) + 1) * pb if look else 0) if hay else 0)
         # the window is ONE fixed size whatever the mascot is doing, and its middle always sits at the
         # same spot in it. resizing or shifting the window between frames made windows flash a dark box
@@ -362,7 +361,7 @@ class RenderMixin:
             # wizard hat on the head, then whatever the job brings along (pet/magic.py)
             hx = px + 3 * bw + (12 * bw - len(HAT[0]) * pb) // 2
             self.glyph(HAT, hx, py + sink - (len(HAT) - 1) * pb, pb,
-                       {"#": HAT_C, "y": BAND_C, "*": STAR_C}, shadow=False)
+                       HAT_COLOURS, shadow=False)
             if job:
                 self.draw_job(job, "front", px, py)
             if helpers and helpers[0]:   # (on the other side from a job's prop)
@@ -536,7 +535,7 @@ class RenderMixin:
             for col in EYES:
                 blk(col, 1, color=EYE)
             hx = x0 + 3 * mbw + (12 * mbw - len(HAT[0]) * mpb) // 2
-            self.glyph(HAT, hx, y0 - (len(HAT) - 1) * mpb, mpb, {"#": HAT_C, "y": BAND_C, "*": STAR_C}, shadow=False)
+            self.glyph(HAT, hx, y0 - (len(HAT) - 1) * mpb, mpb, HAT_COLOURS, shadow=False)
             wx = x0 + (17 * mbw if side > 0 else 0)   # a tiny wand, with a twinkling tip
             for j in range(3):
                 c.create_rectangle(wx + side * j * mpb, y0 + 2 * mbh - (j + 1) * mpb,

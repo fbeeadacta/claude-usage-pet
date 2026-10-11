@@ -2,7 +2,7 @@
 
 A small Claude mascot that walks along the top of the Windows taskbar. A bubble above its head shows Claude plan usage. If any file here gets lost or corrupted, this note has enough detail to rebuild it. You can give this file to Claude and ask it to rebuild the project.
 
-Last updated: 2026-10-11 (version 7.19)
+Last updated: 2026-10-11 (version 7.20)
 
 The change log is in `CHANGELOG.md`, next to this file.
 
@@ -46,6 +46,7 @@ The code is a package (`pet/`) started by `claude_pet.py`. Every file begins wit
 | `pet/mascot.py` | The `Pet` class: puts the parts below together; its settings and start-up. |
 | `pet/screens.py`, `mouse.py`, `talk.py`, `data.py`, `movement.py`, `render.py`, `fun.py` | The parts of the `Pet` (mixin classes): monitors, mouse handling, talking and reactions, data and ticks, physics and movement, drawing, and the extras (being called over, quiet mode, seasons, session wrap-ups, the tour, the diary, the tray icon, fetch, rare visitors). They all share one `self`. |
 | `pet/idle.py` | Things it does on its own when idle (a part of the `Pet`): sweeping, painting, fishing, balloons, a paper plane. |
+| `pet/gags.py` | Coding jokes it acts out when idle (a part of the `Pet`): phone call, cookie, rubber duck, coffee, bug hunt, infinite loop, stack overflow, off by one, fortune cookie, merge conflict, recursion, lost semicolon, 404, tiny keyboard. Hooked into `idle.py`'s activities. |
 | `pet/hay.py` | The haystack at the bottom of a leap of faith (a part of the `Pet`): its shape and shading, popping up below the dive, the squash, and puffing away. |
 | `pet/travel.py` | Getting somewhere it can't walk or jump to (a part of the `Pet`): another monitor or a high window, by rope, ladder, beanstalk, boxes, wings, jetpack, balloons, UFO, cannon, portals, teleport or trapdoor. See "Trips". |
 | `pet/magic.py` | The wizard's jobs (a part of the `Pet`): which job is on, how the mascot holds itself, the props and their particles. |
@@ -77,7 +78,7 @@ One thing to know: `usage.RETRY_AFTER` changes while the pet runs, so other file
 7. **Settings** opens a window laid out like the Claude desktop app's settings: a sidebar with seven pages (and a search box), and on the right each section as a card. Every option has a switch, choice buttons or a slider, plus a short description. Changes apply straight away, and a small "✓ Saved" shows for a moment. Drag the top to move it, the edges to resize it, and close it with × or Esc. Each section has its own "Reset".
    - **Mascot:** Personality (Parkour! / Lively / Normal / Chill / Statue), Take naps, Wizard when Claude works, Apprentices for parallel sessions (shown while the wizard is on), Stand on windows, Rare surprises, Animations
    - **Appearance:** a live preview, Size (slider, 0.5x–4x), Seasonal outfits, Pajamas at bedtime (with Bedtime from 8 PM–1 AM, shown only while it's on), Bubble shows (both limits / 5-hour only / on hover), Bubble style (numbers / bars), Keep details open, Clock (12 / 24 hour), Dates (day or month first)
-   - **Sound & talking:** Sound effects (master switch), Volume (0–100%; plays a sample when you let go), Which sounds (every sound as an on/off chip with a ▶ to hear it: Reactions = Poke, Bounce, Scream, Wall splat; Adventures = Parachute, Eagle cry, Hay landing, Cat, Grappling hook, Wings, Portal gun, Cannon, Jetpack, Boxes; Moods = Wizard magic, Dance music, Milestones), Chatter (off / sometimes / a lot / non-stop), Quiet hours (with From 8 PM–midnight and Until 6–9 AM), Follow Do Not Disturb
+   - **Sound & talking:** Sound effects (master switch), Volume (0–100%; plays a sample when you let go), Which sounds (every sound as an on/off chip with a ▶ to hear it: Reactions = Poke, Bounce, Scream, Wall splat; Adventures = Parachute, Eagle cry, Hay landing, Cat, Grappling hook, Wings, Portal gun, Cannon, Jetpack, Boxes; Moods = Wizard magic, Dance music, Milestones; Coding jokes = Phone, Cookies, Typing), Chatter (off / sometimes / a lot / non-stop), Quiet hours (with From 8 PM–midnight and Until 6–9 AM), Follow Do Not Disturb
    - **Usage & alerts:** Refresh every (2–5 minutes), Warn when nearly full, Yellow ring from (70–85%), Red ring from (85–95%), Early pace warning, Desktop notifications, Count tokens like the Claude app
    - **Shortcuts:** Keyboard shortcuts (on/off; off lets go of the keys so other apps can use them), then each shortcut with what it does and its keys as key caps (defaults: Ctrl + Alt + P shows or hides the mascot, Ctrl + Alt + D pins or closes the details panel, Ctrl + Alt + H calls the mascot over). Click one and press the new keys; Esc cancels, Backspace clears it. Warnings appear if the keys have no Ctrl/Alt, are already used by another shortcut, or another app already uses them.
    - **System:** Start with Windows, Tray icon, Hide during full screen, Stay on one monitor
@@ -115,9 +116,24 @@ One thing to know: `usage.RETRY_AFTER` changes while the pet runs, so other file
   - **Balloons** (2 or 3 of them): it blows one up in five big breaths (eyes squeezed shut), ties it, lets go, and it drifts up and outwards a little (clear of the usage bubble), string wiggling, then pops into bits ("bye, balloon."). No scared reaction.
   - **Paper plane**: it folds a sheet into a plane, holds it up, and throws it (usually towards the middle of the screen, sometimes the wrong way). The plane is its own little window (like the fetch ball) and flies like a glider: speed gives lift, gravity bends its path, drag slows it, and each throw gets its own trim speed, glide ratio and wobble, so paths differ (gentle glides, swoops, now and then a loop). It bonks off screen edges, lands on the taskbar, slides to a stop and stays 8 s. The mascot watches it and reacts to how far it went. One plane at a time.
   - The diary counts sweeps, paintings, things fished out, balloons popped and paper planes.
+- **Coding jokes** (`pet/gags.py`): picked at random along with the activities above (each one as likely as any other), so they happen now and then when it stops walking. Each lasts 7 to 10 s, has its own props (bigger blocks than the small pictures, no dark edges), particles and lines, which it says as it goes rather than one line at the start. Props go on the side towards the middle of the screen. Anything over its head makes the usage bubble move up (`gag_room`). The diary counts them ("Coding jokes").
+  - **Phone call:** a phone buzzes on the floor with little sound waves (`ring`), it picks it up and holds it to its head: "hello, API! long time no see.", then something like "you're number 429 in the queue. please try again later.", and it hangs up.
+  - **Cookie:** it eats a chocolate chip cookie in four bites (crumbs, a `crunch` each): "I love cookies. I accept all of them." ... "mmm. third-party cookies. the forbidden kind."
+  - **Rubber duck debugging:** a duck pops up beside it; it explains its code, waving its arms, until a lightbulb lights up over its head: "OH. never mind. thanks, duck!" The duck squeaks and gets a heart.
+  - **Coffee:** a mug with steam rising; two sips (eyes shut): "coffee in, code out." ... "this is my Java."
+  - **Bug hunt:** a little beetle scuttles along the floor; it chases it with a butterfly net (staying within about 100 px), misses twice, catches it: "it's not a bug, it's a feature!", then lets it go.
+  - **Infinite loop:** it walks back and forth faster and faster with a little arrow spinning over its head ("while (true) { walk(); }"), then gets dizzy: "forgot the break statement."
+  - **Stack overflow:** it stacks ten pancakes on a plate, the stack wobbles, gets butter and syrup, and topples: "stack overflow!" ... "marked as duplicate. rude."
+  - **Off by one:** it counts sheep jumping a fence; the fourth jumps back; it loses count: "there are 2 hard things in coding: naming things, cache invalidation and off-by-one errors."
+  - **Fortune cookie:** it cracks one open (the halves fall, crumbs), a slip unrolls: "'git push --force brings bad luck.'", then laughs nervously.
+  - **Merge conflict:** two sticky notes, << and >>, shove at it from both sides while it looks from one to the other; one gets thrown away: "...accept chaos."
+  - **Recursion:** it looks into an oval hand mirror, which shows it holding a smaller mirror, which shows it holding a smaller one... "it's mascots all the way down."
+  - **Lost semicolon:** it searches the floor with a magnifying glass, walking out and back, finds a gold ";" and holds it up: "found it! now everything compiles. probably."
+  - **404:** it digs a hole with a spade (dirt flies, a heap builds up) and pulls out a sign saying 404: "404: file not found. classic."
+  - **Tiny keyboard:** it types away on a tiny keyboard (keys light up, bits of code fly up, `typing`), then undoes it all with a row of ctrl+z arrows: "great session. zero lines changed."
 - **Waking up:** a big stretch, both arms up.
 - **Limit used up (100%):** it carries on as normal (walking, hopping, activities) and now and then says a "hard day's work" line. The bubble gets its black ring.
-- **Wizard mode:** when tokens are going up, it puts on a wizard hat and casts sparkles with a wand. It notices Claude Code within about 3 seconds, by reading its logs. It notices claude.ai chat and other apps when the 5-hour % goes up, which is checked every 2 minutes.
+- **Wizard mode:** when tokens are going up, it puts on a wizard hat and casts sparkles with a wand. The hat (`HAT`, `HAT_COLOURS` in `pet/art.py`) is lit on its left and shaded on its right, has a crescent moon, a big star and twinkles, a tip that bends over, a gold band with a buckle, and a two-tone brim. It's 23 blocks wide with everything but the tip centred, so it sits in the middle of the head. The apprentices and the teleport use the same hat. It notices Claude Code within about 3 seconds, by reading its logs. It notices claude.ai chat and other apps when the 5-hour % goes up, which is checked every 2 minutes.
 - **Talking:** speech bubbles type themselves out above the usage bubble. It says:
   - an encouraging or silly line every 4–10 minutes ("Sometimes"), but only when you're at the computer
   - something when work starts, now and then while it's working, and when a long job finishes

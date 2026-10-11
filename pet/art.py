@@ -26,18 +26,25 @@ BLOCK_W, BLOCK_H = 4, 8    # one block at 1x. terminal blocks are twice as tall 
 HEART = [".##.##.", "#######", "#######", ".#####.", "..###..", "...#..."]
 ZZZ = ["####", "..#.", ".#..", "####"]
 SPARK = [".#.", "###", ".#."]
-HAT = [                    # the wizard hat. # = hat, y = gold band, * = star
-    "...............##.......",
-    ".............###........",
-    "............####........",
-    "...........#####........",
-    "..........#######.......",
-    ".........####*####......",
-    "........####***####.....",
-    "........#####*#####.....",
-    ".......#############....",
-    ".......yyyyyyyyyyyyy....",
-    "....###################.",
+HAT = [                    # the wizard hat. # = hat, l / d = its lit and shady sides, m = moon, * = stars,
+                           # y = gold band, o / b = the buckle, L = the brim's top. 23 wide, so it sits
+                           # centred on the head (only the tip bends over to the right)
+    "...............#d......",
+    ".............##d.......",
+    "............l#d........",
+    "..........l#d..........",
+    ".........l##*d.........",
+    ".........l###d.........",
+    "........l####*d........",
+    ".......l####***d.......",
+    ".......l#m###*dd.......",
+    "......llmm#####dd......",
+    ".....ll#mm#####*dd.....",
+    ".....ll##m######dd.....",
+    "....ll*##########dd....",
+    "....yyyyyyobboyyyyy....",
+    "..LLLLLLLLLLLLLLLLLLL..",
+    "..dd###############dd..",
 ]
 
 LEFT_WAVE = (((2, 1), (1, 1)), ((2, 1), (1, 0)))   # the left arm, mirror of WAVE
@@ -328,6 +335,35 @@ BOX_C = ("#c79a5b", "#a97c42", "#e8cf9a")        # cardboard: front, the lid's e
 CANNON_C = ("#34343a", "#5b5d66", "#7a5230", "#a87445")   # barrel, its rings, wheel, wheel's hub
 FLASH_C = ("#fff3b0", "#ffd166", "#ff8a1f")      # muzzle flash, rocket flames
 JET_C = ("#a7a9b4", "#e5534b", "#5b5d66")        # jetpack: tank, stripe, nozzle
+# coding jokes (pet/gags.py): little pictures, no dark edges
+PHONE = ["kkkkk", "ksssk", "ksssk", "ksssk", "ksssk", "kkbkk"]   # a phone (s = screen, lit brighter while it rings)
+PHONE_C = {"k": "#2b2b30", "s": "#7fc7ff", "b": "#8e8e93"}
+COOKIE = ["..ooo..", ".oocoo.", "ooooooo", "oooocoo", "ocooooo", ".ooooc.", "..ooo.."]   # c = chocolate chips
+COOKIE_C = {"o": "#d9a05b", "c": "#5a3a22"}
+DUCK = ["...yyy..", "..yyeyo.", "..yyyyoo", "y.yyy...", "yyyyyyyy", "yyyyyyyy", ".yyyyyy."]   # a rubber duck
+DUCK_C = {"y": "#ffd84a", "o": "#ff8a1f", "e": "#2b1a14"}
+BULB = [".www.", "wwwww", "wwwww", "wwwww", ".www.", ".ggg.", ".ggg."]   # an idea
+BULB_C = {"w": "#fff3b0", "g": "#a7a9b4"}
+MUG = ["mccm..", "mmmmhh", "ssss.h", "mmmmhh", "mmmm..", ".mm..."]   # c = coffee, s = a red stripe, h = handle
+MUG_C = {"m": "#f2efe8", "c": "#5a3a22", "s": "#e5534b", "h": "#f2efe8"}
+BUG_A, BUG_B = [".ggk", "gggg", "d.d."], [".ggk", "gggg", ".d.d"]   # a little beetle, two leg frames
+BUG_C = {"g": "#6fcf6a", "k": "#2b1a14", "d": "#2f6b24"}
+SHEEP = [".wwwww..", "wwwwwwff", "wwwwwwff", "wwwwww..", ".l..l..."]   # f = face, l = legs
+SHEEP_C = {"w": "#f7f4ee", "f": "#3b3b40", "l": "#3b3b40"}
+FENCE = ["b.....b", "bbbbbbb", "b.....b", "bbbbbbb", "b.....b"]
+FENCE_C = {"b": "#a87445"}
+FORTUNE = ["..oooo..", ".oooooo.", "oooddooo", "oo....oo"]   # a fortune cookie
+FORTUNE_C = {"o": "#e8b86b", "d": "#c9944a"}
+MERGE_IN, MERGE_OUT = [".k.k", "k.k.", ".k.k"], ["k.k.", ".k.k", "k.k."]   # << and >> on the sticky notes
+SEMI = [".k", "..", ".k", ".k", "k."]   # the lost semicolon
+DIGITS = {"4": ["k.k", "k.k", "kkk", "..k", "..k"], "0": ["kkk", "k.k", "k.k", "k.k", "kkk"]}
+UNDO = [".k..", "kkkk", ".k.k", "...k", ".kk."]   # ctrl+z
+GAG_C = {"note_in": "#ffd166", "note_out": "#8be9fd", "fold": "#e0b94c", "fold2": "#6cc8dc", "ink": "#2b1a14",
+         "wood": "#8b5a2b", "metal": "#a7a9b4", "dark": "#3a3a3c", "key": "#8e8e93", "lit": "#ffe08a",
+         "code": "#6ff0a0", "glass": "#bfe3ff", "frame": "#d4a64a", "plate": "#f2efe8", "plate2": "#c9c3b5",
+         "cake": "#f2c27a", "cake2": "#c98a3e", "butter": "#ffe9a0", "syrup": "#8b4a1c", "paper": "#f7f4ee",
+         "red": "#e5534b", "hole": "#1a120c", "soil": "#6b4a2b", "soil2": "#8b6239", "sign": "#c9944a",
+         "net": "#f2efe8", "semi": "#ffc23a"}
 # rare visitors
 UFO = [                    # c = glass dome, w = shine, g = hull, l = blinking lights, d = feet
     "......cccccc......",
@@ -366,6 +402,8 @@ NOTE_C = ["#ff9ad5", "#8be9fd", "#ffe08a"]
 HAY_C = ["#e3b54a", "#f4d77c", "#b8862c"]   # hay: base, light straw, dark straw
 CHUTE_R, CHUTE_W, STRING_C = "#e5534b", "#f2efe8", "#d9d4c7"
 HAT_C, BAND_C, STAR_C, WAND_C = "#6c4ab6", "#f2c14e", "#ffe08a", "#8b5a2b"
+HAT_COLOURS = {"#": HAT_C, "l": "#8b6ad6", "d": "#4e3391", "L": "#8461cf", "m": "#fff3b0", "*": STAR_C,
+               "y": BAND_C, "o": "#d9a43a", "b": "#7a5a1e"}
 SPARK_C = ["#ffe08a", "#8be9fd", "#ff9ad5", "#ffffff"]
 DIM, RED, TRACK = "#8e8e93", "#e5534b", "#3a3a3c"
 IDLE_C = "#b48cff"   # sleepy lavender: checks are slowed down because nothing is using claude
