@@ -18,12 +18,15 @@ SOUND_VERSION = 5   # bump this when a sound changes, so old saved copies aren't
 # how the sounds are grouped and named in settings, where each one can be switched off
 SOUND_GROUPS = (("Reactions", (("pop", "Poke"), ("boing", "Bounce"), ("scream", "Scream"), ("splat", "Wall splat"))),
                 ("Adventures", (("whoosh", "Parachute"), ("eagle", "Eagle cry"), ("hay", "Hay landing"),
+                                ("splash", "Water bucket"), ("bloop", "Bucket refill"),
+                                ("twang", "Bungee"), ("zip", "Zipline"), ("slide", "Pole slide"),
+                                ("thwip", "Web"),
                                 ("meow", "Cat"), ("clink", "Grappling hook"), ("flap", "Wings"),
                                 ("zap", "Portal gun"), ("boom", "Cannon"), ("jet", "Jetpack"), ("thud", "Boxes"))),
                 ("Moods", (("spell", "Wizard magic"), ("dance", "Dance music"), ("chime", "Milestones"))),
                 ("Coding jokes", (("ring", "Phone"), ("crunch", "Cookies"), ("typing", "Typing"))))
 SOUNDS = ("pop", "boing", "scream", "chime", "whoosh", "eagle", "splat", "spell", "hay", "dance", "meow", "clink",
-          "flap", "zap", "boom", "jet", "thud", "ring", "crunch", "typing")
+          "flap", "zap", "boom", "jet", "thud", "ring", "crunch", "typing", "splash", "bloop", "twang", "zip", "slide", "thwip")
 
 
 def make_sound(kind, volume=100):
@@ -113,6 +116,27 @@ def make_sound(kind, volume=100):
         mix(0.0, [(h - l) * 0.65 for h, l in zip(hiss, low)])   # keeps only the hissy top end: tsss
         mix(0.0, soft(wav(0.3, 0, 0, 0.25, shape="noise", attack=0.004, decay=2.5), 0.25))   # body of the straw
         mix(0.0, wav(0.1, 90, 50, 0.18, attack=0.002, decay=2.0))
+    elif kind == "splash":   # emptying a water bucket (and landing in it): a wet "sploosh", then a few bubbles
+        mix(0.0, soft(wav(0.55, 0, 0, 0.7, shape="noise", attack=0.004, decay=2.0), 0.3))
+        mix(0.0, wav(0.15, 300, 110, 0.25, attack=0.003, decay=2.0))
+        for i, f_ in enumerate((600, 850, 700, 1000)):
+            mix(0.1 + i * 0.07, wav(0.06, f_, f_ * 1.6, 0.12, attack=0.005, decay=1.5))
+    elif kind == "bloop":   # scooping the water back up: a quick rising "blup-blup"
+        mix(0.0, wav(0.09, 280, 700, 0.35, attack=0.005, decay=1.0))
+        mix(0.1, wav(0.11, 380, 950, 0.3, attack=0.005, decay=1.2))
+        mix(0.0, soft(wav(0.2, 0, 0, 0.15, shape="noise", attack=0.01, decay=2.0), 0.4))
+    elif kind == "twang":   # the bungee cord at full stretch: a rubbery "boyoyoing", wobbling down
+        mix(0.0, wav(0.7, 260, 120, 0.4, wobble=45, vib=11, shape="tri", attack=0.005, decay=1.4))
+        mix(0.0, wav(0.5, 520, 240, 0.12, wobble=60, vib=11, attack=0.005, decay=2.0))
+    elif kind == "zip":   # a trolley whizzing down a zipline: a rising, buzzing whirr
+        mix(0.0, wav(1.4, 180, 420, 0.25, shape="saw", wobble=25, vib=38, attack=0.1, decay=0.6))
+        mix(0.0, soft(wav(1.4, 0, 0, 0.35, shape="noise", attack=0.2, decay=0.8), 0.15))
+    elif kind == "slide":   # sliding down a brass pole: a squeaky, falling "zweeee"
+        mix(0.0, wav(0.8, 900, 500, 0.2, shape="tri", wobble=30, vib=24, attack=0.02, decay=0.8))
+        mix(0.0, soft(wav(0.8, 0, 0, 0.15, shape="noise", attack=0.05, decay=1.0), 0.5))
+    elif kind == "thwip":   # a web shooting out: a quick, airy "thwip"
+        mix(0.0, wav(0.12, 2400, 600, 0.25, shape="saw", attack=0.002, decay=1.5))
+        mix(0.0, wav(0.15, 0, 0, 0.35, shape="noise", attack=0.002, decay=2.5))
     elif kind == "meow":   # the cat, when you click it: a rising "mi", then a falling "aow"
         mix(0.0, wav(0.14, 520, 880, 0.3, shape="saw", attack=0.02, decay=0.3, wobble=12, vib=6))
         mix(0.12, wav(0.42, 880, 470, 0.3, shape="saw", attack=0.01, decay=1.4, wobble=18, vib=5))

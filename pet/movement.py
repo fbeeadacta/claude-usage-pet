@@ -5,8 +5,11 @@ import os
 import random
 import time
 
-from .config import (CHUTE_HEIGHT, CHUTE_SPEED, DANCE_CHANCE, DIVE_MIN, FPS, GRAVITY, GROUND_FRICTION,
-    HAY_TIME, HOP_HEIGHT, LEAP_POWER, LEAP_REACH, MAX_STEP_UP, NAP_CHANCE, TASKBAR_PUSH, THROW_DRAG, WALK_EASE,
+from .bucket import IN_WATER
+from .bungee import ON_CORD
+from .config import (CHUTE_HEIGHT, CHUTE_SPEED, DANCE_CHANCE, DIVE_MIN, EDGE_STUNTS, FPS,
+    GRAVITY, GROUND_FRICTION, HAY_TIME, HOP_HEIGHT, LEAP_POWER, LEAP_REACH, MAX_STEP_UP, NAP_CHANCE, TASKBAR_PUSH,
+    THROW_DRAG, WALK_EASE,
     WALK_SPEED)
 from .lines import (CHUTE_LINES, DANCE_LINES, DIVE_LINES, DIZZY_LINES, FALL_LINES, HAY_LINES, LEAP_FAIL,
     LEAP_OK, LEAP_TRY, SLAP_LINES, SQUISH_LINES, UFO_BACK_LINES)
@@ -280,24 +283,48 @@ class MovementMixin:
         if random.random() < 0.8:
             self.say(self.pick(SLAP_LINES), force=True)
 
-    def start_dive(self):
-        # the leap of faith: off the edge of its window in a swan dive, into a pile of hay at the bottom
+    def edge_drop(self):
+        # leaping off the edge of its window (a leap of faith, a water bucket): the floor it'd land on down
+        # there, or None if there's not much of a drop (it'll just walk off) or the screen edge is right there
         if not self.anim.get() or self.plat is None:
-            return False
+            return None
         s = self.s()
         sc = self.screens[self.si]
         x = (self.plat_box[3] if self.dir > 0 else self.plat_box[1]) + self.dir * 60 * s
         lo, hi = self.x_limits()
         if not lo <= x <= hi:
-            return False   # the screen edge is right there
+            return None
         below = self.platform_under(self.y + 2, sc.wb, x)
-        if (below[2] if below else sc.wb) - self.y < DIVE_MIN * s:
-            return False   # not much of a drop. it'll just walk off.
-        self.plat, self.through, self.diving = None, False, True
-        self.vy, self.vx = -math.sqrt(2 * GRAVITY * s * 45 * s), self.dir * 160 * s   # a little spring off the edge
-        g, floor = GRAVITY * s, below[2] if below else sc.wb
+        floor = below[2] if below else sc.wb
+        return floor if floor - self.y >= DIVE_MIN * s else None
+
+    def spring_off(self, floor):
+        # a little spring off the edge. returns where it'll come down.
+        s = self.s()
+        self.plat, self.through = None, False
+        self.vy, self.vx = -math.sqrt(2 * GRAVITY * s * 45 * s), self.dir * 160 * s
+        g = GRAVITY * s
         t = (-self.vy + math.sqrt(self.vy * self.vy + 2 * g * (floor - self.y))) / g   # (when it gets down there)
-        self.hay_spot(min(max(self.x + self.vx * t, lo), hi), floor)   # a pile of hay pops up where it'll land
+        lo, hi = self.x_limits()
+        return min(max(self.x + self.vx * t, lo), hi)
+
+    def edge_stunt(self):
+        # off the edge: a leap of faith, a water bucket jump (pet/bucket.py), a bungee jump (pet/bungee.py),
+        # or a zipline, fireman's pole or web swing (pet/stunts.py)
+        if self.cross_target() is not None and random.random() < 0.5:   # over to the monitor next door
+            return random.choice((self.start_zipline, self.start_web))(cross=True)
+        kinds, weights = zip(*EDGE_STUNTS)
+        kind = random.choices(kinds, weights)[0]
+        return {"dive": self.start_dive, "bucket": self.start_bucket, "bungee": self.start_bungee,
+                "zipline": self.start_zipline, "pole": self.start_pole, "web": self.start_web}[kind]()
+
+    def start_dive(self):
+        # the leap of faith: off the edge of its window in a swan dive, into a pile of hay at the bottom
+        floor = self.edge_drop()
+        if floor is None:
+            return False
+        self.diving = True
+        self.hay_spot(self.spring_off(floor), floor)   # a pile of hay pops up where it'll land
         self.state, self.state_t = "idle", 2.0
         self.play("eagle")
         self.tally("dives")
@@ -388,9 +415,10 @@ class MovementMixin:
         if (self.held or self.pressed or self.squash_t > 0 or not self.grounded() or self.angle or self.vx
                 or (self.state == "walk" and self.walking_allowed()) or self.goto_x is not None or self.ufo
                 or (self.ball and self.ball["phase"] in ("fly", "pet")) or (self.plane and not self.plane["landed"])
-                or (self.plat is not None and time.perf_counter() < self.ride_until) or self.trip or self.walk_v):
+                or (self.plat is not None and time.perf_counter() < self.ride_until) or self.trip or self.walk_v or self.water or self.bungee
+                or self.stunt):
             return 16
-        if (self.plat is not None or self.near or self.hay_t > 0 or self.hay_show or self.straw_t > 0 or self.parts or self.cat or self.wave_t > 0 or self.state in ("work", "dance", "act") or self.speech
+        if (self.plat is not None or self.near or self.hay_t > 0 or self.hay_show or self.straw_t > 0 or self.bucket or self.parts or self.cat or self.wave_t > 0 or self.state in ("work", "dance", "act") or self.speech
                 or self.dizzy_t > 0 or self.stretch_t > 0):
             return 30
         return 80
@@ -416,12 +444,19 @@ class MovementMixin:
         self.plane_tick(dt)
         self.cat_tick(dt)
         self.hay_tick(dt)
+        self.bucket_tick(dt)
+        self.bungee_tick(dt)
+        self.stunt_tick(dt)
         if self.ufo and self.ufo_tick(dt):
             return   # beamed up
         if self.held or self.hidden or self.pressed:
             return
         if self.trip:   # on its way to another monitor (pet/travel.py)
             self.trip_tick(dt, s)
+            return
+        if self.bungee and self.bungee_move(dt, s):   # on the bungee cord (pet/bungee.py)
+            return
+        if self.stunt and self.stunt_move(dt, s):   # on a zipline, a pole or a web (pet/stunts.py)
             return
         if self.plat is not None:
             self.ride(s, dt)
@@ -443,13 +478,16 @@ class MovementMixin:
                 self.hay_popped(self.y)
                 self.jump_now(HOP_HEIGHT * 1.2 * s)
             return
+        if self.bucket and self.bucket["phase"] in IN_WATER:   # standing in its water (pet/bucket.py)
+            return
         walking = self.state == "walk" and self.walking_allowed()
         sc = self.screens[self.si]
         if not self.grounded():   # in the air
             g = GRAVITY * s
             y_before, x_before = self.y, self.x
             if (not self.chute and self.vy > 150 * s and self.drop_left() > CHUTE_HEIGHT * s
-                    and abs(self.angle) < 0.4 and self.leaping is None and not self.diving and not self.slapped):   # a failed jump just plops
+                    and abs(self.angle) < 0.4 and self.leaping is None and not self.diving and not self.slapped
+                    and not self.bucket and not self.stunt):   # a failed jump just plops
                 self.chute = True   # a long way down: open the parachute
                 self.play("whoosh")
                 self.tally("chutes")
@@ -463,8 +501,8 @@ class MovementMixin:
             else:   # a proper curve, the same whatever the frame rate
                 self.y += self.vy * dt + 0.5 * g * dt * dt
                 self.vy += g * dt
-                if self.leaping is None and not self.diving:   # a jump keeps its aim; a throw slows down
-                    self.vx *= max(0.0, 1 - THROW_DRAG * dt)
+                if self.leaping is None and not self.diving and not self.bucket and not self.stunt:   # (a jump
+                    self.vx *= max(0.0, 1 - THROW_DRAG * dt)   # keeps its aim; a throw slows down)
             if self.y - self.pet_px[1] < sc.mt:   # bonk on the top of the screen
                 self.y, self.vy = sc.mt + self.pet_px[1], abs(self.vy) * 0.3
             if abs(self.vx) > 1:
@@ -555,7 +593,7 @@ class MovementMixin:
                     pr = self.prof()
                     if self.jump.get() and random.random() < pr["edge_leap"] and self.try_leap(prefer=self.dir):
                         return
-                    if self.jump.get() and random.random() < pr["dive"] and self.start_dive():
+                    if self.jump.get() and random.random() < pr["dive"] and self.edge_stunt():
                         return
                     self.edge_turn = random.random() < pr["turn"]
                 if self.edge_turn:
@@ -636,6 +674,10 @@ class MovementMixin:
             target, k, damp = self.hang + max(-0.7, min(0.7, -self.drag_vx * 0.0011 / s)), 40, 6
         elif self.diving:
             target, k, damp = self.dir * 2.3, 16, 5   # tips over head first: a swan dive
+        elif self.bungee and self.bungee["phase"] in ON_CORD:
+            target, k, damp = self.bungee_lean(), 16, 5   # hanging upside down from the cord
+        elif self.stunt and self.stunt_lean() is not None:
+            target, k, damp = self.stunt_lean(), 24, 6   # swinging on a zipline or a web
         elif self.angle or self.spin:
             target, k, damp = 0.0, 22, 5
         else:
@@ -663,6 +705,10 @@ class MovementMixin:
         if self.ufo_fall:      # back from the ufo
             self.ufo_fall, self.dizzy_t = False, 2.0
             self.say(self.pick(UFO_BACK_LINES), force=True)
+        if self.bucket and self.bucket_landed():   # splash down in the water it just poured (pet/bucket.py)
+            return
+        if self.stunt and self.stunt_landed():   # a superhero landing after a web swing (pet/stunts.py)
+            return
         if self.diving:   # the leap of faith ends in a pile of hay. no bounce, no dizziness.
             self.diving, self.chute = False, False
             self.vx = self.vy = self.angle = self.spin = 0.0

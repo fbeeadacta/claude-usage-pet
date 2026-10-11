@@ -3,11 +3,12 @@ import math
 import time
 import tkinter.font as tkfont
 
-from .art import (ARMS, BEAM_C, BLOCK_H, BLOCK_W, BLUSH, BLUSH_C, BODY, BUBBLE, BUBBLE_TEXT, CANDLE, CANDLE_BASE,
-    CANDLE_C, CHUTE, CHUTE_R, CHUTE_W, EYE, EYES, FULL_C, FULL_EDGE, GLOW_C, HAT, HAT_COLOURS, HAY_C, HEART,
-    HEART_C, KEY, LEFT_WAVE, LEGS_AIR, LEGS_STAND, LEGS_STEP, MOTE_C, NOTE, NOTE_C, ORANGE, OUTFITS, PANIC_C, RED,
-    SHADOW, SHINY, SMOKE_C, SPARK, SPARK_C, SPEECH, SPEECH_TEXT, STAR_C, STRING_C, TRACK, UFO, UFO_C, UFO_LIGHTS,
-    WAND_C, WARN_C, WAVE, ZZZ, ZZZ_C)
+from .art import (ARMS, BEAM_C, BLOCK_H, BLOCK_W, BLUSH, BLUSH_C, BODY, BUBBLE, BUBBLE_TEXT, BUCKET, BUCKET_C,
+    CANDLE, CANDLE_BASE, CANDLE_C, CHUTE, CHUTE_R, CHUTE_W, EYE, EYES, FULL_C, FULL_EDGE, GLOW_C, GRIP_C, HARNESS_C,
+    HAT, HAT_COLOURS, HAY_C, HEART, HEART_C, KEY, LEFT_WAVE, LEGS_AIR, LEGS_STAND, LEGS_STEP, MC_WATER, MOTE_C,
+    NOTE, NOTE_C, ORANGE, OUTFITS, PANIC_C, RED, SHADOW, SHINY, SMOKE_C, SPARK, SPARK_C, SPEECH, SPEECH_TEXT,
+    STAR_C, STRING_C, TRACK, UFO, UFO_C, UFO_LIGHTS, WAND_C, WARN_C, WAVE, ZZZ, ZZZ_C)
+from .bungee import HARNESS_RING
 from .config import HAY_TIME, SPEAK_CPS
 from .fun import UFO_BEAM, UFO_DROP, UFO_END, UFO_GONE, season, smooth
 from .magic import SIDE_JOBS
@@ -84,6 +85,8 @@ class RenderMixin:
             arms = LEFT_WAVE[1] + WAVE[1]   # holding the strings
         elif anim and self.wave_t > 0 and not sleeping:
             arms = (ARMS[0],) + WAVE[int(self.wave_t / 0.18) % 2]
+        elif anim and self.bungee_frame():   # dangling from the bungee cord, waving
+            arms = (ARMS[0],) + WAVE[int(self.clock / 0.18) % 2]
         else:
             arms = ARMS
         act = self.act_frame() if anim and grounded and not self.held else None   # an idle activity (pet/idle.py)
@@ -101,6 +104,16 @@ class RenderMixin:
             legs = pose.get("legs", legs)
             eyes, eye_dir, eye_v = pose.get("eyes", eyes), pose.get("eye_dir", eye_dir), pose.get("eye_v", eye_v)
             arms = pose.get("arms", arms)
+        bucket = self.bucket_frame() if anim and not self.held else None   # the water bucket jump (pet/bucket.py)
+        harness = anim and self.bungee is not None   # bungee jumping (pet/bungee.py)
+        water = self.water_depth() if anim and not self.held else 0
+        if bucket and bucket[4]:
+            eye_dir, eye_v = 0, 1   # looking down at where the water's going
+        stunt = self.stunt_pose() if anim and not self.held else None   # zipline, pole, web swing (pet/stunts.py)
+        pole = None
+        if stunt:
+            arms, legs = stunt.get("arms", arms), stunt.get("legs", legs)
+            eye_dir, pole = stunt.get("eye_dir", eye_dir), stunt.get("pole")
         parts = tuple((p["kind"], round(p["x"]), round(p["y"]), p["c"]) for p in self.parts) if anim else ()
         show = (self.bubble_mode.get() != "hover" or self.hovering or self.held
                 or self.details.visible or now < self.hover_until)
@@ -123,7 +136,7 @@ class RenderMixin:
         cap = "bedtime_right" if lead else "bedtime"   # (the bobble flops out behind it)
         outfit = None if wiz else cap if night else self.dev_outfit or (season() if self.seasonal.get() else None)
         candle = None   # at bedtime: held in its lead hand, or put down on that side while it sleeps
-        if night and not wiz and not hay and not dancing and not act and not trip:
+        if night and not wiz and not hay and not dancing and not act and not trip and not bucket:
             where = "floor" if sleeping else "hold" if ARMS[lead] in arms else None
             candle = (where, lead, int(self.clock * 5) % 2 if anim else 0) if where else None
         helpers = (self.helpers(), int(self.clock * 5)) if wiz else None
@@ -147,7 +160,7 @@ class RenderMixin:
                 shift,
                 int(self.clock * 8) % 12 if anim and self.dizzy_t > 0 else None,
                 sleeping and int(self.clock / 1.4) % 2 == 1, hay, eye_v, outfit, helpers, ufo, self.shiny, job, act,
-                candle, trip, straws)
+                candle, trip, straws, bucket, water, harness, pole)
 
     def gaze(self):
         # which way to look so it's watching your mouse pointer, when the pointer's nearby
@@ -185,7 +198,8 @@ class RenderMixin:
 
     def draw(self, f):
         (_, legs, eyes, eye_dir, sink_kind, arms, wand, warn, wiz, parts, segs, bars, err, show_bubble,
-         speech, rot, chute, shift, dizzy, breath, hay, eye_v, outfit, helpers, ufo, shiny, job, act, candle, trip, straws) = f
+         speech, rot, chute, shift, dizzy, breath, hay, eye_v, outfit, helpers, ufo, shiny, job, act, candle, trip, straws,
+         bucket, water, harness, pole) = f
         c = self.canvas
         c.delete("all")
         s = self.s()
@@ -314,10 +328,32 @@ class RenderMixin:
             if row == 0 and breath:
                 start, end = start + 1, end - 1   # breathing out while asleep
             block(start, row, end - start)
+        if pole and not rot and not gone:
+            # hugging the fireman's pole (pet/stunts.py): the bit of pole in front of it, then its hands and feet
+            # wrapped round it
+            mx = px + pet_w // 2
+            self.pole_strip(c, mx, py + pet_h + pole[0], py + pet_h + pole[1], pb)
+            for y1, y2 in ((0.9, 1.5), (2.1, 2.7), (4.1, 4.6)):   # (a dark crease under each, so they show)
+                emit(pet_w // 2 - 2 * pb, y1 * bh, pet_w // 2 + 2 * pb, y2 * bh, body_c)
+                emit(pet_w // 2 - 2 * pb, y2 * bh, pet_w // 2 + 2 * pb, y2 * bh + max(1, pb // 2), GRIP_C)
         for col, row in arms if not gone else ():
             block(col, row)
         for col in legs if not gone else ():
             block(col, 4)
+        if harness and not gone:
+            # the bungee harness (pet/bungee.py): black webbing. a belt with a silver buckle, and a strap down to a
+            # silver ring low in the middle, between its legs, where the cord hooks on. a thin lighter line along
+            # the belt's top gives the webbing a bit of sheen.
+            # (careful: "ring" is the warning ring's thickness, used for the usage bubble below)
+            sw, belt = max(2, bw // 2), (3.15 * bh, 3.75 * bh)
+            emit(3 * bw, belt[0], 15 * bw, belt[1], HARNESS_C[0])
+            emit(3 * bw, belt[0], 15 * bw, belt[0] + max(1, bh // 10), HARNESS_C[1])
+            emit(8.3 * bw, belt[0] - 0.05 * bh, 9.7 * bw, belt[1] + 0.05 * bh, HARNESS_C[2])   # the buckle
+            emit(8.6 * bw, belt[0] + 0.15 * bh, 9.4 * bw, belt[1] - 0.15 * bh, HARNESS_C[0])
+            emit(9 * bw - sw / 2, belt[1], 9 * bw + sw / 2, 4 * bh, HARNESS_C[0])
+            ring_y = HARNESS_RING * bh + pet_h / 2
+            emit(8 * bw, ring_y - 0.3 * bh, 10 * bw, ring_y + 0.3 * bh, HARNESS_C[2])
+            emit(9 * bw - sw / 2, ring_y - 0.1 * bh, 9 * bw + sw / 2, ring_y + 0.1 * bh, HARNESS_C[0])
         for col in EYES if not gone else ():
             x1, y1 = (col + eye_dir) * bw, bh + sink + eye_v * max(1, bh // 4)
             if eyes in ("open", "worried"):
@@ -357,6 +393,12 @@ class RenderMixin:
                 x1, y1 = gx + dx * r * pb, gy + dy * r * pb
                 c.create_rectangle(x1, y1, x1 + pb, y1 + pb, fill=GLOW_C, outline="")
             self.glyph(rows_, x0, y0, pb, CANDLE_C, shadow=False)
+        if bucket and not rot and not gone:
+            # the water bucket in its lead hand: full or empty, or upside down while it tips it out
+            look, full, lead, dip, _ = bucket
+            x0, y0 = self.bucket_xy(look, lead, dip)
+            self.glyph(BUCKET if look == "hold" else BUCKET[3:][::-1], px + x0, py + sink + y0, pb,
+                       BUCKET_C if full else dict(BUCKET_C, w=BUCKET_C["e"]))
         if wiz and not rot:
             # wizard hat on the head, then whatever the job brings along (pet/magic.py)
             hx = px + 3 * bw + (12 * bw - len(HAT[0]) * pb) // 2
@@ -400,6 +442,11 @@ class RenderMixin:
             e = (hay - 1) / 30
             self.draw_hay(c, px + pet_w / 2, py + pet_h, s, "front", self.hay_squash(e), 1.0, math.sin(e * 2.2) * 0.15,
                           self.hay_flip)
+        if water and not rot:   # standing in its water: a see-through strip of it in front of its legs, as wide as
+            # the source block on the water's own window behind (pet/bucket.py), with the same lighter top
+            top, bottom = py + pet_h - water, py + pet_h
+            c.create_rectangle(px - bw, top, px + pet_w + bw, bottom, fill=MC_WATER[1], outline="", stipple="gray50")
+            c.create_rectangle(px - bw, top, px + pet_w + bw, top + pb, fill=MC_WATER[2], outline="")
         if straws and not rot and not gone:   # a couple of straws stuck on its head
             for col, lean, colour in ((6, -1, HAY_C[1]), (10, 1, HAY_C[0]), (11, 1, HAY_C[1])):
                 for j in range(3):

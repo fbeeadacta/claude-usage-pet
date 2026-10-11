@@ -28,6 +28,10 @@ TASKBAR_PUSH = False       # windows pushing it while it's on the taskbar (off f
                            # snapped windows shoved it about when they shouldn't)
 DIVE_MIN = 150             # the leap of faith needs at least this much drop below a window's edge
 HAY_TIME = 1.3             # seconds it sits in the hay pile before popping out
+EDGE_STUNTS = (("dive", 0.25), ("bucket", 0.15), ("bungee", 0.15), ("zipline", 0.15), ("pole", 0.15),
+               ("web", 0.15))   # leaping off a window's edge: how often it's each stunt (weights): a leap of
+                                # faith, a water bucket, a bungee, a zipline, a fireman's pole, a web swing
+WATER_TIME = 1.0           # seconds it stands in its water before scooping it back up
 # personalities (menu: personality). keep = chance it keeps walking when a walk ends, idle / walk_t = how
 # long it stands about / walks (seconds), speed = walking speed, hop / leap = average seconds between random
 # hops / jumps to another window, nap = nap chance multiplier. at a window's edge: edge_leap = chance it looks

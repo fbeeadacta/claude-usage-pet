@@ -47,6 +47,20 @@ HAT = [                    # the wizard hat. # = hat, l / d = its lit and shady 
     "..dd###############dd..",
 ]
 
+BUCKET = [                 # the minecraft bucket: h = handle, r = rim, w = what's in it (water, or e when
+    "..hhhhhhhh..",        # it's empty), l / i / d = the iron's lit side, middle and shady side
+    ".h........h.",
+    ".rrrrrrrrrr.",
+    "rwwwwwwwwwwr",
+    "rwwwwwwwwwwr",
+    ".rrrrrrrrrr.",
+    ".liiiiiiidd.",
+    ".liiiiiiidd.",
+    "..liiiiidd..",
+    "..lliiiddd..",
+    "...lldddd...",
+]
+
 LEFT_WAVE = (((2, 1), (1, 1)), ((2, 1), (1, 0)))   # the left arm, mirror of WAVE
 NOTE = ["..##", "..#.", "..#.", "###.", "###."]   # a music note, for dancing
 # the parachute: a dome with red and white stripes
@@ -400,6 +414,19 @@ WARN_C, PANIC_C = "#f2c14e", "#e5534b"
 FULL_C, FULL_EDGE = "#0d0d0d", "#c8c8cd"   # the ring at 100%: black with a silver edge
 NOTE_C = ["#ff9ad5", "#8be9fd", "#ffe08a"]
 HAY_C = ["#e3b54a", "#f4d77c", "#b8862c"]   # hay: base, light straw, dark straw
+MC_WATER = ["#2c55b8", "#3f76e4", "#8fb3f7", "#d6e4ff"]   # minecraft water: deep, base, surface, glint
+BUCKET_C = {"h": "#4a4a4a", "r": "#d6d6d6", "w": MC_WATER[1], "e": "#2e2e2e", "l": "#ececec", "i": "#a8a8a8",
+            "d": "#6c6c6c"}
+CORD_C = ["#f5c518", "#fff2a6", "#cfd2d8", "#6e5206", "#1c1d22", "#4a4d57", "#c9980f", "#8e9199"]   # bungee
+                           # cord: yellow, its shine, the metal (clamp, ring, ferrule, clip), its dark edge, the
+                           # black sleeve on the thick end and its sheen, the braid marks, the metal's shady side
+HARNESS_C = ["#16171b", "#3e414a", "#d9dce2"]   # the bungee harness: black webbing, its sheen, the silver ring
+ZIP_C = ["#e6e1d6", "#4a4a4f", "#9a9aa0", "#e5534b"]   # zipline: cable, its dark edge and straps, posts, trolley
+GRIP_C = "#a8553a"   # the crease under its hands and feet as they grip the pole
+POLE_C = ["#e3b04b", "#fff1c4", "#a8741f", "#7c7f86", "#b83a3a", "#e06464", "#55585e"]   # fireman's pole: brass,
+                           # its shine, its shady side, the steel bracket, the red landing mat, its top, steel shade
+WEB_C = ["#fafafa", "#aab3c2"]   # spider web: the strand, its grey edge
+WOOD_C = ["#c08a4e", "#8a5a2b", "#5e3b1a"]   # the bungee plank: top, underside, the gaps between boards
 CHUTE_R, CHUTE_W, STRING_C = "#e5534b", "#f2efe8", "#d9d4c7"
 HAT_C, BAND_C, STAR_C, WAND_C = "#6c4ab6", "#f2c14e", "#ffe08a", "#8b5a2b"
 HAT_COLOURS = {"#": HAT_C, "l": "#8b6ad6", "d": "#4e3391", "L": "#8461cf", "m": "#fff3b0", "*": STAR_C,

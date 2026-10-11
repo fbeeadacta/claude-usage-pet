@@ -11,6 +11,9 @@ from .art import KEY
 from .cclog import ClaudeCodeLog
 from .config import (FAKE_USAGE_ENV, MAX_SCALE, MIN_FETCH_GAP, MIN_SCALE, PROFILES, SETTINGS_FILE, SHINY_CHANCE,
     STATE_FILE)
+from .bucket import BucketMixin
+from .bungee import BungeeMixin
+from .stunts import StuntsMixin
 from .data import DataMixin
 from .details import Details
 from .dev import DevMixin
@@ -37,7 +40,7 @@ from .winapi import hotkey_thread, make_dpi_aware, own_usage, set_startup, start
 # ---- the pet ----
 
 class Pet(ScreensMixin, MouseMixin, TalkMixin, DataMixin, MovementMixin, RenderMixin, FunMixin, MagicMixin,
-          IdleMixin, TravelMixin, HayMixin, GagsMixin, DevMixin):
+          IdleMixin, TravelMixin, HayMixin, BucketMixin, BungeeMixin, StuntsMixin, GagsMixin, DevMixin):
     def __init__(self):
         make_dpi_aware()
         self.root = tk.Tk()
@@ -184,6 +187,9 @@ class Pet(ScreensMixin, MouseMixin, TalkMixin, DataMixin, MovementMixin, RenderM
         self.leap_plan, self.leaping = None, None   # jumping over to another window
         self.diving, self.hay_t = False, 0.0          # leap of faith, then sitting in the hay
         self.hay_show, self.hay_stage, self.straw_t, self.hay_flip = None, None, 0.0, 1   # (pet/hay.py)
+        self.bucket = self.water = self.water_stage = None   # the water bucket jump and its water (pet/bucket.py)
+        self.bungee = self.bungee_stage = None               # the bungee jump, its plank and cord (pet/bungee.py)
+        self.stunt = self.stunt_stage = None                 # zipline, pole, web swing (pet/stunts.py)
         self.music, self.next_spell = False, 0.0      # dance music playing / when the wizard next goes zing
         self.muted = set(st["muted"])                 # sounds switched off in settings
         self.root.after(3000, self.warm_sounds)       # make the sound files early, in the background

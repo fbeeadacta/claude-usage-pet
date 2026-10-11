@@ -154,6 +154,27 @@ DIVE_LINES = ["leap of faith!", "*eagle screech*", "I saw this in a game once.",
 HAY_LINES = ["hay! right where I left it.", "*pfft* straw in my mouth.", "perfectly safe. totally planned.",
              "who leaves hay lying around? thank you, whoever you are.", "nailed it. itchy, but nailed it.",
              "10/10. would dive again.", "*emerges majestically*"]
+BUCKET_LINES = ["MLG water bucket!", "hold my bucket. actually, no, I need it.", "clutch time.",
+                "I've practised this in creative mode.", "watch this.", "right click... right click... RIGHT CLICK—",
+                "fall damage is a state of mind."]
+WATER_LINES = ["clutched it.", "first try. obviously.", "no fall damage!", "*splash* nailed it.",
+               "and that's why you always carry a bucket.", "speedrunners hate this one trick.", "GG."]
+BUNGEE_LINES = ["bungee time!", "the cord's the right length. probably.", "measure twice, jump once.",
+                "tied it myself!", "YOLO. you only leap once.", "don't look down. don't look down.",
+                "3... 2... 1... BUNGEE!"]
+BUNGEE_DONE = ["again! again!", "my brain's still bouncing.", "all the blood went to my head.", "worth it.",
+               "*unclips like a pro*", "the floor! I missed you!"]
+ZIP_LINES = ["zipline time!", "wheeeee, incoming!", "built this in under a second. probably safe.",
+             "hold on tight...", "commute: optimised."]
+ZIP_DONE = ["best commute ever.", "again! again!", "*hair blown back*", "10/10 zipline.", "and stick the landing!"]
+POLE_LINES = ["fire drill!", "the fast way down.", "WEE-OO WEE-OO", "to the claude cave!", "*slides down the pole*"]
+POLE_DONE = ["and that's how firefighters do it.", "fastest way to the ground floor.", "a bit dizzy. worth it.",
+             "nailed the landing."]
+WEB_LINES = ["*thwip*", "with great tokens comes great responsibility.", "your friendly neighbourhood mascot!",
+             "web, don't fail me now.", "spidey sense: tingling."]
+WEB_DONE = ["superhero landing!", "thwip thwip!", "and nobody saw me. classic.", "that's bad for your knees, you know."]
+BUCKET_FAIL = ["I forgot to right click.", "the bucket was in the wrong slot!", "lag. that was lag.",
+               "ow. ping spike."]
 # getting to another monitor (pet/travel.py)
 ROPE_LINES = ["too high to jump. not too high to climb!", "*swings grappling hook* yeehaw!",
               "every adventurer packs a rope.", "grappling hook, don't fail me now.", "hold on, I've got this."]

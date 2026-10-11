@@ -14,7 +14,10 @@ DEV_GROUPS = (
     ("Moves", (("walk", "Walk"), ("hop", "Hop"), ("wave", "Wave"), ("poke", "Poked"), ("party", "Party hops"),
                ("look", "Look around"), ("stretch", "Stretch"), ("worried", "Worried"), ("dizzy", "Dizzy"),
                ("dance", "Dance"), ("nap", "Nap"), ("throw", "Thrown"), ("chute", "Parachute"),
-               ("come", "Called over"), ("fetch", "Fetch"), ("leap", "Leap to a window"), ("dive", "Leap of faith"))),
+               ("come", "Called over"), ("fetch", "Fetch"), ("leap", "Leap to a window"), ("dive", "Leap of faith"),
+               ("bucket", "Water bucket"), ("bungee", "Bungee jump"),
+               ("zipline", "Zipline"), ("pole", "Pole slide"), ("web", "Web swing"),
+               ("zipline_x", "Zipline to next monitor"), ("web_x", "Web swing to next monitor"))),
     ("Idle activities", (("sweep", "Sweep"), ("paint", "Paint"), ("fish", "Fish"), ("balloon", "Balloons"),
                          ("plane", "Paper plane"))),
     ("Coding jokes", tuple((k, GAG_NAMES.get(k, k.title())) for k in GAGS)),
@@ -176,6 +179,22 @@ class DevMixin:
                 return "It needs to be standing on a window. Try Leap to a window first."
             if not self.start_dive():
                 return "Not a big enough drop off this window, or the screen edge is in the way."
+        elif key == "bucket":
+            if self.plat is None:
+                return "It needs to be standing on a window. Try Leap to a window first."
+            if not self.start_bucket():
+                return "Not a big enough drop off this window, or the screen edge is in the way."
+        elif key in ("zipline_x", "web_x"):
+            if self.plat is None:
+                return "It needs to be standing on a window. Try Leap to a window first."
+            if not getattr(self, "start_" + key[:-2])(cross=True):
+                return ("It needs a window higher than the next monitor's taskbar, facing that monitor, with "
+                        "Stay on one monitor off.")
+        elif key in ("bungee", "zipline", "pole", "web"):
+            if self.plat is None:
+                return "It needs to be standing on a window. Try Leap to a window first."
+            if not getattr(self, "start_" + key)():
+                return "Not a big enough drop off this window, or the screen edge is in the way."
         elif key == "ufo":
             if self.plat is not None:
                 return "It needs to be on the taskbar, not on a window."
@@ -227,6 +246,9 @@ class DevMixin:
         if self.ufo and not self.ufo.get("dropped"):
             self.ufo = None
         self.dev_job = None
+        self.bucket_stop()
+        self.bungee_stop()
+        self.stunt_stop()
         self.goto_x = self.goto_why = None
         self.state, self.state_t, self.act = "idle", 3.0, None
         self.leap_plan = self.leaping = None
@@ -248,7 +270,8 @@ class DevMixin:
         if max(self.wave_t, self.happy_t, self.dizzy_t, self.stretch_t, self.worried_t, self.look_t) > 0:
             return False
         return not ((key == "fetch" and self.ball) or (key == "cat" and self.cat) or (key == "plane" and self.plane)
-                    or (key == "dive" and self.hay_show))
+                    or (key == "dive" and self.hay_show) or self.bucket or self.water
+                    or self.bungee or self.stunt)
 
     def dev_finish(self, next_up=True):
         if self.dev_restore:

@@ -28,6 +28,9 @@
 #   gags.py             part of the Pet: coding jokes it acts out when idle (a phone call from the api, cookies,
 #                        a rubber duck, a stack overflow of pancakes, a lost semicolon, a 404...).
 #   hay.py              part of the Pet: the haystack at the bottom of a leap of faith.
+#   bucket.py           part of the Pet: the minecraft water bucket jump off a window's edge, and its water.
+#   bungee.py           part of the Pet: the bungee jump off a window's edge, its plank, cord and harness.
+#   stunts.py           part of the Pet: more ways off a window's edge: a zipline, a fireman's pole, a web swing.
 #   dev.py              part of the Pet: dev mode (a hidden settings page, ctrl + shift + D in settings): playing
 #                        any animation on demand, or all of them in a row.
 #   tray.py              the tray icon (its own thread and hidden window).
