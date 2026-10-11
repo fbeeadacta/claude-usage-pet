@@ -5,7 +5,7 @@ A Windows desktop mascot that shows Claude plan usage. `claude_pet.py` starts it
 
 ## Start here
 - Read `docs/PROJECT_NOTES.md` before making changes. It has the full spec, how things work, settings and known limits. The change log is in `docs/CHANGELOG.md`.
-- After every change, update `docs/PROJECT_NOTES.md`: bump the version at the top, and add a change log entry in `docs/CHANGELOG.md`.
+- After every change, update `docs/PROJECT_NOTES.md`: bump the version at the top (and `VERSION` in `pet/config.py` to match, which settings shows), and add a change log entry in `docs/CHANGELOG.md`.
 - Also read `CLAUDE.local.md` if it exists (personal, machine-specific notes; not in git).
 
 ## Rules

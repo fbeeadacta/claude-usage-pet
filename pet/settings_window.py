@@ -9,7 +9,7 @@ import webbrowser
 from .art import ARMS, BLOCK_H, BLOCK_W, BODY, BUBBLE, BUBBLE_TEXT, EYE, EYES, IDLE_C, LEGS_STAND, ORANGE, TRACK
 from .dev import DEV_GROUPS
 from .config import (IDLE_AFTER_MIN, IDLE_POLL_SECONDS, MAX_SCALE, MIN_SCALE, PANIC_CHOICES, POLL_CHOICES, PROFILE_NAMES, QUIET_FROM_CHOICES,
-    QUIET_TO_CHOICES, BEDTIME_CHOICES, SHORTCUTS, WARN_CHOICES, combo_parts, key_name)
+    QUIET_TO_CHOICES, BEDTIME_CHOICES, SHORTCUTS, VERSION, WARN_CHOICES, combo_parts, key_name)
 from .sounds import SOUND_DIR, SOUND_GROUPS
 from .storage import DEFAULTS
 from .tips import TIPS
@@ -25,7 +25,6 @@ def hour_name(h):
 
 
 PERF_POINTS = 90   # 3 minutes of performance history, one point every 2 seconds
-VERSION = "7.0"
 PROJECT_URL = "https://github.com/have-you-tried-restarting/claude-usage-pet"
 ICON_FONT = "Segoe MDL2 Assets"   # windows' own icon font
 
@@ -39,8 +38,10 @@ class SettingsWindow:
     ON, KNOB, SEL, WELL = "#d97757", "#faf9f5", "#3d3c38", "#232321"
     CHIP_ON, CHIP_OFF = "#4a3128", "#3a3936"
     CAP, CAP_EDGE, WARN, GOOD, BAD = "#3d3c38", "#4d4c47", "#e8a33d", "#4caf7d", "#e5534b"
-    W, H = 720, 580                          # starting size (base units, before display scaling)
-    MIN_W, MIN_H, MAX_W = 580, 420, 1100     # the tallest it can go is the screen's height
+    W, H = 820, 580                          # starting size (base units, before display scaling)
+    MIN_W, MIN_H, MAX_W = 800, 420, 1100     # the tallest it can go is the screen's height. (800 wide so the
+                                             # diary's longest row, "Jumps to windows   9,999 made · 9,999 missed",
+                                             # fits in its column without the words running into the numbers)
     SB, TOP = 196, 46                        # sidebar width, and the strip along the top
     PAGES = (("mascot", "Mascot", ""), ("appearance", "Appearance", ""),
              ("sound", "Sound & talking", ""), ("usage", "Usage & alerts", ""),

@@ -2,6 +2,14 @@
 
 Newest first. The spec and how everything works are in `PROJECT_NOTES.md`.
 
+- **2026-10-11 (version 7.32): the right version in settings.**
+  - Settings > About & stats said "Claude usage pet 7.0": the version there was set once in `settings_window.py` and never bumped. It's `VERSION` in `pet/config.py` now (7.32), and CLAUDE.md says to bump it along with the version in `PROJECT_NOTES.md`.
+  - Tested: settings opened on a test pet (scratch files, `PET_FAKE_USAGE=ok`) shows "Claude usage pet 7.32".
+
+- **2026-10-11 (version 7.31): settings window wide enough for the diary.**
+  - Bug fix: with the settings window made narrow, the diary's "Jumps to windows" ran into its numbers ("9 made · 29 missed"). Each diary column needs about 242 px for its longest row with four-digit counts, so the window's narrowest is now 800 (was 580), and it opens 820 wide (was 720, which could also overlap). A smaller size saved from before is widened when settings opens.
+  - Tested on a test pet (scratch files, `PET_FAKE_USAGE=ok`, left monitor) with a saved size of 560 and the diary at 9,999 made and 9,999 missed: settings opened at 800, couldn't be made narrower, and the row fits with a gap (screenshot).
+
 - **2026-10-11 (version 7.30): black edge during a web swing to another monitor.**
   - Bug fix (from 7.29): during a web swing over to the next monitor, a black border showed at the right. The web swing's see-through window took its size partly from where the mascot was, so as it flew across it grew every frame, and a window resized every frame flashes its dark background at the new edge. Now its size is set once when the first web sticks, and only made bigger if the second web lands outside it.
   - Tested on a test pet (scratch files, `PET_FAKE_USAGE=ok`, left monitor), counting how often each stunt's window changed size or place: once per stunt for the web swing (across to the main monitor, on one screen, near the edge, from a low window), the zipline across monitors and the pole. No errors. I couldn't see the black edge in screenshots before the fix (it flashes between frames), so the check is that the window no longer changes size.
