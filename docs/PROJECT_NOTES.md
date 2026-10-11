@@ -2,7 +2,7 @@
 
 A small Claude mascot that walks along the top of the Windows taskbar. A bubble above its head shows Claude plan usage. If any file here gets lost or corrupted, this note has enough detail to rebuild it. You can give this file to Claude and ask it to rebuild the project.
 
-Last updated: 2026-10-11 (version 7.21)
+Last updated: 2026-10-11 (version 7.22)
 
 The change log is in `CHANGELOG.md`, next to this file.
 
@@ -435,6 +435,7 @@ There's also 30 px of side space for z's and sparks.
 
 **Details panel:**
 - 340 base units wide, with two tabs, drawn in the settings window's palette (`BG #262624`, cards `#30302e`, `segmented()` controls, `card()`s sent to the back after their contents). It opens just above the bubble. If there isn't room (the mascot is high up on a window), it opens below the mascot, and if there's no room there either, beside it. It never covers the mascot or its bubble.
+- It stays in front of other always-on-top windows: when it opens and every second while it's open, `to_front()` (in `ui.py`) puts it back at the front of the topmost windows with `SetWindowPos(HWND_TOPMOST)`, without taking focus. Its tooltip and the right-click menu are put in front of it after. `-topmost` alone wasn't enough: an always-on-top window opened after the pet started went in front of it.
 - Its height is the tallest of Plan and the four Claude Code views (each is drawn once to measure it), so the controls stay put. Shorter ones leave space at the bottom.
 - The **Plan** tab is the old widget's panel: bars, a pace tick, reset times and pace messages, plus "Claude Code today".
 - The **Claude Code** tab has "Overview", "Models", "Projects" and "Sessions" views, and "7 days", "30 days" and "All time" ranges (not for Sessions). The selected tab, view and range are remembered.

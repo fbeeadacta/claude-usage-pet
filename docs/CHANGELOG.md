@@ -2,6 +2,10 @@
 
 Newest first. The spec and how everything works are in `PROJECT_NOTES.md`.
 
+- **2026-10-11 (version 7.22): details panel stays in front.**
+  - Bug fix: the details panel (plan usage) could show up behind some windows. It was only made always-on-top once, when the pet started, so any always-on-top window opened later went in front of it. Now it's put back at the front of the always-on-top windows when it opens and every second while it's open (`to_front()` in `ui.py`, called from `Details.to_front()` and `data_tick`), without taking focus. Its tooltip and the right-click menu are put in front of it after.
+  - Tested with two plain test windows (not the pet): a later always-on-top window was in front, and `to_front()` brought the first one back in front. Not tested: the real panel against real apps, or windows that use special layers (the Start menu, full-screen games), which may still go in front.
+
 - **2026-10-11 (version 7.21): dev mode.**
   - A hidden dev mode: Ctrl + Shift + D while the settings window is open switches it on and off (saved as `dev` in the settings file). It adds a "Developer" page to settings.
   - The page can make the mascot play any animation right now (every move, idle activity, coding joke, wizard job, trip, visitor and outfit, as tap-to-play chips), or "Play all" to go through every one in a row. One it can't do from where it is is skipped, with the reason shown. A live line shows what it's doing (state, where it is, the trip).

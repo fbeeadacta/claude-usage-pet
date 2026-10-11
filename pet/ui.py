@@ -100,6 +100,14 @@ def move_window(win, x, y, w=None, h=None):
         u32.SetWindowPos(hwnd, None, x, y, w or 0, h or 0, flags)
 
 
+def to_front(win):
+    # puts a topmost window back at the very front of the topmost windows, without taking focus.
+    # "-topmost" alone isn't enough: any always-on-top window opened later (task manager, a video
+    # player...) goes in front of ours, and tk's lift() doesn't always beat it.
+    hwnd = u32.GetParent(win.winfo_id()) or win.winfo_id()
+    u32.SetWindowPos(hwnd, -1, 0, 0, 0, 0, 0x0013)   # HWND_TOPMOST; no move, no resize, no activation
+
+
 def round_rect(c, x1, y1, x2, y2, r, fill, bg=KEY, smooth=False, tag=""):
     # a rounded box: three rectangles plus four corner images, all on whole pixels so nothing steps
     x1, y1, x2, y2 = round(x1), round(y1), round(x2), round(y2)

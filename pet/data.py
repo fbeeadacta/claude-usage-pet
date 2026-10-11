@@ -211,6 +211,7 @@ class DataMixin:
             self.save()
         if self.details.visible:
             self.details.draw()
+            self.details.to_front()   # another always-on-top window may have opened over it
         self.root.after(1000, self.data_tick)
 
     def check_keys(self):

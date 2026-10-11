@@ -8,7 +8,7 @@ import tkinter.font as tkfont
 from .art import IDLE_C, PARK, RED
 from .cclog import compare_line, fmt_minutes, fmt_money, fmt_tokens, hour_label, pretty_model
 from .config import IDLE_AFTER_MIN, IDLE_POLL_SECONDS, SESSION_DONE_MIN
-from .ui import Canvas, Fader, Tooltip, move_window, round_corners, round_rect
+from .ui import Canvas, Fader, Tooltip, move_window, round_corners, round_rect, to_front
 from .usage import (bar_color, fmt_day, fmt_time, fmt_when, forecast, pace_info, parse_rows, parse_time,
     period_seconds, reset_text)
 
@@ -67,7 +67,17 @@ class Details:
         if not self.rounded:
             round_corners(self.win)
             self.rounded = True
+        self.to_front()
         self.fader.to(1.0, instant=not p.anim.get())
+
+    def to_front(self):
+        # in front of every other always-on-top window. runs on show and every second while it's open
+        # (data_tick), with its tooltip and the right-click menu kept in front of it.
+        to_front(self.win)
+        if self.tooltip.win is not None and self.tooltip.text is not None:
+            to_front(self.tooltip.win)
+        if self.pet.popup.visible:
+            to_front(self.pet.popup.win)
 
     def hide(self):
         self.hide_tip()
