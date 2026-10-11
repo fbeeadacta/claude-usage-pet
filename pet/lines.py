@@ -154,6 +154,39 @@ DIVE_LINES = ["leap of faith!", "*eagle screech*", "I saw this in a game once.",
 HAY_LINES = ["hay! right where I left it.", "*pfft* straw in my mouth.", "perfectly safe. totally planned.",
              "who leaves hay lying around? thank you, whoever you are.", "nailed it. itchy, but nailed it.",
              "10/10. would dive again.", "*emerges majestically*"]
+# getting to another monitor (pet/travel.py)
+ROPE_LINES = ["too high to jump. not too high to climb!", "*swings grappling hook* yeehaw!",
+              "every adventurer packs a rope.", "grappling hook, don't fail me now.", "hold on, I've got this."]
+ROPE_TOP = ["made it! *pants*", "summit reached!", "arms... like... noodles...", "who needs stairs?",
+            "mountaineer mode: complete."]
+WING_LINES = ["wings, activate!", "I believe I can fly!", "*flap flap flap*", "taking the scenic route.",
+              "new wings. wish me luck."]
+WING_LAND = ["the eagle has landed.", "smooth landing!", "ok wings, you can go now.", "air mail delivered: me."]
+PORTAL_LINES = ["now you're thinking with portals.", "*pew* ... *pew*", "speedy thing goes in...",
+                "one blue, one orange. perfect."]
+PORTAL_OUT = ["...speedy thing comes out!", "ta-da!", "never taking the stairs again.", "my insides feel orange."]
+BALLOON_RIDE = ["up, up and away!", "balloon express, next stop: over there.", "I hope I counted the balloons right.",
+                "floaty mode!"]
+BALLOON_DROP = ["*pop* *pop* *pop* hello!", "end of the line!", "and... drop!"]
+LADDER_LINES = ["*unfolds a ladder* ...and keeps unfolding.", "safety first. ladder time.", "one rung at a time.",
+                "this ladder goes all the way up. I checked."]
+LADDER_TOP = ["top floor!", "don't look down. ok, I looked.", "climbing: done. ladder: retrieved."]
+BEAN_LINES = ["*plants a magic bean*", "grow, little bean!", "I traded a cow for this. worth it.",
+              "gardening: the slow way up. except it's fast."]
+BEAN_TOP = ["fee-fi-fo-fum!", "thanks, beanstalk!", "the view up here is great."]
+CANNON_LINES = ["*rolls out a cannon*", "human cannonball! well. mascot cannonball.", "light the fuse!",
+                "I've done the maths. roughly."]
+CANNON_LAND = ["NAILED IT.", "*ears ringing*", "again! again!", "that was loud. and great."]
+JET_LINES = ["jetpack, engage!", "*straps on a jetpack*", "3... 2... 1... liftoff!", "rocket mode!"]
+JET_LAND = ["touchdown!", "the mascot has landed.", "smooth. smoky, but smooth."]
+BOX_LINES = ["box. box. box. box...", "I'll just stack some boxes.", "cardboard: the ultimate climbing gear.",
+             "every box is a step."]
+BOX_TOP = ["up! and... timber!", "the boxes have done their duty.", "who's cleaning those up? not me."]
+UFO_RIDE = ["taxi!", "hey! space friends! a lift?", "beam me up!", "*waves at the saucer*"]
+UFO_RIDE_END = ["thanks for the ride!", "5 stars. would get abducted again.", "bye, space friends!"]
+TELE_LINES = ["abra... cadabra!", "*waves wand mysteriously*", "a little wizardry...", "watch this."]
+TELE_END = ["ta-da!", "...and here I am.", "magic!", "I'm getting good at this."]
+HATCH_LINES = ["secret trapdoor! going down.", "mind the gap!", "there's always a way down.", "see you downstairs!"]
 SLAP_LINES = ["*splat*", "WALL.", "ow, my face.", "that window is harder than it looks.", "I'm ok!",
               "who put a wall there?", "*slides down slowly*", "nobody saw that. right?"]
 SQUISH_LINES = ["hey! I was standing there!", "no room! going down!", "squished! see you on the taskbar.",

@@ -60,6 +60,7 @@ class FunMixin:
         self.wake(hop=False)
         if self.ufo and not self.ufo.get("dropped"):
             return   # busy being abducted. it'll be right back.
+        self.end_trip()
         tx = min(max(mx, sc.wl + self.half), sc.wr - self.half)
         if si == self.si and self.plat is None and self.grounded() and abs(tx - self.x) <= COME_DROP * self.s():
             self.goto_x, self.goto_why = tx, "come"
@@ -158,7 +159,7 @@ class FunMixin:
         if part == "morning":
             self.greeted = datetime.date.today().isoformat()   # (that was the good morning)
         st = self.cc_stats()
-        last = (st or {}).get("recent", [None])[0] if st else None
+        last = (st.get("recent") or [None])[0] if st else None   # (no sessions at all: an empty list)
         if last and last["project"] not in ("?", ""):
             ago = now - last["end"].timestamp()
             kind = "warm" if ago < 3 * 3600 else "recent" if ago < 3 * 86400 else "old"
@@ -291,6 +292,7 @@ class FunMixin:
         # (menu: play fetch) a ball flies from your mouse toward the roomier side, and off the mascot goes
         if self.hidden or not self.anim.get():
             return
+        self.end_trip()
         s, sc = self.s(), self.screens[self.si]
         mx, my = self.root.winfo_pointerxy()
         side = 1 if sc.wr - self.x > self.x - sc.wl else -1
@@ -450,7 +452,7 @@ class FunMixin:
             self.start_cat()
 
     def start_ufo(self):
-        if self.ufo or self.plat is not None or not self.grounded():
+        if self.ufo or self.trip or self.plat is not None or not self.grounded():
             return
         self.stop_fetch()
         self.state, self.state_t = "idle", 2.0

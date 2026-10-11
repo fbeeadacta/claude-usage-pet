@@ -267,6 +267,67 @@ PLANE = [                  # a paper plane flying right. # = paper, s = its shad
     "...sss##....",
 ]
 PLANE_C = {"#": "#f7f4ee", "s": "#c9c3b5"}
+# getting to another monitor (pet/travel.py)
+HOOK = [                   # a grappling hook: three prongs on top, the ring the rope ties to at the bottom. m = metal
+    ".mmmmm.",
+    "mm.m.mm",
+    "m..m..m",
+    "...m...",
+    "...m...",
+    "..m.m..",
+    "...m...",
+]
+HOOK_C = {"m": "#b8bcc6"}
+ROPE_C = {"a": "#c9a46a", "b": "#a07a45"}   # two shades, so it looks twisted
+WINGS = {                  # a right wing (the left is the same, flipped): (picture, the row it's attached at)
+    "up": ([
+        "..............##",
+        "............####",
+        "..........#####.",
+        "........######..",
+        "......#######...",
+        "...#########....",
+        "############....",
+        "##########......",
+        ".#.#.#.#........",
+    ], 6),
+    "down": ([
+        "#########.......",
+        "############....",
+        ".##############.",
+        "...############.",
+        ".....#########..",
+        "........###.##..",
+        "..........#..#..",
+    ], 1),
+    "small": ([            # just sprouted, or folding away
+        "....##",
+        "..####",
+        "######",
+        "####..",
+        ".#....",
+    ], 2),
+}
+WING_C = {"#": "#f7f4ee"}
+GUN = [                    # the portal gun, pointing right. t = the tip, in the colour it's about to shoot
+    "..ggg...",
+    "wwwwwwwt",
+    "wwwwww..",
+    ".gg.....",
+]
+GUN_C = {"w": "#f2efe8", "g": "#8e8e93"}
+PORTAL_C = {               # l = bright rim, o = the portal, d = deep inside, w = a glint going round
+    "blue": {"l": "#bfe3ff", "o": "#3d9bff", "d": "#123a6b", "w": "#ffffff"},
+    "orange": {"l": "#ffd9a8", "o": "#ff8a1f", "d": "#6b3210", "w": "#ffffff"},
+}
+HATCH_C = ("#7a5230", "#1a120c")   # the trapdoor: wood, and the dark hole under it
+LADDER_C = ("#b07a43", "#d9a066")                # rails, rungs
+STALK_C = ("#4f9a3a", "#3d7d2c", "#7fd16a")      # the beanstalk: stalk, its darker streak, leaves
+SOIL_C = ("#6b4a2b", "#8b6239")
+BOX_C = ("#c79a5b", "#a97c42", "#e8cf9a")        # cardboard: front, the lid's edge, tape
+CANNON_C = ("#34343a", "#5b5d66", "#7a5230", "#a87445")   # barrel, its rings, wheel, wheel's hub
+FLASH_C = ("#fff3b0", "#ffd166", "#ff8a1f")      # muzzle flash, rocket flames
+JET_C = ("#a7a9b4", "#e5534b", "#5b5d66")        # jetpack: tank, stripe, nozzle
 # rare visitors
 UFO = [                    # c = glass dome, w = shine, g = hull, l = blinking lights, d = feet
     "......cccccc......",

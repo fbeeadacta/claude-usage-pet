@@ -14,6 +14,7 @@ from .config import (FAKE_USAGE_ENV, MAX_SCALE, MIN_FETCH_GAP, MIN_SCALE, PROFIL
 from .data import DataMixin
 from .details import Details
 from .fun import FunMixin
+from .hay import HayMixin
 from .idle import IdleMixin
 from .magic import MagicMixin
 from .lines import TOUR_LINES
@@ -25,6 +26,7 @@ from .screens import ScreensMixin
 from .settings_window import PERF_POINTS, SettingsWindow
 from .storage import load_memory, load_settings, log_error, write_json
 from .talk import TalkMixin
+from .travel import TravelMixin
 from .ui import Canvas, Fader
 from .usage import CLOCK
 from .winapi import hotkey_thread, make_dpi_aware, own_usage, set_startup, startup_path, summon_event, winmm
@@ -33,7 +35,7 @@ from .winapi import hotkey_thread, make_dpi_aware, own_usage, set_startup, start
 # ---- the pet ----
 
 class Pet(ScreensMixin, MouseMixin, TalkMixin, DataMixin, MovementMixin, RenderMixin, FunMixin, MagicMixin,
-          IdleMixin):
+          IdleMixin, TravelMixin, HayMixin):
     def __init__(self):
         make_dpi_aware()
         self.root = tk.Tk()
@@ -178,6 +180,7 @@ class Pet(ScreensMixin, MouseMixin, TalkMixin, DataMixin, MovementMixin, RenderM
         self.ride_until, self.through = 0.0, False   # its window just moved / dropping through to the taskbar
         self.leap_plan, self.leaping = None, None   # jumping over to another window
         self.diving, self.hay_t = False, 0.0          # leap of faith, then sitting in the hay
+        self.hay_show, self.hay_stage, self.straw_t, self.hay_flip = None, None, 0.0, 1   # (pet/hay.py)
         self.music, self.next_spell = False, 0.0      # dance music playing / when the wizard next goes zing
         self.muted = set(st["muted"])                 # sounds switched off in settings
         self.root.after(3000, self.warm_sounds)       # make the sound files early, in the background
@@ -191,6 +194,8 @@ class Pet(ScreensMixin, MouseMixin, TalkMixin, DataMixin, MovementMixin, RenderM
         self.fetch_at, self.cur_job, self.job_since = 0.0, None, 0.0   # (the wizard's job, and since when)
         self.act, self.act_t, self.act_info = None, 0.0, {}   # an idle activity (pet/idle.py)
         self.plane = self.plane_sprite = None         # a paper plane it threw
+        self.trip, self.trip_stage = None, None      # on its way somewhere out of reach (pet/travel.py)
+        self.walk_v = 0.0                             # walking speed right now (it speeds up and slows down)
         self.mouse = (-10 ** 6, -10 ** 6)             # where the pointer is (its eyes follow it)
         self.shiny, self.shiny_said = st["rare"] and random.random() < SHINY_CHANCE, False
         self.dizzy_t = self.stretch_t = self.dance_t = 0.0
@@ -297,6 +302,7 @@ class Pet(ScreensMixin, MouseMixin, TalkMixin, DataMixin, MovementMixin, RenderM
                 self.root.after_cancel(self.anim_job)
                 self.anim_job = None
             self.wake(hop=False)
+            self.end_trip()
             self.plat = None
             self.y, self.vy = self.screens[self.si].wb, 0.0   # land and stand still
             self.state, self.squash_t, self.pending_v, self.parts = "idle", 0.0, 0.0, []

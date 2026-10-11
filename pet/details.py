@@ -8,7 +8,7 @@ import tkinter.font as tkfont
 from .art import IDLE_C, PARK, RED
 from .cclog import compare_line, fmt_minutes, fmt_money, fmt_tokens, hour_label, pretty_model
 from .config import IDLE_AFTER_MIN, IDLE_POLL_SECONDS, SESSION_DONE_MIN
-from .ui import Canvas, Fader, move_window, round_corners, round_rect
+from .ui import Canvas, Fader, Tooltip, move_window, round_corners, round_rect
 from .usage import (bar_color, fmt_day, fmt_time, fmt_when, forecast, pace_info, parse_rows, parse_time,
     period_seconds, reset_text)
 
@@ -42,7 +42,8 @@ class Details:
         self.canvas.bind("<Button-3>", pet.show_menu)
         self.canvas.bind("<Motion>", self.hover)
         self.canvas.bind("<Leave>", lambda e: self.hide_tip())
-        self.tips, self.tip, self.tip_text = [], None, None   # (x1, y1, x2, y2, text) areas that explain themselves
+        self.tips = []   # (x1, y1, x2, y2, text) areas that explain themselves
+        self.tooltip = Tooltip(self.win, self.CARD, self.FG, self.DIM, self.font)
         self.visible = self.pinned = self.rounded = False
         self.hits, self.rect, self.px_size, self.fonts = [], None, (10, 10), {}
         self.anchor_x = self.anchor_bottom = 0
@@ -105,34 +106,10 @@ class Details:
         self.hide_tip()
 
     def show_tip(self, text, e):
-        # a little card just under the mouse, styled like the panel: a bold title, then the explanation.
-        # text is "Title: explanation"
-        title, _, body = text.partition(": ")
-        s = self.s
-        if self.tip is None:
-            self.tip = tk.Toplevel(self.win)
-            self.tip.overrideredirect(True)
-            self.tip.attributes("-topmost", True)
-            self.tip.configure(bg=self.CARD)
-            self.tip_title = tk.Label(self.tip, bg=self.CARD, fg=self.FG, justify="left", anchor="w")
-            self.tip_body = tk.Label(self.tip, bg=self.CARD, fg=self.DIM, justify="left", anchor="w")
-        if text != self.tip_text:
-            self.tip_text = text
-            self.tip_title.configure(text=title, font=self.font(8, True))
-            self.tip_body.configure(text=body, font=self.font(7.5), wraplength=round(220 * s))
-            self.tip_title.pack_forget()
-            self.tip_body.pack_forget()
-            self.tip_title.pack(fill="x", padx=round(12 * s), pady=(round(9 * s), round(2 * s)))
-            self.tip_body.pack(fill="x", padx=round(12 * s), pady=(0, round(10 * s)))
-            round_corners(self.tip)
-        self.tip.geometry(f"+{e.x_root + 12}+{e.y_root + 16}")
-        self.tip.deiconify()
-        self.tip.lift()
+        self.tooltip.show(text, e.x_root, e.y_root, self.s)
 
     def hide_tip(self):
-        if self.tip is not None and self.tip_text is not None:
-            self.tip.withdraw()
-            self.tip_text = None
+        self.tooltip.hide()
 
     def click(self, e):
         p = self.pet

@@ -151,3 +151,38 @@ class Fader:
     def apply(self):
         self.win.attributes("-alpha", max(0.0, min(1.0, self.alpha)) * self.peak)
         self.on_step()
+
+
+class Tooltip:
+    # a little card just under the mouse, styled like the panel: a bold title, then the explanation in grey.
+    # text is "Title: explanation". font(size, bold) gives the owner's fonts (already scaled).
+    def __init__(self, owner, card, fg, dim, font):
+        self.owner, self.card, self.fg, self.dim, self.font = owner, card, fg, dim, font
+        self.win, self.text = None, None
+
+    def show(self, text, x_root, y_root, s):
+        title, _, body = text.partition(": ")
+        if self.win is None:
+            self.win = tk.Toplevel(self.owner)
+            self.win.overrideredirect(True)
+            self.win.attributes("-topmost", True)
+            self.win.configure(bg=self.card)
+            self.title = tk.Label(self.win, bg=self.card, fg=self.fg, justify="left", anchor="w")
+            self.body = tk.Label(self.win, bg=self.card, fg=self.dim, justify="left", anchor="w")
+        if text != self.text:
+            self.text = text
+            self.title.configure(text=title, font=self.font(8, True))
+            self.body.configure(text=body, font=self.font(7.5), wraplength=round(220 * s))
+            self.title.pack_forget()
+            self.body.pack_forget()
+            self.title.pack(fill="x", padx=round(12 * s), pady=(round(9 * s), round(2 * s)))
+            self.body.pack(fill="x", padx=round(12 * s), pady=(0, round(10 * s)))
+            round_corners(self.win)
+        self.win.geometry(f"+{x_root + 12}+{y_root + 16}")
+        self.win.deiconify()
+        self.win.lift()
+
+    def hide(self):
+        if self.win is not None and self.text is not None:
+            self.win.withdraw()
+            self.text = None

@@ -12,7 +12,7 @@ from .config import (IDLE_AFTER_MIN, IDLE_POLL_SECONDS, MAX_SCALE, MIN_SCALE, PA
 from .sounds import SOUND_DIR, SOUND_GROUPS
 from .storage import DEFAULTS
 from .tips import TIPS
-from .ui import Canvas, round_corners, round_rect
+from .ui import Canvas, Tooltip, round_corners, round_rect
 from .usage import fmt_day, fmt_time
 from .winapi import u32
 
@@ -49,6 +49,7 @@ class SettingsWindow:
     def __init__(self, pet):
         self.pet, self.win, self.tab, self.fonts = pet, None, "mascot", {}
         self.hits, self.drag, self.move_from, self.s = [], None, None, 1.0
+        self.tips, self.tooltip = [], None   # (x1, y1, x2, y2, text): options that explain themselves on hover
         self.recording, self.key_note = None, None   # which shortcut is waiting for keys / a message under it
         self.scroll, self.max_scroll, self.fixed_n = 0, 0, 0
         self.resizing, self.redraw_job, self.sized = None, None, False
@@ -178,6 +179,8 @@ class SettingsWindow:
         self.canvas.bind("<ButtonRelease-1>", self.release)
         self.canvas.bind("<MouseWheel>", self.wheel)
         self.canvas.bind("<Motion>", self.hover_cursor)
+        self.canvas.bind("<Leave>", lambda e: self.tooltip.hide())
+        self.tooltip = Tooltip(w, self.CARD, self.FG, self.DIM, self.font)
         w.bind("<Escape>", self.escape)
         w.bind("<KeyPress>", self.key)
         w.protocol("WM_DELETE_WINDOW", lambda: None if self.recording else self.close())   # alt + F4 while recording
@@ -209,6 +212,7 @@ class SettingsWindow:
         self.stop_recording()
         self.key_note = None
         if self.win is not None:
+            self.tooltip.hide()
             self.win.destroy()
             self.win = None
 
@@ -263,7 +267,7 @@ class SettingsWindow:
         view = H - self.TOP
         for _ in range(2):   # (twice at most: once more if the scroll had to be pulled back in)
             c.delete("all")
-            self.hits, self.focusables = [], []
+            self.hits, self.focusables, self.tips = [], [], []
             end = self.draw_content(self.SB + 28, W - 28, self.TOP + 4 - self.scroll)
             self.max_scroll = max(0, round(end + self.scroll - self.TOP - 4 - view + 24))
             if self.scroll <= self.max_scroll:
@@ -449,6 +453,7 @@ class SettingsWindow:
         self.box(x, y, x + w, y + 28, 8, self.WELL, self.CARD)
         cx = x + 3
         values = [v for v, _ in options]
+        explain = dict(TIPS.get(label, ("", []))[1])   # (each option's explanation, shown when you hover it)
         for value, t in options:
             ow = f.measure(t) / self.s + 20
             on = var.get() == value
@@ -456,6 +461,8 @@ class SettingsWindow:
                 self.box(cx, y + 3, cx + ow, y + 25, 6, self.SEL, self.WELL)
             self.text(cx + ow / 2, y + 14, t, self.FG if on else self.DIM, 8, True, "center")
             self.hits.append((("pick", var, value, cmd), cx * self.s, y * self.s, (cx + ow) * self.s, (y + 28) * self.s))
+            if t in explain:
+                self.tips.append((cx * self.s, y * self.s, (cx + ow) * self.s, (y + 28) * self.s, f"{t}: {explain[t]}"))
             cx += ow
 
         def step(d, var=var, cmd=cmd, values=values):
@@ -761,6 +768,7 @@ class SettingsWindow:
                  ("Little hops", n("hops")),
                  ("Jumps to windows", f"{n('leaps_made')} made · {n('leaps_missed')} missed"),
                  ("Leaps of faith", n("dives")), ("Parachutes", n("chutes")), ("Wall splats", n("splats")),
+                 ("Monitor hops", n("trips")),
                  ("Dances", n("dances")), ("Naps", n("naps")), ("Games of fetch", n("fetches")),
                  ("Walked", f"{metres:,.0f} m" if metres < 1000 else f"{metres / 1000:,.2f} km"),
                  ("Time as a wizard", f"{wiz // 60}h {wiz % 60:02d}m" if wiz >= 60 else f"{wiz}m"),
@@ -768,7 +776,7 @@ class SettingsWindow:
                  ("Past-midnight sessions", f"{st['late']:,}" if st else "…"),
                  ("UFO abductions", n("ufo")), ("Cats met", n("cats")), ("Shiny days", n("shiny")),
                  ("Sweeps", n("sweeps")), ("Paintings", n("paintings")), ("Things fished out", n("catches")),
-                 ("Balloons popped", n("balloons")), ("Paper planes", n("planes")), ("", "")]
+                 ("Balloons popped", n("balloons")), ("Paper planes", n("planes"))]
         y = self.text(x0 + 16, y + 14, f"What the mascot's been up to{since}. Past-midnight sessions come from "
                       "Claude Code's logs (all time); the rest is counted by the mascot.", self.DIM, 8,
                       width=x1 - x0 - 32) + 8
@@ -886,6 +894,7 @@ class SettingsWindow:
         return next((h[0] for h in hits if h[1] <= x <= h[3] and h[2] <= y <= h[4]), None)
 
     def press(self, e):
+        self.tooltip.hide()
         self.kb = False   # clicking hides the keyboard focus ring
         hit = self.hit_at(e.x, e.y)
         if self.win.focus_get() is self.search and (not hit or hit[0] != "search"):
@@ -983,6 +992,7 @@ class SettingsWindow:
             self.draw()
 
     def wheel(self, e):
+        self.tooltip.hide()
         if self.max_scroll:
             self.scroll = min(self.max_scroll, max(0, self.scroll - e.delta / 120 * 48))
             self.draw()
@@ -998,6 +1008,12 @@ class SettingsWindow:
             want = ""
         if self.canvas.cget("cursor") != want:
             self.canvas.configure(cursor=want)
+        tip = next((t for x1, y1, x2, y2, t in self.tips if x1 <= e.x <= x2 and y1 <= e.y <= y2
+                    and e.y > self.TOP * self.s), None)   # (not under the strip along the top)
+        if tip:
+            self.tooltip.show(tip, e.x_root, e.y_root, self.s)
+        else:
+            self.tooltip.hide()
 
     # ---- the keyboard ----
     def escape(self, e):

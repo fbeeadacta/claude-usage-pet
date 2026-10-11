@@ -10,9 +10,10 @@ from .art import (ARMS, BAND_C, BEAM_C, BLOCK_H, BLOCK_W, BLUSH, BLUSH_C, BODY, 
     SHADOW, SHINY, SPARK, SPARK_C, SPEECH, SPEECH_TEXT, STAR_C, STRING_C, TRACK, UFO, UFO_C, UFO_LIGHTS,
     MOTE_C, SMOKE_C,
     WAND_C, WARN_C, WAVE, ZZZ, ZZZ_C)
-from .config import SPEAK_CPS
+from .config import HAY_TIME, SPEAK_CPS
 from .fun import UFO_BEAM, UFO_DROP, UFO_END, UFO_GONE, season, smooth
 from .magic import SIDE_JOBS
+from .travel import FADES
 from .ui import round_rect, wrap
 
 
@@ -28,10 +29,12 @@ class RenderMixin:
         wiz = anim and self.state == "work" and not airborne
         squash = anim and grounded and not self.held and (self.squash_t > 0 or self.pressed)
         walking = (anim and grounded and not squash
-                   and ((self.state == "walk" and self.walking_allowed()) or self.goto_x is not None))
+                   and ((self.state == "walk" and self.walking_allowed()) or self.goto_x is not None
+                        or abs(self.walk_v) > 2 * self.s()))
         beat = int(self.dance_t / 0.25) % 4 if dancing else 0
         chute = anim and self.chute and not grounded
-        hay = anim and self.hay_t > 0
+        hay = int((HAY_TIME - self.hay_t) * 30) + 1 if anim and self.hay_t > 0 else 0   # (how long it's been in it)
+        straws = anim and self.straw_t > 0 and not self.held
         if sleeping or hay:
             legs = ()
         elif self.held:
@@ -63,8 +66,10 @@ class RenderMixin:
             eye_dir, eye_v = self.gaze()   # watching your mouse pointer
         else:
             eye_dir = 0
-        if sleeping or hay:
-            sink = "lie"   # lying down, or sat in the hay
+        if hay:
+            sink = "hay"   # sat in the hay pile (pet/hay.py)
+        elif sleeping:
+            sink = "lie"   # lying down
         elif squash or (dancing and beat in (1, 3)):
             sink = "half"   # squished, or bopping to the beat
         else:
@@ -91,6 +96,13 @@ class RenderMixin:
             legs = pose.get("legs", legs)
             eyes, eye_dir, eye_v = pose.get("eyes", eyes), pose.get("eye_dir", eye_dir), pose.get("eye_v", eye_v)
             arms, shift = pose.get("arms", arms), pose.get("shift", shift)
+        trip = self.trip_frame() if anim and not self.held else None   # on its way to another monitor
+        if trip:
+            pose = self.trip_pose(trip)
+            sink = pose.get("sink", sink)
+            legs = pose.get("legs", legs)
+            eyes, eye_dir, eye_v = pose.get("eyes", eyes), pose.get("eye_dir", eye_dir), pose.get("eye_v", eye_v)
+            arms = pose.get("arms", arms)
         parts = tuple((p["kind"], round(p["x"]), round(p["y"]), p["c"]) for p in self.parts) if anim else ()
         show = (self.bubble_mode.get() != "hover" or self.hovering or self.held
                 or self.details.visible or now < self.hover_until)
@@ -113,7 +125,7 @@ class RenderMixin:
         cap = "bedtime_right" if lead else "bedtime"   # (the bobble flops out behind it)
         outfit = None if wiz else cap if night else season() if self.seasonal.get() else None
         candle = None   # at bedtime: held in its lead hand, or put down on that side while it sleeps
-        if night and not wiz and not hay and not dancing and not act:
+        if night and not wiz and not hay and not dancing and not act and not trip:
             where = "floor" if sleeping else "hold" if ARMS[lead] in arms else None
             candle = (where, lead, int(self.clock * 5) % 2 if anim else 0) if where else None
         helpers = (self.helpers(), int(self.clock * 5)) if wiz else None
@@ -137,7 +149,7 @@ class RenderMixin:
                 shift,
                 int(self.clock * 8) % 12 if anim and self.dizzy_t > 0 else None,
                 sleeping and int(self.clock / 1.4) % 2 == 1, hay, eye_v, outfit, helpers, ufo, self.shiny, job, act,
-                candle)
+                candle, trip, straws)
 
     def gaze(self):
         # which way to look so it's watching your mouse pointer, when the pointer's nearby
@@ -175,7 +187,7 @@ class RenderMixin:
 
     def draw(self, f):
         (_, legs, eyes, eye_dir, sink_kind, arms, wand, warn, wiz, parts, segs, bars, err, show_bubble,
-         speech, rot, chute, shift, dizzy, breath, hay, eye_v, outfit, helpers, ufo, shiny, job, act, candle) = f
+         speech, rot, chute, shift, dizzy, breath, hay, eye_v, outfit, helpers, ufo, shiny, job, act, candle, trip, straws) = f
         c = self.canvas
         c.delete("all")
         s = self.s()
@@ -184,8 +196,9 @@ class RenderMixin:
         pet_w, pet_h = 18 * bw, 5 * bh
         font = self.font(max(8, round(11 * s)))
         pad = round(7 * s)
-        if rot or ufo:
-            show_bubble = False   # the usage bubble steps aside while it's tumbling about (or being abducted)
+        if rot or ufo or (trip and (trip[0] not in ("wings", "jetpack", "balloon", "portal") or trip[-1] is not None
+                                    or trip[-2])):
+            show_bubble = False   # the usage bubble steps aside while it's tumbling about, abducted or climbing
 
         # usage bubble size: numbers, or two little bars
         if bars:
@@ -214,11 +227,17 @@ class RenderMixin:
             sp_h = len(sp_lines) * sfont.metrics("linespace") + 2 * round(5 * s)
 
         side = round(30 * s)                               # room for z's, notes and sparks
-        look = OUTFITS.get(outfit) if not rot else None
+        clip = trip[-1] if trip and not rot else None   # sinking through a portal or trapdoor: the floor hides the rest
+        fade = trip[-2] if trip else 0   # teleporting or inside something: see-through steps, 4 = gone
+        stip = FADES.get(fade)
+        hide_look = rot or clip is not None or fade or (trip and trip[0] == "teleport")
+        look = OUTFITS.get(outfit) if not hide_look else None
         above = max((len(HAT) - 1) * pb if wiz else 0,     # room above the head: hat, outfit, parachute, stars
                     (len(look[0]) + 1) * pb if look else 0,   # (a little gap, so the bubble's tail clears it)
                     (len(CHUTE) + 10) * pb if chute is not None else 0,
-                    6 * pb if dizzy is not None else 0)
+                    6 * pb if dizzy is not None else 0,
+                    self.trip_room(trip, pb) if trip else 0,
+                    self.hay_lift((hay - 1) / 30, s) + ((len(look[0]) + 1) * pb if look else 0) if hay else 0)
         # the window is ONE fixed size whatever the mascot is doing, and its middle always sits at the
         # same spot in it. resizing or shifting the window between frames made windows flash a dark box
         # or the mascot flicker, because moving and redrawing a window don't happen at the same instant.
@@ -232,6 +251,8 @@ class RenderMixin:
         cx = W // 2
         H = cy + hd
         sink = {"lie": bh, "half": bh // 2}.get(sink_kind, 0)
+        if sink_kind == "hay":   # sat up in the dip on top of the haystack
+            sink = -self.hay_lift((hay - 1) / 30, s)
         up = 0
 
         if rot:
@@ -253,7 +274,14 @@ class RenderMixin:
             px, py = cx - pet_w // 2 + shift * max(1, bw // 2), cy - pet_h // 2
 
             def emit(x1, y1, x2, y2, color):
-                c.create_rectangle(px + x1, py + y1, px + x2, py + y2, fill=color, outline="")
+                if clip is not None:
+                    y2 = min(y2, clip)
+                    if y2 <= y1:
+                        return
+                if stip:
+                    c.create_rectangle(px + x1, py + y1, px + x2, py + y2, fill=color, outline="", stipple=stip)
+                else:
+                    c.create_rectangle(px + x1, py + y1, px + x2, py + y2, fill=color, outline="")
 
         body_c = SHINY if shiny else ORANGE
 
@@ -267,12 +295,19 @@ class RenderMixin:
             mid = px + pet_w // 2 + ufo[1]
             c.create_polygon(mid - 8 * pb, top, mid + 8 * pb, top, mid + pet_w // 2 + 3 * bw, bottom,
                              mid - pet_w // 2 - 3 * bw, bottom, fill=BEAM_C, outline="", stipple="gray50")
-        gone = bool(ufo and ufo[3])   # inside the saucer
+        gone = bool(ufo and ufo[3]) or fade >= 4   # inside the saucer (or the cannon, or mid-teleport)
+        if trip and not rot:   # wings go behind it
+            self.draw_trip(trip, "back", px, py, sink, bw, bh, pb, pet_w, pet_h)
         if job and not rot:   # the far side of a job's magic goes behind the mascot (and runes falling behind it)
             self.draw_job(job, "back", px, py)
             for kind, x, y, ci in parts:
                 if kind == "glyph" and ci < 100:
                     self.rune(px + x, py + y, pb, ci)
+
+        if hay and not rot:   # the back of the hay pile, behind it
+            e = (hay - 1) / 30
+            self.draw_hay(c, px + pet_w / 2, py + pet_h, s, "back", self.hay_squash(e), 1.0, math.sin(e * 2.2) * 0.15,
+                          self.hay_flip)
 
         # the mascot
         for row, line in enumerate(BODY if not gone else ()):
@@ -291,14 +326,14 @@ class RenderMixin:
             else:   # a thin line: low for closed, high for a happy squint
                 ly = y1 + (bh // 5 if eyes == "happy" else bh // 2)
                 emit(x1, ly, x1 + bw, ly + max(1, bh // 4), EYE)
-        if eyes == "worried":   # little slanted eyebrows
+        if eyes == "worried" and not gone:   # little slanted eyebrows
             for col, inner in ((EYES[0] + eye_dir, 1), (EYES[1] + eye_dir, -1)):
                 yb, th = sink + bh // 2, max(1, bh // 6)
                 emit((col - 1) * bw if inner > 0 else col * bw, yb + th, col * bw if inner > 0 else (col + 1) * bw,
                      yb + 2 * th, EYE)
                 emit(col * bw if inner > 0 else (col - 1) * bw, yb, (col + 1) * bw if inner > 0 else col * bw,
                      yb + th, EYE)
-        if eyes == "happy":
+        if eyes == "happy" and not gone:
             for col in BLUSH:
                 block(col, 2, color=BLUSH_C)
         if look and not gone:
@@ -352,6 +387,8 @@ class RenderMixin:
                 c.create_line(sx_, cb, ex, py + sink, fill=STRING_C, width=lw)
         if act and not rot:
             self.draw_act(act, px, py, sink, bw, bh, pb, pet_w, pet_h)
+        if trip and not rot:
+            self.draw_trip(trip, "front", px, py, sink, bw, bh, pb, pet_w, pet_h)
         if dizzy is not None and not rot:
             # three little stars circling its head
             cx, cy = px + 9 * bw, py + sink - 3 * pb
@@ -360,25 +397,15 @@ class RenderMixin:
                 self.glyph(SPARK, cx + math.cos(a) * 7 * bw - 1.5 * pb, cy + math.sin(a) * 2 * pb - 1.5 * pb,
                            pb, STAR_C)
 
-        if hay and not rot:
-            # a pile of hay round its middle: rows of straw, wider at the bottom (no outline, like the mascot)
-            mid, base = px + pet_w // 2, py + pet_h
-            half_w, rows = pet_w // 2 + 3 * bw, max(3, round(1.8 * bh / pb))
-            for row in range(rows):
-                w2 = round(half_w * (1 - 0.6 * (row / rows) ** 2) / pb) * pb
-                y2 = base - row * pb
-                c.create_rectangle(mid - w2, y2 - pb, mid + w2, y2, fill=HAY_C[0], outline="")
-                for i in range(-w2 // pb, w2 // pb):   # streaks of lighter and darker straw
-                    k = (i * 7 + row * 3) % 9
-                    if k < 3:
-                        c.create_rectangle(mid + i * pb, y2 - pb, mid + (i + 1) * pb, y2,
-                                           fill=HAY_C[1 + k % 2], outline="")
-            top = base - rows * pb
-            for i, (dx, lean) in enumerate(((-0.5, -1), (-0.2, 0), (0.15, 1), (0.45, 1), (-0.35, 1))):
-                x0 = mid + round(dx * half_w / pb) * pb   # stray straws poking out of the top
+        if hay and not rot:   # the front of the hay pile, in front of it (pet/hay.py)
+            e = (hay - 1) / 30
+            self.draw_hay(c, px + pet_w / 2, py + pet_h, s, "front", self.hay_squash(e), 1.0, math.sin(e * 2.2) * 0.15,
+                          self.hay_flip)
+        if straws and not rot and not gone:   # a couple of straws stuck on its head
+            for col, lean, colour in ((6, -1, HAY_C[1]), (10, 1, HAY_C[0]), (11, 1, HAY_C[1])):
                 for j in range(3):
-                    c.create_rectangle(x0 + lean * j * pb, top - (j + 1) * pb, x0 + lean * j * pb + pb, top - j * pb,
-                                       fill=HAY_C[1 + i % 2], outline="")
+                    x1, y1 = px + col * bw + lean * j * pb, py + sink - (j + 1) * pb
+                    c.create_rectangle(x1, y1, x1 + pb, y1 + pb, fill=colour, outline="")
 
         # z's, notes and sparkles drift up behind the bubbles, so they never cover the words
         for kind, x, y, ci in parts:

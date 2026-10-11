@@ -6,7 +6,7 @@ import random
 import time
 
 from .config import (CHUTE_HEIGHT, CHUTE_SPEED, DANCE_CHANCE, DIVE_MIN, FPS, GRAVITY, GROUND_FRICTION,
-    HAY_TIME, HOP_HEIGHT, LEAP_POWER, LEAP_REACH, MAX_STEP_UP, NAP_CHANCE, TASKBAR_PUSH, THROW_DRAG,
+    HAY_TIME, HOP_HEIGHT, LEAP_POWER, LEAP_REACH, MAX_STEP_UP, NAP_CHANCE, TASKBAR_PUSH, THROW_DRAG, WALK_EASE,
     WALK_SPEED)
 from .lines import (CHUTE_LINES, DANCE_LINES, DIVE_LINES, DIZZY_LINES, FALL_LINES, HAY_LINES, LEAP_FAIL,
     LEAP_OK, LEAP_TRY, SLAP_LINES, SQUISH_LINES, UFO_BACK_LINES)
@@ -193,7 +193,7 @@ class MovementMixin:
         sc = self.screens[self.si]
         here = self.floor()
         lo, hi = self.x_limits()
-        options = []
+        options, high = [], []   # (high: windows it can see but that are too high to jump to)
         for i, w in enumerate(self.plats):
             hwnd, left, top, right, _ = w
             if hwnd == self.plat:
@@ -205,7 +205,8 @@ class MovementMixin:
             if tx in (a, b) and b - a > 80 * s:   # aim a little way in from the edge
                 tx += 40 * s if tx == a else -40 * s
             dx, rise = tx - self.x, here - top
-            if abs(dx) > LEAP_REACH * s or not -LEAP_POWER * s < rise < LEAP_POWER * 1.4 * s:
+            too_high = rise >= LEAP_POWER * 1.4 * s and abs(dx) <= LEAP_REACH * 1.5 * s and sc.wl <= tx <= sc.wr
+            if not too_high and (abs(dx) > LEAP_REACH * s or not -LEAP_POWER * s < rise < LEAP_POWER * 1.4 * s):
                 continue   # too far, or way too high even for its ego
             if abs(rise) < 25 * s and abs(dx) < 60 * s:
                 continue   # that's basically where it already is
@@ -213,9 +214,17 @@ class MovementMixin:
                 continue
             if any(o[1] <= tx < o[3] and o[2] <= top - 2 < o[4] for o in self.plats[:i]):
                 continue   # that spot is under another window
+            if too_high:
+                high.append((w, tx))
+                continue
             options.append((hwnd, top, dx, rise, left, right))
         if prefer:
             options = [o for o in options if o[2] * prefer > 0] or options
+            high = [h for h in high if (h[1] - self.x) * prefer > 0] or high
+        if high and random.random() < self.prof()["high"] * (1.0 if not options else 0.3):
+            w, tx = random.choice(high)   # too high to jump: a ladder, a beanstalk, a cannon... (pet/travel.py)
+            if self.start_trip(self.si, win=w, tx=tx):
+                return True
         if not options:
             return False
         hwnd, top, dx, rise, left, right = random.choice(options)
@@ -286,6 +295,9 @@ class MovementMixin:
             return False   # not much of a drop. it'll just walk off.
         self.plat, self.through, self.diving = None, False, True
         self.vy, self.vx = -math.sqrt(2 * GRAVITY * s * 45 * s), self.dir * 160 * s   # a little spring off the edge
+        g, floor = GRAVITY * s, below[2] if below else sc.wb
+        t = (-self.vy + math.sqrt(self.vy * self.vy + 2 * g * (floor - self.y))) / g   # (when it gets down there)
+        self.hay_spot(min(max(self.x + self.vx * t, lo), hi), floor)   # a pile of hay pops up where it'll land
         self.state, self.state_t = "idle", 2.0
         self.play("eagle")
         self.tally("dives")
@@ -308,6 +320,10 @@ class MovementMixin:
         if nb is None:
             self.x, self.dir = limit, -side
             return
+        if ((self.x - limit) * side <= 0 and self.state == "walk" and self.goto_x is None and not self.vx
+                and self.grounded() and self.y - self.screens[nb].wb > MAX_STEP_UP * self.s()
+                and random.random() < self.prof()["climb"] and self.start_trip(nb)):
+            return   # a ledge too tall to jump: rope, wings, portals or balloons (pet/travel.py)
         edge = sc.mr if side > 0 else sc.ml
         if (nx - edge) * side < 0:   # half way over, not across yet
             self.x = nx
@@ -372,9 +388,9 @@ class MovementMixin:
         if (self.held or self.pressed or self.squash_t > 0 or not self.grounded() or self.angle or self.vx
                 or (self.state == "walk" and self.walking_allowed()) or self.goto_x is not None or self.ufo
                 or (self.ball and self.ball["phase"] in ("fly", "pet")) or (self.plane and not self.plane["landed"])
-                or (self.plat is not None and time.perf_counter() < self.ride_until)):
+                or (self.plat is not None and time.perf_counter() < self.ride_until) or self.trip or self.walk_v):
             return 16
-        if (self.plat is not None or self.near or self.hay_t > 0 or self.parts or self.cat or self.wave_t > 0 or self.state in ("work", "dance", "act") or self.speech
+        if (self.plat is not None or self.near or self.hay_t > 0 or self.hay_show or self.straw_t > 0 or self.parts or self.cat or self.wave_t > 0 or self.state in ("work", "dance", "act") or self.speech
                 or self.dizzy_t > 0 or self.stretch_t > 0):
             return 30
         return 80
@@ -399,9 +415,13 @@ class MovementMixin:
         self.ball_tick(dt)
         self.plane_tick(dt)
         self.cat_tick(dt)
+        self.hay_tick(dt)
         if self.ufo and self.ufo_tick(dt):
             return   # beamed up
         if self.held or self.hidden or self.pressed:
+            return
+        if self.trip:   # on its way to another monitor (pet/travel.py)
+            self.trip_tick(dt, s)
             return
         if self.plat is not None:
             self.ride(s, dt)
@@ -420,6 +440,7 @@ class MovementMixin:
             if self.hay_t <= 0:
                 for _ in range(8):
                     self.spawn("straw")
+                self.hay_popped(self.y)
                 self.jump_now(HOP_HEIGHT * 1.2 * s)
             return
         walking = self.state == "walk" and self.walking_allowed()
@@ -448,8 +469,8 @@ class MovementMixin:
                 self.y, self.vy = sc.mt + self.pet_px[1], abs(self.vy) * 0.3
             if abs(self.vx) > 1:
                 self.slide(dt)
-            elif walking:
-                self.move_x(self.dir * WALK_SPEED * self.prof()["speed"] * s * dt)
+            elif walking or self.walk_v:
+                self.move_x(self.walk_step(walking, dt, s))
             if self.leaping is not None:
                 self.leap_wall(x_before, s)
             if self.platforms.get() and self.plat is None and self.vy > 0 and self.plats and not self.through:
@@ -466,6 +487,8 @@ class MovementMixin:
             self.vx -= math.copysign(min(abs(self.vx), GROUND_FRICTION * s * dt), self.vx)
             return
         self.vx = 0.0
+        if self.state not in ("walk", "idle"):
+            self.walk_v = 0.0   # (stopped to do something else)
         if self.goto_x is not None and self.chase(dt, s):
             return   # called over, or after the ball
         if self.shiny and random.random() < dt / 3:
@@ -537,10 +560,11 @@ class MovementMixin:
                     self.edge_turn = random.random() < pr["turn"]
                 if self.edge_turn:
                     self.dir, self.edge_turn = -self.dir, None
-        if walking:
-            night = not 6 <= datetime.datetime.now().hour < 23
-            x0 = self.x
-            self.move_x(self.dir * WALK_SPEED * self.prof()["speed"] * (0.7 if night else 1) * s * dt)
+        if walking or self.walk_v:
+            x0, dx = self.x, self.walk_step(walking, dt, s)
+            self.move_x(dx)
+            if dx and abs(self.x - x0) < abs(dx) * 0.5:
+                self.walk_v = 0.0   # bumped into something (or turned round at the screen edge)
             self.tally("walked", abs(self.x - x0) / self.screens[self.si].dpi)
             if self.plat is not None and not self.plat_box[1] <= self.x <= self.plat_box[3]:
                 self.plat = None   # walked off the edge
@@ -552,6 +576,9 @@ class MovementMixin:
         if (self.jump.get() and self.walk.get() and self.platforms.get()
                 and not self.details.visible and random.random() < dt / self.prof()["leap"] and self.try_leap()):
             return
+        if (walking and self.jump.get() and self.plat is None and random.random() < dt / self.prof()["stack"]
+                and self.try_stacked_trip()):
+            return   # off to a monitor above or below
         if self.jump.get() and random.random() < dt / self.prof()["hop"]:
             self.jump_now(HOP_HEIGHT * s)
             self.tally("hops")
@@ -563,7 +590,7 @@ class MovementMixin:
                 pass
             elif self.state == "walk" and self.walking_allowed() and random.random() < pr["keep"]:
                 self.state_t = random.uniform(*pr["walk_t"])   # keeps going, maybe the other way
-                if random.random() < 0.3:
+                if random.random() < pr["flip"]:
                     self.dir = -self.dir
             elif self.state == "walk" or not self.walking_allowed():
                 night = not 6 <= datetime.datetime.now().hour < 23
@@ -575,8 +602,24 @@ class MovementMixin:
             else:
                 self.state, self.state_t = "walk", random.uniform(*pr["walk_t"])
                 self.dir = random.choice((-1, 1))
+                if random.random() < pr["roam"]:   # off towards another monitor
+                    ways = [d for d in (-1, 1) if self.neighbour(d) is not None]
+                    if ways:
+                        self.dir = random.choice(ways)
         if self.state == "idle" and self.look_t <= 0 and random.random() < dt / 4:
             self.look_d, self.look_t = random.choice((-1, 1)), random.uniform(0.6, 1.4)
+
+    def walk_step(self, walking, dt, s):
+        # walking has a little weight to it: it speeds up over a moment, and slows to a stop (WALK_EASE).
+        # returns how far to move this frame.
+        night = not 6 <= datetime.datetime.now().hour < 23
+        full = WALK_SPEED * self.prof()["speed"] * (0.7 if night else 1) * s
+        want = self.dir * full if walking else 0.0
+        step = full / WALK_EASE * dt
+        self.walk_v += max(-step, min(step, want - self.walk_v))
+        if not walking and abs(self.walk_v) < 0.5 * s:
+            self.walk_v = 0.0
+        return self.walk_v * dt
 
     def start_dance(self):
         if self.anim.get():
@@ -624,6 +667,7 @@ class MovementMixin:
             self.diving, self.chute = False, False
             self.vx = self.vy = self.angle = self.spin = 0.0
             self.hay_t, self.bounces = HAY_TIME, 0
+            self.hay_landed()
             for _ in range(10):
                 self.spawn("straw")
             self.play("hay")

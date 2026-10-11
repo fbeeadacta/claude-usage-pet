@@ -52,6 +52,18 @@ class ScreensMixin:
                 return i
         return None
 
+    def stacked(self):
+        # screens right above or below this one (sharing at least a bit of width), if the pet may go there
+        if self.one_monitor.get():
+            return []
+        sc, out = self.screens[self.si], []
+        for i, o in enumerate(self.screens):
+            if i == self.si or (self.hide_fs.get() and self.fs[i]):
+                continue
+            if (abs(o.mb - sc.mt) <= 2 or abs(o.mt - sc.mb) <= 2) and min(o.mr, sc.mr) - max(o.ml, sc.ml) > 200:
+                out.append(i)
+        return out
+
     def refresh_screens(self):
         self.screens_at = time.time()
         self.apply_screens(self.get_screens())
@@ -62,6 +74,7 @@ class ScreensMixin:
     def apply_screens(self, new):
         if new == self.screens:
             return
+        self.end_trip()   # (a monitor came or went mid-trip: it just drops where it is)
         if len(new) != len(self.screens):
             self.fs = [False] * len(new)
         self.screens = new
@@ -84,7 +97,7 @@ class ScreensMixin:
         if self.hidden and self.fader.alpha <= 0.001:
             geo = (w, h, PARK, PARK)
         else:   # always placed by the body, the same way in every state, so nothing jumps
-            if not self.held:
+            if not self.held and not self.trip:   # (a trip goes where it's going)
                 self.clamp_x()
             geo = (w, h, round(self.x - self.center_x), round(self.y - self.feet_win))
         if geo != self.geo:
@@ -96,6 +109,7 @@ class ScreensMixin:
             return
         self.hidden = hide
         if hide:
+            self.end_trip()
             self.held = self.pressed = False
             self.details.hide()
             self.popup.hide()

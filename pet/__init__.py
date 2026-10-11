@@ -23,6 +23,9 @@
 #                        sticky notes, question mark, rune circle, hourglass, rolling scroll) and their particles.
 #   idle.py              part of the Pet: things it does when idle (sweeping, painting, fishing, balloons,
 #                        a paper plane that flies off in its own little window).
+#   travel.py           part of the Pet: getting somewhere it can't walk or jump to (another monitor, a high window):
+#                        rope, ladder, beanstalk, boxes, wings, jetpack, balloons, ufo, cannon, portals, teleport, trapdoor.
+#   hay.py              part of the Pet: the haystack at the bottom of a leap of faith.
 #   tray.py              the tray icon (its own thread and hidden window).
 #   sprites.py           little see-through windows for things away from the mascot: the ball, the cat.
 #   mascot.py            the Pet itself: puts the parts together, its settings, and starting it up.

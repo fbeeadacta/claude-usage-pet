@@ -32,23 +32,33 @@ HAY_TIME = 1.3             # seconds it sits in the hay pile before popping out
 # long it stands about / walks (seconds), speed = walking speed, hop / leap = average seconds between random
 # hops / jumps to another window, nap = nap chance multiplier. at a window's edge: edge_leap = chance it looks
 # for another window to jump to, dive = chance of a leap of faith, turn = chance it turns around (else walks off).
+# trips to another monitor or a high window (pet/travel.py): climb = chance at a ledge too tall to jump,
+# stack = average seconds of walking between trips to a monitor above or below, high = chance it goes for a
+# window too high to jump to. flip = chance it turns round when it keeps walking, roam = chance a new walk
+# heads for another monitor, act = how often it does idle things (sweeping, painting...), times ACT_CHANCE.
 PROFILES = {
-    "parkour": {"keep": 0.6, "idle": (0.5, 2.5), "walk_t": (3, 7), "speed": 1.7, "hop": 10, "leap": 6,
-                "nap": 0.1, "edge_leap": 0.9, "dive": 0.8, "turn": 0.2},
+    "parkour": {"keep": 0.9, "idle": (0.2, 0.9), "walk_t": (4, 9), "speed": 1.7, "hop": 7, "leap": 3,
+                "nap": 0.05, "edge_leap": 1.0, "dive": 0.8, "turn": 0.1, "climb": 1.0, "stack": 20, "high": 0.9,
+                "flip": 0.15, "roam": 0.6, "act": 0.3},
     "lively": {"keep": 0.4, "idle": (1.5, 4.5), "walk_t": (3, 6), "speed": 1.3, "hop": 18, "leap": 12,
-               "nap": 0.3, "edge_leap": 0.7, "dive": 0.5, "turn": 0.4},
+               "nap": 0.3, "edge_leap": 0.7, "dive": 0.5, "turn": 0.4, "climb": 0.85, "stack": 50, "high": 0.6,
+               "flip": 0.3, "roam": 0.3, "act": 1.0},
     "normal": {"keep": 0.0, "idle": (3, 8), "walk_t": (2, 5), "speed": 1.0, "hop": JUMP_EVERY, "leap": LEAP_EVERY,
-               "nap": 1.0, "edge_leap": 0.3, "dive": 0.15, "turn": 0.5},
+               "nap": 1.0, "edge_leap": 0.3, "dive": 0.15, "turn": 0.5, "climb": 0.7, "stack": 90, "high": 0.35,
+               "flip": 0.3, "roam": 0.0, "act": 1.0},
     "chill": {"keep": 0.0, "idle": (8, 18), "walk_t": (1.5, 3.5), "speed": 0.75, "hop": 60, "leap": 90,
-              "nap": 2.0, "edge_leap": 0.1, "dive": 0.0, "turn": 0.8},
+              "nap": 2.0, "edge_leap": 0.1, "dive": 0.0, "turn": 0.8, "climb": 0.4, "stack": 240, "high": 0.15,
+              "flip": 0.3, "roam": 0.0, "act": 1.0},
     "statue": {"keep": 0.0, "idle": (5, 10), "walk_t": (2, 5), "speed": 1.0, "hop": 10 ** 9, "leap": 10 ** 9,
-               "nap": 1.0, "edge_leap": 0.0, "dive": 0.0, "turn": 1.0},
+               "nap": 1.0, "edge_leap": 0.0, "dive": 0.0, "turn": 1.0, "climb": 0.0, "stack": 10 ** 9, "high": 0.0,
+               "flip": 0.3, "roam": 0.0, "act": 1.0},
 }
 PROFILE_NAMES = (("parkour", "Parkour!"), ("lively", "Lively"), ("normal", "Normal"), ("chill", "Chill"),
                  ("statue", "Statue"))
 GRAVITY = 1150             # pixels per second per second
 FPS = 60                   # frames a second while it moves (falls back to slower frames when idle)
 MAX_STEP_UP = 400          # tallest ledge (onto a higher monitor) it will jump up
+WALK_EASE = 0.3            # seconds it takes to get up to walking speed (and to slow to a stop)
 # moods
 SLEEP_AFTER_MIN = 5        # falls asleep when you've been away from the computer this long
 NAP_CHANCE = 0.06          # chance of a short nap whenever it stops walking

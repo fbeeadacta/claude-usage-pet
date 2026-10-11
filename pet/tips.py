@@ -14,13 +14,16 @@ TIPS = {
         ("On", "Matches the Claude desktop app: every logged copy of an answer is added up, and peak hour "
                "is when your sessions start."),
         ("Off", "Real numbers: each answer is counted once (about 3× lower), and peak hour is your busiest hour.")]),
-    "Personality": ("How much the mascot moves about.", [
-        ("Parkour!", "Always on the move: runs about, jumps from window to window, and takes leaps of faith "
-                     "off window edges into a pile of hay. Hardly ever naps."),
-        ("Lively", "Walks a lot, jumps to windows nearby, and sometimes dives off edges."),
-        ("Normal", "A bit of walking, a bit of standing about, the odd jump and nap."),
-        ("Chill", "Mostly hangs out. Short strolls, rare jumps, plenty of naps."),
-        ("Statue", "Stays in one spot. It still blinks, reacts, hops when poked and talks.")]),
+    "Personality": ("How much the mascot moves about. Hover an option to see what it does.", [
+        ("Parkour!", "Hardly ever stands still. It runs about fast, jumps from window to window every few seconds, "
+                     "dives off window edges into hay, heads off to your other monitors, and always finds a way up "
+                     "a ledge or onto a high window (rope, ladder, cannon...). Barely naps."),
+        ("Lively", "Walks a lot and a bit faster, jumps to windows nearby, sometimes dives off edges, and often "
+                   "climbs up to high windows and other monitors."),
+        ("Normal", "A bit of walking, a bit of standing about, the odd jump, nap or trip to another monitor."),
+        ("Chill", "Mostly hangs out. Short, slow strolls, rare jumps, rare trips, plenty of naps."),
+        ("Statue", "Stays in one spot: no walking, jumping or trips. It still blinks, reacts, hops when poked "
+                   "and talks.")]),
     "Walk around": ("Lets the mascot wander along the taskbar.", [
         ("On", "It walks left and right, and across to your other monitors."),
         ("Off", "It stays in one spot, but still blinks, hops and reacts.")]),

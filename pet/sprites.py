@@ -1,8 +1,9 @@
-# little see-through windows for things that wander away from the mascot: the fetch ball and the cat.
+# little see-through windows for things that wander away from the mascot: the fetch ball, the cat, and the
+# stage that a trip to another monitor is drawn on.
 import tkinter as tk
 
 from .art import KEY, PARK, SHADOW
-from .ui import Canvas
+from .ui import Canvas, move_window
 
 
 class Sprite:
@@ -52,3 +53,40 @@ class Sprite:
     def contains(self, mx, my):
         g = self.geo
         return g is not None and g[2] != PARK and g[2] <= mx < g[2] + g[0] and g[3] <= my < g[3] + g[1]
+
+
+class Stage:
+    # a see-through, click-through window over part of the screen, for drawing whatever's needed there
+    # (the props and dust of a trip). draw on .canvas in screen pixels minus .origin.
+    # hidden, it's just empty and 1x1 where it was (moving it back from the parking spot didn't always work).
+    def __init__(self, root):
+        w = self.win = tk.Toplevel(root)
+        w.overrideredirect(True)
+        w.attributes("-topmost", True)
+        w.configure(bg=KEY)
+        w.attributes("-transparentcolor", KEY)
+        w.geometry(f"1x1+{PARK}+{PARK}")
+        self.canvas = Canvas(w, bg=KEY, highlightthickness=0, bd=0, width=1, height=1)
+        self.canvas.pack()
+        self.origin, self.geo, self.shown = (PARK, PARK), None, False
+
+    def place(self, x0, y0, x1, y1):
+        # covers (x0, y0) to (x1, y1). returns True if it just appeared (so whatever goes in front can be lifted)
+        geo = (max(1, round(x1 - x0)), max(1, round(y1 - y0)), round(x0), round(y0))
+        fresh = not self.shown
+        if geo != self.geo:
+            self.canvas.configure(width=geo[0], height=geo[1])
+            move_window(self.win, geo[2], geo[3], geo[0], geo[1])   # (tk sometimes holds a move back)
+            self.geo, self.origin = geo, (geo[2], geo[3])
+        if fresh:
+            self.win.lift()
+            self.shown = True
+        return fresh
+
+    def hide(self):
+        self.canvas.delete("all")
+        if self.shown:
+            self.canvas.configure(width=1, height=1)
+            self.geo = (1, 1) + self.geo[2:]
+            self.win.geometry("1x1+{}+{}".format(*self.geo[2:]))
+            self.shown = False

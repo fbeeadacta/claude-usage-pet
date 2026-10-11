@@ -18,9 +18,11 @@ SOUND_VERSION = 5   # bump this when a sound changes, so old saved copies aren't
 # how the sounds are grouped and named in settings, where each one can be switched off
 SOUND_GROUPS = (("Reactions", (("pop", "Poke"), ("boing", "Bounce"), ("scream", "Scream"), ("splat", "Wall splat"))),
                 ("Adventures", (("whoosh", "Parachute"), ("eagle", "Eagle cry"), ("hay", "Hay landing"),
-                                ("meow", "Cat"))),
+                                ("meow", "Cat"), ("clink", "Grappling hook"), ("flap", "Wings"),
+                                ("zap", "Portal gun"), ("boom", "Cannon"), ("jet", "Jetpack"), ("thud", "Boxes"))),
                 ("Moods", (("spell", "Wizard magic"), ("dance", "Dance music"), ("chime", "Milestones"))))
-SOUNDS = ("pop", "boing", "scream", "chime", "whoosh", "eagle", "splat", "spell", "hay", "dance", "meow")
+SOUNDS = ("pop", "boing", "scream", "chime", "whoosh", "eagle", "splat", "spell", "hay", "dance", "meow", "clink",
+          "flap", "zap", "boom", "jet", "thud")
 
 
 def make_sound(kind, volume=100):
@@ -114,6 +116,29 @@ def make_sound(kind, volume=100):
         mix(0.0, wav(0.14, 520, 880, 0.3, shape="saw", attack=0.02, decay=0.3, wobble=12, vib=6))
         mix(0.12, wav(0.42, 880, 470, 0.3, shape="saw", attack=0.01, decay=1.4, wobble=18, vib=5))
         buf[:] = soft(buf, 0.3)   # rounder, less buzzy
+    elif kind == "clink":   # a metal hook biting on an edge: two bright rings and a tick
+        mix(0.0, soft(wav(0.03, 0, 0, 0.4, shape="noise", attack=0.001, decay=2.0), 0.7))
+        mix(0.0, wav(0.35, 2350, 2300, 0.3, attack=0.002, decay=3.0))
+        mix(0.0, wav(0.25, 3700, 3650, 0.18, attack=0.002, decay=3.5))
+        mix(0.09, wav(0.3, 2350, 2300, 0.15, attack=0.002, decay=3.0))
+    elif kind == "flap":    # little wings: soft whumps of air
+        for i in range(4):
+            mix(i * 0.11, soft(soft(wav(0.1, 0, 0, 0.8, shape="noise", attack=0.02, decay=1.5), 0.25), 0.35))
+            mix(i * 0.11, wav(0.08, 140, 90, 0.15, attack=0.01, decay=1.5))
+    elif kind == "zap":     # the portal gun: a quick "pew" falling down, and a warbly "vwoom" as the portal opens
+        mix(0.0, wav(0.16, 1700, 350, 0.3, shape="square", attack=0.002, decay=1.4))
+        mix(0.06, wav(0.35, 200, 620, 0.35, wobble=50, vib=28, attack=0.02, decay=1.3))
+    elif kind == "boom":    # the cannon: a deep thump with a crackly blast on top
+        mix(0.0, wav(0.6, 110, 35, 0.7, attack=0.002, decay=1.6))
+        mix(0.0, soft(wav(0.7, 0, 0, 0.8, shape="noise", attack=0.001, decay=2.2), 0.3))
+        mix(0.0, wav(0.12, 0, 0, 0.25, shape="noise", attack=0.001, decay=3.0))
+    elif kind == "jet":     # the jetpack lighting up: a rising roar
+        roar = soft(wav(1.1, 0, 0, 0.9, shape="noise", attack=0.25, decay=0.8), 0.18)
+        mix(0.0, roar)
+        mix(0.0, wav(1.0, 70, 140, 0.25, shape="saw", attack=0.2, decay=1.0, wobble=8, vib=17))
+    elif kind == "thud":    # a cardboard box landing: a hollow "tok"
+        mix(0.0, wav(0.12, 230, 140, 0.5, attack=0.002, decay=2.5))
+        mix(0.0, soft(wav(0.08, 0, 0, 0.35, shape="noise", attack=0.001, decay=3.0), 0.4))
     elif kind == "dance":   # a bouncy little chiptune that loops while it dances (2 bars at 150 bpm)
         step = 0.2   # one eighth note
         c5 = 523.25
