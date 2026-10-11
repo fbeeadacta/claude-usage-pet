@@ -9,7 +9,13 @@ SIZES = [0.75, 1.0, 1.25, 1.5, 2.0, 3.0]   # choices in the right-click size men
 MIN_SCALE, MAX_SCALE = 0.5, 4.0            # limits for ctrl + mouse wheel
 POLL_SECONDS = 120         # how often to ask the api
 ONLY_KNOWN_LIMITS = True   # show only the 5-hour and weekly limits. False shows everything the api lists.
-RATE_LIMITED_SECONDS = 180 # wait at least this long after the api says "slow down" (longer if it repeats)
+RATE_LIMITED_SECONDS = 900 # wait at least this long after the api says "slow down", doubling each time (reports say
+RATE_LIMITED_MAX = 3600    # quick retries keep the throttle alive; the service has asked for 50-60 minutes)
+MIN_FETCH_GAP = 60         # never ask the api twice within this many seconds, whatever the reason (restarts too)
+IDLE_POLL_SECONDS = 900    # when nothing has used tokens for IDLE_AFTER_MIN, check this often instead
+IDLE_AFTER_MIN = 10
+USAGE_LOG_KB = 300         # data/pet_usage.log is trimmed to stay about this small
+FAKE_USAGE_ENV = "PET_FAKE_USAGE"   # set for tests: no network. "ok" = fake numbers, "offline", or "429"
 USER_AGENT = "usage-widget/0.1"
 # how it moves (pixels are at 1x size)
 WALK_SPEED = 28            # pixels per second
@@ -139,6 +145,7 @@ SETTINGS_FILE = DATA_DIR / "pet_settings.json"
 STATE_FILE = DATA_DIR / "pet_state.json"     # moods and memories that survive a restart
 CC_CACHE = DATA_DIR / "pet_cc_cache.json.gz" # claude code's log numbers, saved so a restart doesn't re-read every log
 ERROR_LOG = DATA_DIR / "pet_errors.log"
+USAGE_LOG = DATA_DIR / "pet_usage.log"   # one line per usage check, to see what leads to a "slow down"
 try:
     DATA_DIR.mkdir(exist_ok=True)
     # older versions kept these files next to claude_pet.py. move them in (the newer copy wins)

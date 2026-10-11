@@ -5,9 +5,9 @@ import time
 import tkinter as tk
 import tkinter.font as tkfont
 
-from .art import PARK, RED
+from .art import IDLE_C, PARK, RED
 from .cclog import compare_line, fmt_minutes, fmt_money, fmt_tokens, hour_label, pretty_model
-from .config import SESSION_DONE_MIN
+from .config import IDLE_AFTER_MIN, IDLE_POLL_SECONDS, SESSION_DONE_MIN
 from .ui import Canvas, Fader, move_window, round_corners, round_rect
 from .usage import (bar_color, fmt_day, fmt_time, fmt_when, forecast, pace_info, parse_rows, parse_time,
     period_seconds, reset_text)
@@ -40,6 +40,9 @@ class Details:
         self.canvas.pack(fill="both", expand=True)
         self.canvas.bind("<ButtonRelease-1>", self.click)
         self.canvas.bind("<Button-3>", pet.show_menu)
+        self.canvas.bind("<Motion>", self.hover)
+        self.canvas.bind("<Leave>", lambda e: self.hide_tip())
+        self.tips, self.tip, self.tip_text = [], None, None   # (x1, y1, x2, y2, text) areas that explain themselves
         self.visible = self.pinned = self.rounded = False
         self.hits, self.rect, self.px_size, self.fonts = [], None, (10, 10), {}
         self.anchor_x = self.anchor_bottom = 0
@@ -66,6 +69,7 @@ class Details:
         self.fader.to(1.0, instant=not p.anim.get())
 
     def hide(self):
+        self.hide_tip()
         if not self.visible:
             return
         self.visible = self.pinned = False
@@ -93,6 +97,42 @@ class Details:
         self.rect = (x, y, x + pw, y + ph)
         y += round((1 - self.fader.alpha) * 10 * p.dpi)   # slides up a little as it fades in
         move_window(self.win, x, y, pw, ph)
+
+    def hover(self, e):
+        for x1, y1, x2, y2, text in self.tips:
+            if x1 <= e.x <= x2 and y1 <= e.y <= y2:
+                return self.show_tip(text, e)
+        self.hide_tip()
+
+    def show_tip(self, text, e):
+        # a little card just under the mouse, styled like the panel: a bold title, then the explanation.
+        # text is "Title: explanation"
+        title, _, body = text.partition(": ")
+        s = self.s
+        if self.tip is None:
+            self.tip = tk.Toplevel(self.win)
+            self.tip.overrideredirect(True)
+            self.tip.attributes("-topmost", True)
+            self.tip.configure(bg=self.CARD)
+            self.tip_title = tk.Label(self.tip, bg=self.CARD, fg=self.FG, justify="left", anchor="w")
+            self.tip_body = tk.Label(self.tip, bg=self.CARD, fg=self.DIM, justify="left", anchor="w")
+        if text != self.tip_text:
+            self.tip_text = text
+            self.tip_title.configure(text=title, font=self.font(8, True))
+            self.tip_body.configure(text=body, font=self.font(7.5), wraplength=round(220 * s))
+            self.tip_title.pack_forget()
+            self.tip_body.pack_forget()
+            self.tip_title.pack(fill="x", padx=round(12 * s), pady=(round(9 * s), round(2 * s)))
+            self.tip_body.pack(fill="x", padx=round(12 * s), pady=(0, round(10 * s)))
+            round_corners(self.tip)
+        self.tip.geometry(f"+{e.x_root + 12}+{e.y_root + 16}")
+        self.tip.deiconify()
+        self.tip.lift()
+
+    def hide_tip(self):
+        if self.tip is not None and self.tip_text is not None:
+            self.tip.withdraw()
+            self.tip_text = None
 
     def click(self, e):
         p = self.pet
@@ -139,12 +179,14 @@ class Details:
         if frac > 0:
             self.box(x1, y, max(x1 + 6, x1 + (x2 - x1) * min(1.0, frac)), y + 6, 3, color, self.WELL)
 
-    def segmented(self, x0, y, x1, options, current, hit, size=8, h=26):
+    def segmented(self, x0, y, x1, options, current, hit, size=8, h=26, equal=False):
         # like the claude app: options share a dark well, the chosen one sits on a lighter tab
         f = self.font(size, True)
         widths = [f.measure(label) / self.s + 18 for _, label in options]
         if x1 is None:   # just as wide as it needs to be (x0 is then its right edge)
             x1, x0 = x0, x0 - sum(widths) - 6
+        elif equal:      # spread across the space given, every option the same width
+            widths = [(x1 - x0 - 6) / len(options)] * len(options)
         else:            # spread across the space given
             extra = (x1 - x0 - 6 - sum(widths)) / len(options)
             widths = [w + extra for w in widths]
@@ -159,11 +201,11 @@ class Details:
             x += w
         return x0
 
-    def heading(self, y, label, right=None):
+    def heading(self, y, label, right=None, right_color=None):
         # a small section heading over a card, like the settings window
         self.text(14, y, label, self.DIM, 8, True)
         if right:
-            self.text(PANEL_W - 14, y, right, self.FAINT, 7.5, anchor="ne")
+            self.text(PANEL_W - 14, y, right, right_color or self.FAINT, 7.5, anchor="ne")
         return y + 20
 
     def card(self, y0, y1):
@@ -191,8 +233,8 @@ class Details:
         # draws one tab from scratch and returns how tall it came out
         s, W = self.s, PANEL_W
         self.canvas.delete("all")
-        self.hits = []
-        self.segmented(12, 12, W - 44, (("plan", "Plan"), ("cc", "Claude Code")), tab, "tab", 8.5, 30)
+        self.hits, self.tips = [], []
+        self.segmented(12, 12, W - 44, (("plan", "Plan"), ("cc", "Claude Code")), tab, "tab", 8.5, 30, equal=True)
         self.text(W - 22, 27, "×", self.DIM, 13, False, "center")      # close button
         self.hits.append(("close", (W - 38) * s, 10 * s, (W - 6) * s, 44 * s))
         return self.draw_plan(54) if tab == "plan" else self.draw_cc(54, view)
@@ -204,8 +246,16 @@ class Details:
         rows = parse_rows(p.data) if p.data else []
         now_dt = datetime.datetime.now(datetime.timezone.utc)
         now = time.time()
-        wait = "updating…" if p.busy else f"next check in {max(0, math.ceil(p.next_at - now))}s"
-        y = self.heading(y, "Your plan", (f"updated {fmt_time(p.updated)} · " if p.updated else "") + wait)
+        left = max(0, math.ceil(p.next_at - now))
+        wait = "updating…" if p.busy else f"next check in {left // 60}m {left % 60:02d}s" if left >= 60             else f"next check in {left}s"
+        right = (f"updated {fmt_time(p.updated)} · " if p.updated else "") + wait
+        idle = not p.busy and p.idle(now)
+        y = self.heading(y, "Your plan", ("idle · " + right) if idle else right, IDLE_C if idle else None)
+        if idle:   # hovering the line says why the checks are slower
+            tw = self.font(7.5).measure("idle · " + right) / self.s
+            self.tips.append(((W - 14 - tw) * self.s, (y - 20) * self.s, (W - 14) * self.s, (y - 6) * self.s,
+                              f"Idle: Claude hasn't been used for {IDLE_AFTER_MIN} min, so it checks every "
+                              f"{IDLE_POLL_SECONDS // 60} min. Back to normal as soon as you use Claude."))
         if p.quiet():   # no talking or sounds right now
             until = (f" until {fmt_time(datetime.datetime.fromtimestamp(p.hush_until))}"
                      if time.time() < p.hush_until else "")
@@ -219,7 +269,7 @@ class Details:
             unchanged = now - seen[1] if seen else 0
             el, msg, kind = pace_info(r["key"], r["pct"], r["resets"], now_dt, unchanged)
             self.text(26, y, r["label"] + " limit", self.FG, 9, True)
-            self.text(W - 26, y - 3, f"{r['pct']:.0f}%", self.FG, 13, True, "ne")
+            self.text(W - 26, y, f"{r['pct']:.0f}%", self.FG, 9, True, "ne")
             self.bar(26, y + 22, W - 26, r["pct"] / 100, bar_color(r["pct"]))
             if el is not None:   # the pace tick: where the clock is in this window
                 tx = 26 + (W - 52) * el / 100

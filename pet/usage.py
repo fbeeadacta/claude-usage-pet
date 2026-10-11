@@ -1,10 +1,12 @@
 # reading your login, asking the usage api, and turning the answer into numbers and times.
 import datetime
 import json
+import os
+import time
 import urllib.request
 import urllib.error
 
-from .config import (AHEAD_BY, CREDENTIALS, IDLE_HOURS_WEEKLY, IDLE_MIN_5H, NICE, ONLY_KNOWN_LIMITS,
+from .config import (AHEAD_BY, CREDENTIALS, FAKE_USAGE_ENV, IDLE_HOURS_WEEKLY, IDLE_MIN_5H, NICE, ONLY_KNOWN_LIMITS,
     SLOW_BELOW, URL, USER_AGENT)
 
 
@@ -44,8 +46,29 @@ def fmt_when(dt, key):
     return fmt_time(dt) if key == "five_hour" else f"{fmt_day(dt)} {fmt_time(dt)}"
 
 
+def fake_usage():
+    # offline test mode (env PET_FAKE_USAGE): no network, no token read. "ok" = made-up numbers,
+    # "offline" = no connection, "429" = a "slow down" with a one hour wait
+    mode = os.environ.get(FAKE_USAGE_ENV, "").lower()
+    LAST.clear()
+    LAST.update(status="fake-" + mode)
+    if mode == "offline":
+        return None, "no connection (offline test mode)."
+    if mode == "429":
+        global RETRY_AFTER
+        RETRY_AFTER = 3600
+        return None, "rate limited."
+    soon = lambda s: (datetime.datetime.now(datetime.timezone.utc) + datetime.timedelta(seconds=s)).isoformat()
+    return {"five_hour": {"utilization": 40.0, "resets_at": soon(2 * 3600)},
+            "seven_day": {"utilization": 20.0, "resets_at": soon(3 * 86400)}}, None
+
+
 def fetch_usage():
     # returns (data, error). error is a short plain message, never the token.
+    # LAST keeps what the answer looked like (status, headers' names, a short error body) for data/pet_usage.log.
+    if os.environ.get(FAKE_USAGE_ENV):
+        return fake_usage()
+    LAST.clear()
     token = read_token()
     if not token:
         return None, "no login found. The mascot reads your login from Claude Code.\n\n" + LOGIN_HELP
@@ -55,13 +78,20 @@ def fetch_usage():
         "User-Agent": USER_AGENT,
         "anthropic-beta": "oauth-2025-04-20",
     })
+    t0 = time.time()
     try:
         with urllib.request.urlopen(req, timeout=10) as r:
             body = r.read()
+            LAST.update(status=r.status, took=round(time.time() - t0, 1))
     except urllib.error.HTTPError as e:
+        LAST.update(status=e.code, headers=interesting_headers(e.headers), took=round(time.time() - t0, 1))
         if e.code == 401:
             return None, "login expired. The mascot can't see your usage until you log in again.\n\n" + LOGIN_HELP
         if e.code == 429:
+            try:
+                LAST["body"] = e.read(300).decode("utf-8", "replace").replace("\n", " ")
+            except Exception:
+                pass
             global RETRY_AFTER
             try:
                 RETRY_AFTER = int(e.headers.get("Retry-After") or 0)   # the service's own "try again in"
@@ -75,6 +105,18 @@ def fetch_usage():
         return json.loads(body), None
     except ValueError:
         return None, SERVICE_CHANGED
+
+
+LAST = {}   # the last answer's status, header names and (for a 429) the short error body: never the token
+
+
+def interesting_headers(headers):
+    # the rate-limit related headers of an answer, as name=value (none of these hold secrets)
+    keep = ("retry-after", "x-should-retry", "anthropic-ratelimit", "x-ratelimit", "request-id", "cf-ray")
+    try:
+        return [f"{k.lower()}={v}" for k, v in headers.items() if k.lower().startswith(keep)]
+    except Exception:
+        return []
 
 
 RETRY_AFTER = 0   # seconds the usage service asked us to wait, from its last "slow down"

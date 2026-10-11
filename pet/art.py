@@ -307,5 +307,6 @@ CHUTE_R, CHUTE_W, STRING_C = "#e5534b", "#f2efe8", "#d9d4c7"
 HAT_C, BAND_C, STAR_C, WAND_C = "#6c4ab6", "#f2c14e", "#ffe08a", "#8b5a2b"
 SPARK_C = ["#ffe08a", "#8be9fd", "#ff9ad5", "#ffffff"]
 DIM, RED, TRACK = "#8e8e93", "#e5534b", "#3a3a3c"
+IDLE_C = "#b48cff"   # sleepy lavender: checks are slowed down because nothing is using claude
 KEY = "#010203"            # this exact colour becomes see-through (and click-through)
 PARK = -32000              # hidden windows are parked way off screen

@@ -92,7 +92,8 @@ def compare_line(tokens):
 
 def build_stats(answers, lines, starts=None, real=None):
     # the claude code tab's numbers, for all time, 30 days and 7 days.
-    # starts (session -> first time) = peak hour is when sessions start, like the claude app.
+    # starts (log -> first line's time) = peak hour is the hour most sessions start in, all time whatever the
+    # range, like the claude app.
     # real = each answer once. the cost estimate always uses that, whichever way tokens are counted.
     real = answers if real is None else real
     today = datetime.date.today()
@@ -112,9 +113,13 @@ def build_stats(answers, lines, starts=None, real=None):
             if not a[2].startswith("<"):   # skip claude code's made-up "<synthetic>" entries
                 models[a[2]] += a[3] + a[4] + a[5] + a[6]
         hours = Counter(ln[0].hour for ln in L)
-        if starts:
-            began = Counter(t.hour for t in starts.values() if since is None or t.date() >= since)
-            hours = began or hours
+        peak = max(sorted(hours), key=hours.get) if hours else None   # a tie: the earlier hour
+        if starts:   # (the app ignores the range here)
+            began, peak = Counter(), None
+            for t in sorted(starts.values()):   # a tie keeps the hour that got there first
+                began[t.hour] += 1
+                if peak is None or began[t.hour] > began[peak]:
+                    peak = t.hour
         projects, proj_sessions, cost, unpriced = Counter(), {}, 0.0, False
         for a in A:
             proj = a[8] if len(a) > 8 else "?"
@@ -130,7 +135,7 @@ def build_stats(answers, lines, starts=None, real=None):
         out["ranges"][name] = {
             "sessions": len({ln[1] for ln in L}), "messages": len(L), "tokens": sum(parts),
             "parts": parts, "days": len({ln[0].date() for ln in L}),
-            "peak": hours.most_common(1)[0][0] if hours else None, "models": models.most_common(),
+            "peak": peak, "models": models.most_common(),
             "projects": [(name_, tok, len(proj_sessions[name_])) for name_, tok in projects.most_common()],
             "cost": cost, "unpriced": unpriced,
         }
@@ -187,7 +192,8 @@ def job_for(name):
     name = str(name)
     return "mcp" if name.startswith("mcp__") else JOBS.get(name)
 CHUNK = 4 * 2 ** 20   # logs are read this much at a time, so a huge log never sits in memory all at once
-CACHE_VERSION = 2   # 2: project names are the repo root, not the subfolder
+CACHE_VERSION = 4   # 2: project names are the repo root, not the subfolder. 3: lines copied into other logs.
+                    # 4: session starts are each log's first line
 
 
 class ClaudeCodeLog:
@@ -196,10 +202,12 @@ class ClaudeCodeLog:
     def __init__(self):
         self.offsets = {}         # file -> bytes read so far
         self.seen_answers = set() # (message id, request id). each answer is logged several times.
-        self.seen_lines = set()   # line ids, so nothing is counted twice
+        self.seen_lines = {}      # line id -> the log it was first seen in, so nothing is counted twice
+        self.copied = {}          # log -> line ids it repeats from another log (a resumed or forked session)
+        self.line_copies = []     # (local time, session) for those repeated lines (the claude app counts them too)
         self.answers = []         # (local time, session, model, input, output, cache write, cache read)
         self.copies = []          # the extra logged copies of those answers (the claude app counts them too)
-        self.starts = {}          # session -> its first line's time
+        self.starts = {}          # log -> the time on its first user or assistant line (how the claude app does it)
         self.lines = []           # (local time, session) for every user and assistant line
         self.last_error = 0.0     # when a tool call last failed (for the worried face)
         self.stats = None         # summary for the panel
@@ -259,7 +267,7 @@ class ClaudeCodeLog:
                 self.offsets[str(f)] = start
                 self.dirty = True
                 for raw in chunk[:end].split(b"\n"):
-                    got = self.take(raw)
+                    got = self.take(raw, str(f))
                     if got is not None:
                         changed = True
                         new_output += got
@@ -267,7 +275,8 @@ class ClaudeCodeLog:
             self.last_growth = time.time()
         if self.stats is None or (changed and time.time() - self.built_at > 10):
             self.stats = {"real": build_stats(self.answers, self.lines),
-                          "app": build_stats(self.answers + self.copies, self.lines, self.starts, self.answers)}
+                          "app": build_stats(self.answers + self.copies, self.lines + self.line_copies, self.starts,
+                                                 self.answers)}
             self.built_at = time.time()
         if not self.ready:
             self.save_cache()   # the first full read is the slow one: save it straight away
@@ -287,13 +296,21 @@ class ClaudeCodeLog:
                 pos += len(block)
 
     # ---- the cache: numbers already read, so a restart only reads what's new ----
+    def seen_lines_by_log(self):
+        # {log: [line ids]} for the cache, so each log's path is only written once
+        out = {}
+        for uid, log in self.seen_lines.items():
+            out.setdefault(log, []).append(uid)
+        return out
+
     def save_cache(self):
         t = lambda d: round(d.timestamp(), 3)
         row = lambda a: [t(a[0])] + list(a[1:])
         data = {"v": CACHE_VERSION, "logs": str(CC_LOGS), "offsets": self.offsets,
-                "seen_answers": [list(k) for k in self.seen_answers], "seen_lines": list(self.seen_lines),
+                "seen_answers": [list(k) for k in self.seen_answers], "seen_lines": self.seen_lines_by_log(), "copied": {k: list(v) for k, v in self.copied.items()},
                 "answers": [row(a) for a in self.answers], "copies": [row(a) for a in self.copies],
-                "starts": {k: t(v) for k, v in self.starts.items()}, "lines": [[t(w), s] for w, s in self.lines]}
+                "starts": {k: t(v) for k, v in self.starts.items()}, "lines": [[t(w), s] for w, s in self.lines],
+                "line_copies": [[t(w), s] for w, s in self.line_copies]}
         tmp = CC_CACHE.with_name(CC_CACHE.name + ".tmp")
         try:
             with gzip.open(tmp, "wt", encoding="utf-8") as fh:
@@ -326,7 +343,9 @@ class ClaudeCodeLog:
         lines = [(when(w), str(s)) for w, s in data["lines"]]
         self.starts = {str(k): when(v) for k, v in data["starts"].items()}
         self.seen_answers = {tuple(k) for k in data["seen_answers"]}
-        self.seen_lines = set(data["seen_lines"])
+        self.seen_lines = {uid: log for log, uids in data["seen_lines"].items() for uid in uids}
+        self.copied = {log: set(uids) for log, uids in data["copied"].items()}
+        self.line_copies = [(when(w), str(s)) for w, s in data["line_copies"]]
         self.answers, self.copies, self.lines, self.offsets = answers, copies, lines, offsets
         self.saved_at = time.time()
 
@@ -342,8 +361,8 @@ class ClaudeCodeLog:
         step = max(1, len(out) // 150)   # no need for more than ~150 points
         return out[::step] + out[-1:] if out else []
 
-    def take(self, raw):
-        # one log line -> output tokens it added (None if it was nothing new)
+    def take(self, raw, log=""):
+        # one log line from the log file `log` -> output tokens it added (None if it was nothing new)
         try:
             d = json.loads(raw)
         except ValueError:
@@ -355,18 +374,27 @@ class ClaudeCodeLog:
         if d.get("type") not in ("user", "assistant"):
             return None
         uid = d.get("uuid")
-        if uid in self.seen_lines:
-            return None
         when = parse_time(d.get("timestamp") or "")
         if when is None:
             return None
         when = when.astimezone()   # your local time
-        if uid:
-            self.seen_lines.add(uid)
         session = d.get("sessionId") or "?"
+        if uid in self.seen_lines:
+            # a resumed or forked session starts its log with a copy of the old one. counted once for the
+            # real count, but the claude app counts every copy. (the same log read again isn't a copy)
+            if self.seen_lines[uid] == log or uid in self.copied.get(log, ()):
+                return None
+            self.copied.setdefault(log, set()).add(uid)
+            self.line_copies.append((when, session))
+            self.starts.setdefault(log, when)
+            m = d.get("message")
+            if d["type"] == "assistant" and isinstance(m, dict) and isinstance(m.get("usage"), dict):
+                self.copies.append(self.answer_row(d, m, when, session))
+            return 0
+        if uid:
+            self.seen_lines[uid] = log
         self.lines.append((when, session))
-        if session not in self.starts or when < self.starts[session]:
-            self.starts[session] = when
+        self.starts.setdefault(log, when)
         if self.ready:
             self.active[session] = time.time()   # this session is doing something right now
         m = d.get("message")
@@ -381,18 +409,21 @@ class ClaudeCodeLog:
                 elif isinstance(b, dict) and b.get("type") in ("thinking", "redacted_thinking"):
                     self.job = (time.time(), "think")
         if d["type"] == "assistant" and isinstance(m, dict) and isinstance(m.get("usage"), dict):
-            u = m["usage"]
-            n = [int(u.get(k) or 0) for k in ("input_tokens", "output_tokens",
-                                              "cache_creation_input_tokens", "cache_read_input_tokens")]
-            cc = u.get("cache_creation") if isinstance(u.get("cache_creation"), dict) else {}
-            cw1h = int(cc.get("ephemeral_1h_input_tokens") or 0)
-            project = project_name(d.get("cwd"))
-            row = (when, session, str(m.get("model") or "unknown"), *n, cw1h, project)
+            row = self.answer_row(d, m, when, session)
             key = (m.get("id"), d.get("requestId"))
             if key in self.seen_answers:
                 self.copies.append(row)   # same answer, logged again
                 return 0
             self.seen_answers.add(key)
             self.answers.append(row)
-            return n[1]
+            return row[4]
         return 0
+
+    def answer_row(self, d, m, when, session):
+        # (local time, session, model, input, output, cache write, cache read, 1h cache write, project)
+        u = m["usage"]
+        n = [int(u.get(k) or 0) for k in ("input_tokens", "output_tokens",
+                                          "cache_creation_input_tokens", "cache_read_input_tokens")]
+        cc = u.get("cache_creation") if isinstance(u.get("cache_creation"), dict) else {}
+        cw1h = int(cc.get("ephemeral_1h_input_tokens") or 0)
+        return (when, session, str(m.get("model") or "unknown"), *n, cw1h, project_name(d.get("cwd")))

@@ -5,8 +5,8 @@ import os
 import time
 import traceback
 
-from .config import (CHATTER, DEFAULT_KEYS, DEFAULT_SCALE, ERROR_LOG, ERROR_LOG_KB, MAX_SCALE, MIN_SCALE,
-    PANIC_AT, PANIC_CHOICES, POLL_CHOICES, POLL_SECONDS, PROFILES, QUIET_FROM_CHOICES, QUIET_TO_CHOICES,
+from .config import (CHATTER, DEFAULT_KEYS, DEFAULT_SCALE, ERROR_LOG, ERROR_LOG_KB, FAKE_USAGE_ENV, MAX_SCALE,
+    MIN_SCALE, USAGE_LOG, USAGE_LOG_KB, PANIC_AT, PANIC_CHOICES, POLL_CHOICES, POLL_SECONDS, PROFILES, QUIET_FROM_CHOICES, QUIET_TO_CHOICES,
     BEDTIME_CHOICES, SETTINGS_FILE, SHORTCUTS, STATE_FILE, WARN_AT, WARN_CHOICES, combo_ok)
 from .sounds import SOUNDS
 
@@ -26,6 +26,22 @@ def log_error(what, exc=None):
         if len(old) > ERROR_LOG_KB * 1024:
             old = old[-ERROR_LOG_KB * 512:]   # keep the newer half
         ERROR_LOG.write_text(old + f"[{stamp}] {what}\n{text}\n", encoding="utf-8")
+    except Exception:
+        pass
+
+
+def log_usage(line):
+    # one line per usage check in data/pet_usage.log (times, counts and response header names only,
+    # never the login token). trimmed like the error log. not written in the offline test mode.
+    if os.environ.get(FAKE_USAGE_ENV):
+        return
+    try:
+        stamp = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        old = USAGE_LOG.read_text(encoding="utf-8") if USAGE_LOG.exists() else ""
+        if len(old) > USAGE_LOG_KB * 1024:
+            cut = old.find("\n", len(old) - USAGE_LOG_KB * 512)
+            old = old[cut + 1:] if cut >= 0 else ""   # keep the newer half, whole lines
+        USAGE_LOG.write_text(old + f"[{stamp}] {line}\n", encoding="utf-8")
     except Exception:
         pass
 
@@ -110,7 +126,8 @@ def load_memory():
     m = read_json(STATE_FILE)
     out = {"seen": {}, "last_5h": None, "pokes": 0, "milestones": {}, "last_usage": time.time(), "history": [],
            "greeted": "", "pace_warned": {}, "recapped": [], "log": {}, "log_since": "", "hush_until": 0.0,
-           "toured": bool(m), "season_said": ""}   # (someone who already has a memory file has met the pet)
+           "toured": bool(m), "season_said": "", "blocked_until": 0.0,
+           "last_fetch": 0.0}   # (someone who already has a memory file has met the pet)
     for k in ("greeted", "log_since", "season_said"):
         if isinstance(m.get(k), str):
             out[k] = m[k]
@@ -136,7 +153,8 @@ def load_memory():
         out["milestones"] = {k: [str(v[0]), [int(x) for x in v[1]]] for k, v in m.get("milestones", {}).items()}
     except (TypeError, ValueError, IndexError, AttributeError):
         pass
-    for k, kind in (("last_5h", float), ("pokes", int), ("last_usage", float), ("hush_until", float)):
+    for k, kind in (("last_5h", float), ("pokes", int), ("last_usage", float), ("hush_until", float),
+                    ("blocked_until", float), ("last_fetch", float)):
         try:
             if m.get(k) is not None:
                 out[k] = kind(m[k])

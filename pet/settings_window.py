@@ -6,8 +6,8 @@ import tkinter as tk
 import tkinter.font as tkfont
 import webbrowser
 
-from .art import ARMS, BLOCK_H, BLOCK_W, BODY, BUBBLE, BUBBLE_TEXT, EYE, EYES, LEGS_STAND, ORANGE, TRACK
-from .config import (MAX_SCALE, MIN_SCALE, PANIC_CHOICES, POLL_CHOICES, PROFILE_NAMES, QUIET_FROM_CHOICES,
+from .art import ARMS, BLOCK_H, BLOCK_W, BODY, BUBBLE, BUBBLE_TEXT, EYE, EYES, IDLE_C, LEGS_STAND, ORANGE, TRACK
+from .config import (IDLE_AFTER_MIN, IDLE_POLL_SECONDS, MAX_SCALE, MIN_SCALE, PANIC_CHOICES, POLL_CHOICES, PROFILE_NAMES, QUIET_FROM_CHOICES,
     QUIET_TO_CHOICES, BEDTIME_CHOICES, SHORTCUTS, WARN_CHOICES, combo_parts, key_name)
 from .sounds import SOUND_DIR, SOUND_GROUPS
 from .storage import DEFAULTS
@@ -634,6 +634,10 @@ class SettingsWindow:
         line = (f"Last checked {fmt_time(p.updated)}. " if p.updated else "") + \
                ("Checking now…" if p.busy else f"Next check in {wait // 60}m {wait % 60:02d}s.")
         end = self.text(x0 + 16, y + 38, line, self.DIM, 8, width=x1 - x0 - 140)
+        if p.idle() and not err:
+            end = self.text(x0 + 16, end + 4, f"Idle: nothing has used Claude for {IDLE_AFTER_MIN} minutes, so it "
+                            f"checks every {IDLE_POLL_SECONDS // 60} minutes. Back to normal as soon as you use "
+                            "Claude again.", IDLE_C, 8, width=x1 - x0 - 32)
         # a "check now" button
         label = "Check now"
         bw_ = self.font(8, True).measure(label) / self.s + 24
@@ -649,8 +653,9 @@ class SettingsWindow:
         return end + 14
 
     def check_now(self):
-        self.pet.next_at = time.time()
-        self.pet.refresh()
+        if time.time() >= self.pet.blocked_until:   # (not while the service told us to wait)
+            self.pet.next_at = time.time()
+        self.pet.refresh("manual")
         self.draw()
 
     def draw_perf(self, x0, x1, y):

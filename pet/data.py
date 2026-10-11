@@ -1,14 +1,17 @@
 # part of the Pet: fetching usage, milestones, keyboard shortcuts and the regular ticks.
 import datetime
+import os
 import queue
+import random
 import threading
 import time
 
 from . import usage
-from .art import DIM, RED
-from .config import DEFAULT_KEYS, NICE, PACE_WARN, RATE_LIMITED_SECONDS, SHORT, STALE_MIN
+from .art import DIM, IDLE_C, RED
+from .config import (DEFAULT_KEYS, FAKE_USAGE_ENV, IDLE_AFTER_MIN, IDLE_POLL_SECONDS, MIN_FETCH_GAP, NICE, PACE_WARN,
+    RATE_LIMITED_MAX, RATE_LIMITED_SECONDS, SHORT, STALE_MIN)
 from .lines import MILESTONES, PACE_LINES, RESET_LINES
-from .storage import log_error
+from .storage import log_error, log_usage
 from .usage import (bar_color, fetch_usage, fmt_time, fmt_when, forecast, parse_rows, parse_time, same_window,
     short_error)
 from .winapi import u32
@@ -16,11 +19,53 @@ from .winapi import u32
 
 class DataMixin:
     # data
-    def refresh(self):
-        if self.busy:
+    def refresh(self, why="timer"):
+        now = time.time()
+        if self.busy or now < self.blocked_until:   # (the service asked us to wait: even on a restart)
             return
+        if now - self.last_fetch < MIN_FETCH_GAP and not os.environ.get(FAKE_USAGE_ENV):
+            return   # asked a moment ago (a restart, "check now", a renewed login): the tick tries again later
+        self.fetch_why, self.fetch_gap = why, now - self.last_fetch if self.last_fetch else None
+        self.last_fetch = now
+        self.req_times = [t for t in self.req_times if now - t < 3600] + [now]
         self.busy = True
         threading.Thread(target=lambda: self.inbox.put(fetch_usage()), daemon=True).start()
+
+    def rate_message(self):
+        at = datetime.datetime.fromtimestamp(self.blocked_until)
+        return (f"rate limited: the usage service asked us to slow down, so it'll try again at {fmt_time(at)}. "
+                "your last numbers are still shown. a slower 'refresh every' setting helps.")
+
+    def idle(self, now=None):
+        # nothing has used tokens for a while, so checks slow down
+        return (now or time.time()) - self.last_usage > IDLE_AFTER_MIN * 60
+
+    def expected_gap(self, now=None):
+        # seconds between checks right now: the setting, or slower when idle
+        gap = self.poll.get()
+        return max(gap, IDLE_POLL_SECONDS) if self.idle(now) else gap
+
+    def poll_gap(self, now):
+        # seconds to the next check: the setting, or slower when nothing has used tokens for a while
+        gap = self.expected_gap(now)
+        return gap * random.uniform(0.9, 1.1)   # (a little jitter, so checks don't land in a fixed rhythm)
+
+    def usage_log_line(self, now, ok, rows):
+        # what one check looked like, for data/pet_usage.log: when it was, how often we'd been asking, what came back
+        last = usage.LAST
+        gap = f"{self.fetch_gap:.0f}s" if self.fetch_gap is not None else "first"
+        parts = ["ok" if ok else str(last.get("status") or "fail"), f"why={self.fetch_why}", f"since_last={gap}",
+                 f"req10m={sum(1 for t in self.req_times if now - t < 600)}", f"req1h={len(self.req_times)}",
+                 f"up={(now - self.started) / 60:.0f}m", f"poll={self.poll.get()}s",
+                 f"idle={'yes' if self.idle(now) else 'no'}"]
+        if ok:
+            parts += [f"{r['key']}={r['pct']:.0f}" for r in rows[:2]]
+        else:
+            if last.get("headers"):
+                parts.append("headers=" + ",".join(last["headers"]))
+            if last.get("body"):
+                parts.append(f'body="{last["body"][:200]}"')
+        return " ".join(parts)
 
     def take_result(self):
         try:
@@ -29,6 +74,7 @@ class DataMixin:
             return
         now = time.time()
         self.busy = False
+        ok_rows = parse_rows(data) if usage.looks_right(data) else []
         if data is not None and not usage.looks_right(data):
             # the undocumented usage api changed shape. say so (and log what it sent: names only, never values)
             if not self.shape_logged:
@@ -60,21 +106,27 @@ class DataMixin:
             self.first_result = False
             self.limited = 0
             self.last_ok = now
-            self.next_at = now + self.poll.get()
+            self.blocked_until = 0.0
+            self.next_at = now + self.poll_gap(now)
             self.remember(now, parse_rows(data))
+            log_usage(self.usage_log_line(now, True, ok_rows))
+            self.save()
         else:
             if err.startswith("login expired") and not (self.error or "").startswith("login expired"):
                 self.say("I can't see your usage anymore. hover me for how to log back in!", force=True)
                 self.toast("Claude pet: login expired", "Hover the mascot for step-by-step help logging back in.")
             if err.startswith("rate limited"):
-                # asked to slow down: wait 3, 6, 12... minutes (up to 30), or longer if the service says so
+                # asked to slow down: wait 15, 30, 60 minutes, or longer if the service says so. quick retries
+                # keep the throttle alive (others saw it ask for 50-60 minutes)
                 self.limited += 1
-                wait = max(usage.RETRY_AFTER, min(1800, RATE_LIMITED_SECONDS * 2 ** (self.limited - 1)))
-                self.next_at = now + wait
-                at = datetime.datetime.fromtimestamp(self.next_at)
-                err = (f"rate limited: the usage service asked us to slow down, so it'll try again at {fmt_time(at)}. "
-                       "your last numbers are still shown. a slower 'refresh every' setting helps.")
+                wait = max(usage.RETRY_AFTER, min(RATE_LIMITED_MAX, RATE_LIMITED_SECONDS * 2 ** (self.limited - 1)))
+                self.next_at = self.blocked_until = now + wait
+                err = self.rate_message()
+                log_usage(self.usage_log_line(now, False, []) + f" retry_after={usage.RETRY_AFTER}s waits={wait:.0f}s "
+                          f"in_a_row={self.limited}")
+                self.save()
             else:
+                log_usage(self.usage_log_line(now, False, []) + " (error: " + short_error(err) + ")")
                 self.next_at = now + self.poll.get()
             self.error = err
             self.checks_failed += 1
@@ -148,8 +200,13 @@ class DataMixin:
             self.creds_mtime = stamp
             if self.error and not self.error.startswith("rate limited"):
                 self.next_at = now
+                self.why_next = "login renewed"
+        if self.last_ok and not self.error and self.next_at > self.last_ok + self.poll.get() \
+                and now - self.last_usage <= IDLE_AFTER_MIN * 60:
+            self.next_at = self.last_ok + self.poll.get()   # woke up from idle: back to the normal pace
         if not self.busy and now >= self.next_at:
-            self.refresh()
+            self.refresh(self.why_next)
+            self.why_next = "timer"
         if now - self.saved_at >= 60:
             self.save()
         if self.details.visible:
@@ -250,11 +307,11 @@ class DataMixin:
         return picks[:1] if self.bubble_mode.get() == "5h" else picks
 
     def stale_for(self):
-        # minutes since the last good answer, if that's long enough that the numbers may be out of date
+        # minutes since the last good answer, if checks have been missed (not just the slow idle ones)
         if not self.data or not self.last_ok:
             return 0
         age = time.time() - self.last_ok
-        return int(age // 60) if age > max(STALE_MIN * 60, 3 * self.poll.get()) else 0
+        return int(age // 60) if age > max(STALE_MIN * 60, 3 * self.expected_gap()) else 0
 
     def bubble_segments(self):
         old = self.stale_for()
@@ -262,6 +319,8 @@ class DataMixin:
                 for r in self.shown_rows()]
         if old:
             segs.append((f"{old}m old" if old < 120 else f"{old // 60}h old", DIM))
+        elif segs and self.idle():
+            segs.append(("idle", IDLE_C))   # the numbers are fine, just checked less often
         if self.error:
             segs.append(("!" if segs else short_error(self.error), RED))
         return segs or [("...", DIM)]

@@ -2,6 +2,47 @@
 
 Newest first. The spec and how everything works are in `PROJECT_NOTES.md`.
 
+- **2026-10-11 (version 7.15): the tooltip looks like the panel.**
+  - The idle tooltip is now a small rounded card in the panel's card colour, with a bold "Idle" title and the explanation in grey under it, Segoe UI like everything else (was a square dark label with a border). Tooltip text is written "Title: explanation" and split there.
+  - Tested: screenshot on a test pet (scratch files, `PET_FAKE_USAGE=ok`, left monitor) with a pretend mouse move. Not tested: a real mouse hover.
+
+- **2026-10-11 (version 7.14): idle tooltip, and peak hour matches the app.**
+  - The idle explanation line under the panel's "idle · updated ..." line is gone again. Hovering that line now shows it as a tooltip instead. The panel has a small tooltip helper (`tips`, `hover()`, `show_tip()`, `hide_tip()`).
+  - Peak hour (app count): worked out from Claude Code GitHub issues (#65775, #83678). The app counts each log file once at the local hour of its first user or assistant line, all-time whatever the range. The pet used the earliest time in each session and followed the range. Now it does it the app's way; a tie keeps the hour that reached the top first. The real count (setting off) still uses the busiest message hour. Log cache `CACHE_VERSION` 4, so the logs are re-read once.
+  - Tested: the log reader on this computer's real logs (numbers only), from scratch, from its cache and re-reading everything: peak hour 5 PM (same as the app), the other numbers unchanged. The tooltip on a test pet (scratch files, `PET_FAKE_USAGE=ok`, left monitor) with a pretend mouse move and a screenshot. Not tested: a real mouse hover, and how the tie rule holds up as more sessions are added (it's a best guess from one tie).
+
+- **2026-10-11 (version 7.13): Claude Code numbers match the app again, and a tidier panel.**
+  - Bug fix: with "Count tokens like the Claude app" on, Messages and Total tokens were lower than the app (4,483 and 968.7M against 6,120 and 1.3B). A resumed or forked session copies the old conversation into its new log, and the pet skipped those lines because it had seen their ids before; the app counts them. Now a line seen again in a different log counts as a copy (the same log read again still doesn't). The real count (setting off) is unchanged. The log cache format changed (`CACHE_VERSION` 3), so the first start re-reads every log once.
+  - Peak hour still doesn't match (app 5 PM, pet 10 PM). None of the ways tried gave 5 PM, so it's left as it was (see "Claude Code token counts").
+  - The panel's "next check in" shows minutes and seconds ("next check in 14m 46s"; under a minute, just seconds).
+  - The Plan and Claude Code buttons at the top of the panel are the same width (`segmented(..., equal=True)`).
+  - While idle, the panel shows the explanation under the "idle · updated ..." line, in lavender. The Claude login card in Settings keeps its line too.
+  - Tested: the log reader on this computer's real logs (numbers only) from scratch, from its cache, and re-reading every log from the start: the same numbers each time (app count 16 sessions, 6,153 messages, 1.26B tokens; real count unchanged). Screenshots (test pet, scratch files, `PET_FAKE_USAGE=ok`, left monitor) of the Plan tab while idle and the Claude Code overview. Not tested: a session resumed while the pet is running, the panel while not idle.
+
+- **2026-10-11 (version 7.12): idle has its own colour.**
+  - Idle is now lavender (`IDLE_C = "#b48cff"` in `art.py`; the blue, orange, green and red are all taken). The bubble's "idle", the panel's "updated ... · next check in" line (which now starts with "idle ·" instead of ending in "(idle)") and the idle line on the Claude login card all use it. `Details.heading()` takes an optional colour for its right-hand text.
+  - Tested (test pet, scratch files, `PET_FAKE_USAGE=ok`, left monitor): screenshots of all three while idle. Not tested: the panel line going back to grey when idle ends.
+
+- **2026-10-11 (version 7.11): idle mode you can see, and no false "old".**
+  - The percentages on the panel's 5-hour and Weekly rows are now the same size as the "5-hour limit" / "Weekly limit" labels (were bigger).
+  - "old" in the bubble now allows for idle checks: numbers only count as old after 3 missed checks at the current pace (45 minutes while idle, as before otherwise). Before, it said "10m old" while idle even though the 15-minute wait was by design. New `idle()` and `expected_gap()` in `data.py`.
+  - Idle shows: a grey "idle" after the numbers in the bubble, "(idle)" after the panel's "next check in", and a line under "Next check in" on the Claude login card explaining it.
+  - Tested (test pet, scratch files, `PET_FAKE_USAGE=ok`, left monitor): screenshots of the bubble, panel and login card while idle; the old/idle logic checked for active and idle with fresh and missed checks. Not tested: the screens while not idle (only the logic was checked), and the real switch in and out of idle over time.
+
+- **2026-10-11 (version 7.10): fewer requests, a usage log, and a no-network test mode.**
+  - After a "slow down" the pet now waits 15, 30, then 60 minutes (was 3, 6, 12... up to 30), or the service's `Retry-After` if longer. Other people's reports say quick retries keep the throttle alive. `RATE_LIMITED_SECONDS` = 900, new `RATE_LIMITED_MAX` = 3600.
+  - New `MIN_FETCH_GAP` (60 s): the service is never asked twice within a minute, whatever the reason. The time of the last request is saved (`last_fetch` in the state file), so quitting and starting the pet again in a row can't pile up requests. Checks also get ±10% random jitter, and the idle gap went from 10 to 15 minutes.
+  - New `data/pet_usage.log` (`log_usage()` in `storage.py`, trimmed to about 300 KB): one line per check with the reason (`start`, `timer`, `manual`, `login renewed`), seconds since the last check, checks in the last 10 minutes and hour, uptime, refresh setting, idle or not, and for a failure the status, the rate-limit header names and values (`retry-after`, `anthropic-ratelimit-*`, `request-id`, ...), and the first 200 characters of the error text. No login token. It can show what leads up to a "slow down", not the service's own reason.
+  - New offline test mode: set `PET_FAKE_USAGE` to `ok`, `offline` or `429` and `fetch_usage()` never touches the network or the login (`fake_usage()` in `usage.py`). The testing rule is written in `PROJECT_NOTES.md` ("Where the numbers come from") and `CLAUDE.md`.
+  - Researched other ways to get the plan %, including claude.ai chat. The best on paper is Claude Code's `statusLine` `rate_limits` data. Written up in "Rate limits" in `PROJECT_NOTES.md`. A test status line never ran in the desktop app's Code tab (settings restored afterwards), so it wasn't built.
+  - Tested, all offline (a safety net made any real request abort the test): the three fake modes, the log writer and its trimming, the 60-second gap, the log line for a 429, the jitter range. Not tested: the whole pet running with these changes, or against the real service.
+
+- **2026-10-11 (version 7.9): fewer checks, and a "slow down" wait that survives restarts.**
+  - When the usage service says "slow down", the wait is now saved (`blocked_until` in `pet_state.json`). Restarting the pet used to check straight away and could get limited again; now it shows the rate-limit message and waits. "Check now" and changing "Refresh every" also respect it.
+  - Idle polling: if nothing has used tokens for 10 minutes, it checks every 10 minutes instead of every 2 to 5. It returns to the normal pace as soon as Claude Code's logs or the plan % show tokens going up. New in `config.py`: `IDLE_AFTER_MIN`, `IDLE_POLL_SECONDS`.
+  - Why: the usage service once asked for a ~1 hour wait. The cause wasn't found (the error log has no rate-limit entries); fewer requests and no restart skipping are the likely helpers, not a proven fix.
+  - Tested: it compiles; the saved wait loads back; the idle and active gaps (120s vs 600s); refresh does nothing while waiting. Not tested against the real service, or on the running pet until it's restarted.
+
 - **2026-10-11 (version 7.8): subfolders no longer show up as their own projects.**
   - The Projects view named a project after the last folder in the session's working directory, so a session that worked in `pet/` or `docs/` showed up as a separate project. `cclog.project_name()` now walks up to the folder that has `.git` and uses that name (falling back to the plain folder name outside a repo). Results are cached per folder.
   - `CACHE_VERSION` went to 2, so the log cache is rebuilt once on the next start and old rows get the new names.

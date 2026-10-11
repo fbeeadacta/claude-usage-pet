@@ -1,5 +1,6 @@
 # the Pet itself: puts the parts together, its settings, and starting it up.
 import collections
+import os
 import queue
 import random
 import threading
@@ -8,7 +9,8 @@ import tkinter as tk
 
 from .art import KEY
 from .cclog import ClaudeCodeLog
-from .config import MAX_SCALE, MIN_SCALE, PROFILES, SETTINGS_FILE, SHINY_CHANCE, STATE_FILE
+from .config import (FAKE_USAGE_ENV, MAX_SCALE, MIN_FETCH_GAP, MIN_SCALE, PROFILES, SETTINGS_FILE, SHINY_CHANCE,
+    STATE_FILE)
 from .data import DataMixin
 from .details import Details
 from .fun import FunMixin
@@ -95,6 +97,14 @@ class Pet(ScreensMixin, MouseMixin, TalkMixin, DataMixin, MovementMixin, RenderM
         self.data, self.error, self.updated = None, None, None
         self.busy = False
         self.next_at = 0.0          # unix time of the next check. 0 = check right away.
+        self.blocked_until = mem["blocked_until"]   # the service said wait until then (kept over restarts)
+        self.last_fetch = mem["last_fetch"]         # when we last asked the service (so a quick restart doesn't ask again)
+        self.req_times, self.fetch_why, self.fetch_gap = [], "start", None
+        self.why_next = "start"
+        if not os.environ.get(FAKE_USAGE_ENV):
+            self.next_at = max(self.next_at, self.last_fetch + MIN_FETCH_GAP)
+        if self.blocked_until > time.time():
+            self.next_at, self.error = self.blocked_until, self.rate_message()
         self.seen = mem["seen"]     # key -> (percent, when it last changed, resets_at)
         self.last_5h = mem["last_5h"]
         self.pokes = mem["pokes"]
@@ -260,7 +270,8 @@ class Pet(ScreensMixin, MouseMixin, TalkMixin, DataMixin, MovementMixin, RenderM
                                 "pace_warned": self.pace_warned, "recapped": self.recapped,
                                 "log": {k: round(v, 1) if isinstance(v, float) else v for k, v in self.log.items()},
                                 "log_since": self.log_since, "hush_until": self.hush_until,
-                                "toured": self.toured, "season_said": self.season_said})
+                                "toured": self.toured, "season_said": self.season_said,
+                                "blocked_until": self.blocked_until, "last_fetch": self.last_fetch})
         self.saved_at = time.time()
 
     def changed(self):
@@ -304,7 +315,7 @@ class Pet(ScreensMixin, MouseMixin, TalkMixin, DataMixin, MovementMixin, RenderM
         self.save()
 
     def poll_changed(self):
-        self.next_at = min(self.next_at, time.time() + self.poll.get())
+        self.next_at = max(self.blocked_until, min(self.next_at, time.time() + self.poll.get()))
         self.changed()
 
     def clock_changed(self, save=True):
