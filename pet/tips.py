@@ -97,8 +97,8 @@ TIPS = {
                                           "session is working at once, one for each extra session (up to 3).", []),
     "Rare surprises": ("Every so often something unusual happens: a cat strolls by, a UFO drops in, or the "
                        "mascot wakes up a rare colour.", []),
-    "Seasonal outfits": ("Dresses up for special days: a pumpkin at Halloween, a Santa hat in December, a party "
-                         "hat at New Year and on its birthday, and hearts on Valentine's Day.", []),
+    "Seasonal outfits": ("Dresses up for special days: a pumpkin at Halloween, a Santa hat in December, a top "
+                         "hat at New Year, a party hat on its birthday, and hearts on Valentine's Day.", []),
     "Pajamas at bedtime": ("Gets ready for bed at night: a blue and white striped nightcap, and a candle "
                            "to light the way.", [
         ("On", "It wears them from the time below until 6 AM. This is the default."),

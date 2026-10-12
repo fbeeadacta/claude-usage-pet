@@ -2,6 +2,12 @@
 
 Newest first. The spec and how everything works are in `PROJECT_NOTES.md`.
 
+- **2026-10-12 (version 7.36): an animated README, and the first release.**
+  - Every README picture is an animated GIF now: the mascot waving as its panel fades in, the panel's tabs, the settings pages, and animated sheets of the wizard jobs, the things it does on its own, the coding jokes (two sheets) and the outfits. Recorded at 1x from a test pet (made-up numbers and projects), so they show crisp at their real size.
+  - Badges under the README's title (latest release, Windows 10 / 11, Python 3.10+, no dependencies, MIT), and the download links point at the latest release.
+  - A social preview card (`screenshots/social-preview.png`) for when the repo's link is shared.
+  - Settings > Appearance > Seasonal outfits said "a party hat at New Year"; it's a top hat now.
+
 - **2026-10-12 (version 7.35): sound effects are off by default.**
   - New installs start with "Sound effects" off (`sounds` in `pet/storage.py`). Existing settings files keep whatever was saved. The tip text in `pet/tips.py` says Off is the default. Not tested by running the pet.
 

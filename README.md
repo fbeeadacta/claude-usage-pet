@@ -1,16 +1,24 @@
 # Claude usage pet
 
+<p align="center">
+  <a href="https://github.com/have-you-tried-restarting/claude-usage-pet/releases/latest"><img src="https://img.shields.io/github/v/release/have-you-tried-restarting/claude-usage-pet?label=release" alt="Latest release"></a>
+  <img src="https://img.shields.io/badge/Windows-10%20%7C%2011-0078D4" alt="Windows 10 or 11">
+  <img src="https://img.shields.io/badge/Python-3.10%2B-3776AB" alt="Python 3.10 or newer">
+  <img src="https://img.shields.io/badge/dependencies-none-2ea44f" alt="No dependencies">
+  <a href="LICENSE"><img src="https://img.shields.io/badge/licence-MIT-blue" alt="MIT licence"></a>
+</p>
+
 A tiny pixel Claude that lives on your Windows taskbar and keeps an eye on your Claude plan for you.
 
 The bubble over its head shows how much of your **5-hour** and **weekly** limits you've used (these cover claude.ai, the desktop app and Claude Code together). Hover over it for the details. While Claude Code is working, it puts on a wizard hat and acts out what Claude is doing.
 
-<p align="center"><img src="screenshots/hero.png" alt="The mascot on the taskbar with its usage bubble, and the details panel above it showing the 5-hour and weekly limits, reset times and a pace chart" width="380"></p>
+<p align="center"><img src="screenshots/hero.gif" alt="The mascot waves on the taskbar with its usage bubble, then the details panel fades in above it showing the 5-hour and weekly limits, reset times and a pace chart" width="400"></p>
 
 ## Quick start
 
 1. Install **Python** from [python.org](https://www.python.org/downloads/windows/).
 2. Make sure **Claude Code** is installed and signed in on this computer.
-3. [Download this project as a ZIP](https://github.com/have-you-tried-restarting/claude-usage-pet/archive/refs/heads/main.zip), unzip it, and double-click **`Start pet.bat`**.
+3. Download the [latest release](https://github.com/have-you-tried-restarting/claude-usage-pet/releases/latest) (**Source code (zip)**), unzip it, and double-click **`Start pet.bat`**.
 
 That's it: no terminal and no extra installs. The full steps are below if you need them.
 
@@ -20,30 +28,29 @@ That's it: no terminal and no extra installs. The full steps are below if you ne
 
 **Claude Code stats.** A Claude Code tab with token counts, models, projects, an activity grid, and a recap of each session when it finishes. All of it is read from Claude Code's logs on your own computer.
 
-<p align="center">
-  <img src="screenshots/claude-code-tab.png" alt="The Claude Code tab: sessions, messages, total tokens, peak hour, favourite model and an activity grid" width="300">
-  <img src="screenshots/sessions-tab.png" alt="The Sessions tab: the latest Claude Code sessions with project, length, messages, tokens and model" width="300">
-</p>
+<p align="center"><img src="screenshots/panel-tabs.gif" alt="The details panel going through its tabs: Plan, then Claude Code's Overview (sessions, messages, tokens, peak hour, favourite model, an activity grid), Models, Projects and Sessions" width="372"></p>
 
 **Wizard mode.** While Claude Code works, the mascot casts a spell to match the tool it's using. It gets little apprentices when several sessions run at once.
 
-<p align="center"><img src="screenshots/wizard-jobs.png" alt="The wizard's jobs: spell tome for reading, quill for writing, rune rain for commands, crystal ball for the web, summoning for agents, sticky notes for planning, a question mark when asking you, a rune circle for add-on tools, an hourglass for thinking, a rolling scroll for shortening the chat, apprentices for parallel sessions, and the wand" width="760"></p>
+<p align="center"><img src="screenshots/wizard-jobs.gif" alt="The wizard's jobs: spell tome for reading, quill for writing, rune rain for commands, crystal ball for the web, summoning for agents, sticky notes for planning, a question mark when asking you, a rune circle for add-on tools, an hourglass for thinking, a rolling scroll for shortening the chat, apprentices for parallel sessions, and the wand" width="790"></p>
 
 **A pet with a personality.** It walks the taskbar, hops between monitors and onto your windows, naps when you're away, and gets bored when you ignore it. Then it finds something to do.
 
-<p align="center"><img src="screenshots/adventures.png" alt="Things it does on its own: painting a picture, fishing through the taskbar, balloons, sweeping, parachuting after a throw, a rare UFO visit, a cat dropping by, party hops" width="760"></p>
+<p align="center"><img src="screenshots/adventures.gif" alt="Things it does on its own: painting a picture, fishing through the taskbar, balloons, sweeping, parachuting in, a rare UFO visit, a cat dropping by, dancing and napping" width="790"></p>
 
-<p align="center"><img src="screenshots/coding-jokes.png" alt="Coding jokes it acts out: coffee ('this is my Java'), rubber duck debugging, accepting all cookies, a fortune cookie, digging up a 404, a merge conflict, a stack overflow of pancakes, a lost semicolon, a call from the API, recursion, an infinite loop and a bug hunt" width="760"></p>
+<p align="center"><img src="screenshots/coding-jokes-1.gif" alt="Coding jokes it acts out: coffee, rubber duck debugging, accepting all cookies, a fortune cookie, digging up a 404 from a treasure chest, a merge conflict" width="790"></p>
+
+<p align="center"><img src="screenshots/coding-jokes-2.gif" alt="More coding jokes: a stack overflow of pancakes, the lost semicolon found with a magnifying glass, a call from the API, recursion, an infinite loop, and a bug hunt with a net" width="790"></p>
 
 **Play with it.** Click it to poke it. Drag it around (it dangles from where you grab it), or throw it: it screams, bounces, and opens a parachute on long falls. Right-click it for a game of fetch, an hour of quiet, settings and more. Click the tray icon, or press Ctrl + Alt + H, and it comes running to your mouse.
 
 **Dressed for the day.** It wears outfits on special days and pajamas at bedtime, and once in a while it wakes up a rare colour.
 
-<p align="center"><img src="screenshots/outfits.png" alt="Outfits: Halloween pumpkin, Christmas hat, new year and birthday party hats, Valentine's hearts, a nightcap and candle at bedtime, and the rare shiny colour" width="760"></p>
+<p align="center"><img src="screenshots/outfits.gif" alt="Outfits, each doing party hops: a Halloween jack-o'-lantern, a Santa hat, a New Year top hat, a birthday party hat, Valentine's hearts, a nightcap and candle at bedtime, and the rare shiny colour" width="810"></p>
 
 **Yours to tune.** Everything can be switched off, from sounds and chatter to all animations. The settings window explains every option.
 
-<p align="center"><img src="screenshots/settings.png" alt="The settings window: personality, naps, wizard mode, apprentices, standing on windows and rare surprises" width="560"></p>
+<p align="center"><img src="screenshots/settings.gif" alt="The settings window going through its pages: Mascot, Appearance (with a live preview), Sound and talking, Usage and alerts, Shortcuts, and About and stats" width="852"></p>
 
 Also: optional sound effects and desktop notifications, quiet hours (it follows Windows' Do Not Disturb), hiding during full-screen apps, and keyboard shortcuts (Ctrl + Alt + P hides or shows it, Ctrl + Alt + D pins the details panel; you can change them).
 
@@ -58,14 +65,14 @@ Also: optional sound effects and desktop notifications, quiet hours (it follows 
 No terminal needed.
 
 1. **Install Python.** Go to [python.org/downloads/windows](https://www.python.org/downloads/windows/), download the newest version and run the installer. If it shows a "tcl/tk and IDLE" option, leave it ticked. Skip the Microsoft Store version of Python.
-2. **Download the pet.** At the top of this page, click the green **Code** button, then **Download ZIP**.
+2. **Download the pet.** Open the [latest release](https://github.com/have-you-tried-restarting/claude-usage-pet/releases/latest) and click **Source code (zip)** under Assets.
 3. **Unzip it** somewhere you'll keep it, such as your Documents folder: right-click the ZIP, choose **Extract All**, and pick the folder. Avoid `Program Files`, because the pet saves its settings in its own `data` folder and can't write there.
 4. **Start it.** Open the extracted folder and double-click **`Start pet.bat`**. The mascot appears on your taskbar.
    - The first time, Windows may warn about a file from the internet. Click **Run** (or **More info → Run anyway**) to go ahead.
    - If Python is missing, a window says so and opens the download page. If your Python is too old or is missing a part, a pop-up says what to fix.
 5. **Optional:** to start it whenever you sign in to Windows, right-click the mascot, open **Settings → System**, and turn on **Start with Windows**.
 
-To stop it, right-click the mascot and choose **Quit**. To update it, download the ZIP again and unzip it over the old folder; your settings in `data` are kept.
+To stop it, right-click the mascot and choose **Quit**. To update it, download the newest release and unzip it over the old folder; your settings in `data` are kept.
 
 If you use a terminal, `py claude_pet.py` runs it with a console window that shows errors as they happen.
 
