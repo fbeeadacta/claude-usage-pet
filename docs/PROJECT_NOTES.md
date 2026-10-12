@@ -2,7 +2,7 @@
 
 A small Claude mascot that walks along the top of the Windows taskbar. A bubble above its head shows Claude plan usage. If any file here gets lost or corrupted, this note has enough detail to rebuild it. You can give this file to Claude and ask it to rebuild the project.
 
-Last updated: 2026-10-11 (version 7.32)
+Last updated: 2026-10-12 (version 7.33)
 
 The change log is in `CHANGELOG.md`, next to this file.
 
@@ -25,7 +25,10 @@ The change log is in `CHANGELOG.md`, next to this file.
 | `data/pet_usage.log` | One line per usage check: when, why (timer, start, manual, login renewed), seconds since the last one, how many checks in the last 10 minutes and hour, and for a failure the status, `Retry-After`, the rate-limit header names and the short error text. For working out what leads to "slow down". Never the login token. Kept under about 300 KB. Safe to delete. Not on GitHub. |
 | `data/pet_errors.log` | What went wrong, if anything (Python error details, never the login token). Kept under about 200 KB. Safe to delete. Not on GitHub. |
 | `data/` | Everything the pet writes while it runs: settings, memory, the log cache and the error log. Made on first run (and old copies next to `claude_pet.py` are moved in once). Git ignores it. |
-| `screenshots/wizard-jobs.png` | The README picture: a sheet of all the wizard jobs, staged on a plain backdrop (nothing personal in it). |
+| `screenshots/` | The README pictures: `hero.png` (mascot and Plan panel), `claude-code-tab.png`, `sessions-tab.png`, `settings.png`, and sheets `wizard-jobs.png`, `adventures.png`, `coding-jokes.png`, `outfits.png`. Taken from a test pet on a plain backdrop with `PET_FAKE_USAGE=ok` and made-up Claude Code logs (`CLAUDE_CONFIG_DIR` pointed at invented projects), so nothing personal is in them. |
+| `SECURITY.md` | How to report a security problem privately, and what the pet can access. |
+| `CONTRIBUTING.md` | Issues welcome; pull requests aren't accepted; rules for forks (stdlib only, the token rule, `PET_FAKE_USAGE`). |
+| `.github/ISSUE_TEMPLATE/` | The bug report and idea forms (bug reports warn never to paste a token), and a link to private security reporting. Blank issues are off. |
 
 ## Code layout
 
@@ -538,15 +541,16 @@ There's also 30 px of side space for z's and sparks.
 ## Setup
 
 - Windows 10 or 11 (tested on Windows 11).
-- Python 3.10 or newer with tkinter (tested with Python 3.14). No pip installs. Runs on 3.14 (Tk 8.6) and 3.15 (Tk 9.0). Tk 9.0 leaks memory for every deleted canvas item, so all canvases are `ui.Canvas`, which reuses items instead (see 7.4 in the change log). New windows should use it too. The code's syntax was checked down to 3.8, but nothing older than 3.14 has been run.
+- Python 3.10 or newer with tkinter (tested with Python 3.14). The older Pythons the Python install manager offers (`py install 3.10`, and other "legacy" versions) come **without tkinter**, so they can't run it: the start-up check says to install the newest Python. On 3.10 every file compiles and nothing newer than 3.10 is used, but the windows themselves haven't been run on it. No pip installs. Runs on 3.14 (Tk 8.6) and 3.15 (Tk 9.0). Tk 9.0 leaks memory for every deleted canvas item, so all canvases are `ui.Canvas`, which reuses items instead (see 7.4 in the change log). New windows should use it too. The code's syntax was checked down to 3.8, but nothing older than 3.14 has been run.
 - Claude Code installed and signed in on the same computer.
 - The development computer has two 1920×1080 monitors side by side, with the taskbar at the bottom of both.
 - Everything specific to one computer (paths, monitors, the Python install) goes in `docs/LOCAL_NOTES.md`, which git ignores.
 
 ## GitHub
 
-- The repo is `claude-usage-pet`. It's **private** for now.
-- Commits use the GitHub no-reply email, set for this repo only, so no personal email is in the history.
+- The repo is `claude-usage-pet`. It's **private** for now; it's ready to go public (see the 7.33 change log entry).
+- Commits use the GitHub no-reply email, set for this repo only, so no personal email is in the history. Commit times are in UTC (`+0000`) so they don't hint at a location: commit with the `TZ=UTC` environment variable set (in Git Bash: `TZ=UTC git commit ...`).
+- Pull requests aren't accepted (`CONTRIBUTING.md`); issues are. Security reports go through GitHub's private vulnerability reporting (`SECURITY.md`).
 
 **Before making the repo public:**
 1. ~~Pick a license.~~ Done: MIT (`LICENSE`), covering the code only. The README says the Claude name and mascot belong to Anthropic.

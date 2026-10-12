@@ -2,6 +2,7 @@
 import datetime
 import json
 import os
+import re
 import time
 import traceback
 
@@ -21,6 +22,12 @@ def log_error(what, exc=None):
         text = "".join(traceback.format_exception(*exc)) if exc else traceback.format_exc()
         if text.strip() in ("NoneType: None", ""):
             text = ""
+        # file paths in a traceback start with your user folder (and so your windows name). they show as ~
+        # instead, so the log is safe to paste into a bug report
+        home = os.path.expanduser("~")
+        if len(home) > 3:   # (also the doubled-backslash way error messages print paths, any case)
+            for form in (home.replace("\\", "\\\\"), home):
+                text = re.sub(re.escape(form), "~", text, flags=re.IGNORECASE)
         stamp = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         old = ERROR_LOG.read_text(encoding="utf-8") if ERROR_LOG.exists() else ""
         if len(old) > ERROR_LOG_KB * 1024:

@@ -55,9 +55,11 @@ def check_setup():
     try:
         import tkinter
     except ImportError:
-        problem("This Python is missing tkinter, the part that draws windows.\n\n"
-                "Reinstall Python from python.org. If the installer has a \"tcl/tk and IDLE\" "
-                "option, make sure it's ticked. Then start the pet again.", offer_download=True)
+        # (older pythons from the python install manager, like `py install 3.10`, come without it)
+        problem("This Python (%d.%d) is missing tkinter, the part that draws windows.\n\n"
+                "Install the newest Python from python.org, which includes it. If the installer has a "
+                "\"tcl/tk and IDLE\" option, make sure it's ticked. Then start the pet again."
+                % sys.version_info[:2], offer_download=True)
 
 
 if __name__ == "__main__":

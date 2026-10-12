@@ -12,6 +12,16 @@ from .config import (AHEAD_BY, CREDENTIALS, FAKE_USAGE_ENV, IDLE_HOURS_WEEKLY, I
 
 # ---- talking to the api ----
 
+class NoRedirects(urllib.request.HTTPRedirectHandler):
+    # urllib would follow a redirect and send the login token along to wherever it points.
+    # the token may only go to api.anthropic.com, so a redirect is treated as an error instead
+    def redirect_request(self, req, fp, code, msg, headers, newurl):
+        return None
+
+
+OPENER = urllib.request.build_opener(NoRedirects)
+
+
 def read_token():
     try:
         creds = json.loads(CREDENTIALS.read_text())
@@ -80,7 +90,7 @@ def fetch_usage():
     })
     t0 = time.time()
     try:
-        with urllib.request.urlopen(req, timeout=10) as r:
+        with OPENER.open(req, timeout=10) as r:
             body = r.read()
             LAST.update(status=r.status, took=round(time.time() - t0, 1))
     except urllib.error.HTTPError as e:

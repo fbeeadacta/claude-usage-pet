@@ -1,68 +1,102 @@
 # Claude usage pet
 
-A tiny pixel Claude mascot that lives on your Windows taskbar. A bubble above its head shows your Claude plan usage: the 5-hour and weekly limits, which cover claude.ai, the desktop app and Claude Code together.
+A tiny pixel Claude that lives on your Windows taskbar and keeps an eye on your Claude plan for you.
 
-<p><img src="screenshots/wizard-jobs.png" alt="The mascot's wizard jobs: spell tome, quill and scroll, rune rain, crystal ball, summoning, sticky notes, question mark, rune circle, hourglass, rolling scroll" width="700"></p>
+The bubble over its head shows how much of your **5-hour** and **weekly** limits you've used (these cover claude.ai, the desktop app and Claude Code together). Hover over it for the details. While Claude Code is working, it puts on a wizard hat and acts out what Claude is doing.
 
-What it does:
+<p align="center"><img src="screenshots/hero.png" alt="The mascot on the taskbar with its usage bubble, and the details panel above it showing the 5-hour and weekly limits, reset times and a pace chart" width="380"></p>
 
-- Walks along the taskbar, hops now and then, and moves between monitors.
-- Hover over it for a details panel with reset times and pace tips. It also has a Claude Code tab with real token counts, an activity grid and model stats, read from Claude Code's local logs.
-- Puts on a wizard hat and casts sparkles while Claude is working.
-- Talks in little speech bubbles: encouragement, silly quotes, milestones, and comments on what's going on.
-- Click it to poke it. Drag it around (it dangles from where you grab it), or throw it: it screams, bounces, and opens a parachute on long falls.
-- Dances now and then, gets bored, and asks for attention when you ignore it. When it's idle it might sweep the floor, paint a little picture, fish through a hole in the taskbar, blow up balloons (they pop), or throw a paper plane.
-- Falls asleep when you're away, rings its bubble yellow, then red, as you near a limit, and remembers its moods across restarts.
-- Hides while something is full-screen, and can land on top of your windows when it falls.
-- Optional sound effects (with a volume slider) and desktop notifications.
-- Keyboard shortcuts: Ctrl + Alt + P hides or shows it, and Ctrl + Alt + D pins the details panel. You can change them in Settings → Shortcuts.
-- Right-click it for Refresh now, Play fetch, Quiet for an hour, Settings and Quit. The settings window has every option and what it does, and everything can be switched off, including all animations.
-- A tray icon by the clock shows your usage when you hover it. Click it (or press Ctrl + Alt + H, or start the pet again) and the mascot comes running to your mouse, or parachutes in from above.
-- A Sessions tab recaps your latest Claude Code sessions, and it sums each one up when it finishes. It warns you early if your pace would run out before the reset.
-- Turns what Claude Code is doing into wizard magic: a spell tome for reading, a quill for writing, rune rain for commands, a crystal ball for the web, a summoned helper for agents, sticky notes for planning, a question mark when Claude asks you something, a rune circle for add-on tools and an hourglass while it thinks. It gets little apprentices when several sessions run at once, wears outfits on special days, plays fetch, and keeps a diary of everything it gets up to. Every so often something rare happens.
+## Quick start
+
+1. Install **Python** from [python.org](https://www.python.org/downloads/windows/).
+2. Make sure **Claude Code** is installed and signed in on this computer.
+3. [Download this project as a ZIP](https://github.com/have-you-tried-restarting/claude-usage-pet/archive/refs/heads/main.zip), unzip it, and double-click **`Start pet.bat`**.
+
+That's it: no terminal and no extra installs. The full steps are below if you need them.
+
+## What it does
+
+**Your usage at a glance.** The bubble rings yellow, then red, as you near a limit, and it warns you early if your pace would run out before the reset. Hover over the mascot for reset times, a chart of the current window and a forecast. A tray icon by the clock shows the same numbers.
+
+**Claude Code stats.** A Claude Code tab with token counts, models, projects, an activity grid, and a recap of each session when it finishes. All of it is read from Claude Code's logs on your own computer.
+
+<p align="center">
+  <img src="screenshots/claude-code-tab.png" alt="The Claude Code tab: sessions, messages, total tokens, peak hour, favourite model and an activity grid" width="300">
+  <img src="screenshots/sessions-tab.png" alt="The Sessions tab: the latest Claude Code sessions with project, length, messages, tokens and model" width="300">
+</p>
+
+**Wizard mode.** While Claude Code works, the mascot casts a spell to match the tool it's using. It gets little apprentices when several sessions run at once.
+
+<p align="center"><img src="screenshots/wizard-jobs.png" alt="The wizard's jobs: spell tome for reading, quill for writing, rune rain for commands, crystal ball for the web, summoning for agents, sticky notes for planning, a question mark when asking you, a rune circle for add-on tools, an hourglass for thinking, a rolling scroll for shortening the chat, apprentices for parallel sessions, and the wand" width="760"></p>
+
+**A pet with a personality.** It walks the taskbar, hops between monitors and onto your windows, naps when you're away, and gets bored when you ignore it. Then it finds something to do.
+
+<p align="center"><img src="screenshots/adventures.png" alt="Things it does on its own: painting a picture, fishing through the taskbar, balloons, sweeping, parachuting after a throw, a rare UFO visit, a cat dropping by, party hops" width="760"></p>
+
+<p align="center"><img src="screenshots/coding-jokes.png" alt="Coding jokes it acts out: coffee ('this is my Java'), rubber duck debugging, accepting all cookies, a fortune cookie, digging up a 404, a merge conflict, a stack overflow of pancakes, a lost semicolon, a call from the API, recursion, an infinite loop and a bug hunt" width="760"></p>
+
+**Play with it.** Click it to poke it. Drag it around (it dangles from where you grab it), or throw it: it screams, bounces, and opens a parachute on long falls. Right-click it for a game of fetch, an hour of quiet, settings and more. Click the tray icon, or press Ctrl + Alt + H, and it comes running to your mouse.
+
+**Dressed for the day.** It wears outfits on special days and pajamas at bedtime, and once in a while it wakes up a rare colour.
+
+<p align="center"><img src="screenshots/outfits.png" alt="Outfits: Halloween pumpkin, Christmas hat, new year and birthday party hats, Valentine's hearts, a nightcap and candle at bedtime, and the rare shiny colour" width="760"></p>
+
+**Yours to tune.** Everything can be switched off, from sounds and chatter to all animations. The settings window explains every option.
+
+<p align="center"><img src="screenshots/settings.png" alt="The settings window: personality, naps, wizard mode, apprentices, standing on windows and rare surprises" width="560"></p>
+
+Also: optional sound effects and desktop notifications, quiet hours (it follows Windows' Do Not Disturb), hiding during full-screen apps, and keyboard shortcuts (Ctrl + Alt + P hides or shows it, Ctrl + Alt + D pins the details panel; you can change them).
 
 ## What you need
 
-- Windows 10 or 11 (tested on Windows 11).
-- Python 3.10 or newer from [python.org](https://www.python.org/downloads/windows/) (tested with Python 3.14). No `pip install` needed: it only uses Python's standard library.
-- [Claude Code](https://claude.com/claude-code) installed on the same computer and signed in with your Claude account (Pro or Max). The pet reads your usage through Claude Code's saved login. Signing in to only claude.ai or the desktop app isn't enough, and neither is a Claude Code API key.
+- **Windows 10 or 11.** It's tested on Windows 11.
+- **Python 3.10 or newer** from [python.org](https://www.python.org/downloads/windows/), including tkinter (the part that draws windows). The newest Python from python.org has everything it needs. It's tested on Python 3.14 and 3.15. There's no `pip install`: it only uses Python's standard library.
+- **Claude Code**, installed on the same computer and signed in with your Claude account (Pro or Max). The pet reads your usage through Claude Code's saved login. Being signed in only to claude.ai or the desktop app isn't enough, and neither is a Claude Code API key.
 
 ## Install and start it
 
 No terminal needed.
 
-1. **Install Python.** Go to [python.org/downloads/windows](https://www.python.org/downloads/windows/), download the installer and run it. If the installer shows a "tcl/tk and IDLE" option, leave it ticked: the pet needs it to draw its windows. Skip the Microsoft Store version of Python.
-2. **Download the pet.** On this page, click the green **Code** button, then **Download ZIP**.
-3. **Unzip it** somewhere you'll keep it, for example your Documents folder. Right-click the ZIP, choose **Extract All**, and pick the folder. Avoid `Program Files`: the pet saves its settings next to its files and can't write there.
+1. **Install Python.** Go to [python.org/downloads/windows](https://www.python.org/downloads/windows/), download the newest version and run the installer. If it shows a "tcl/tk and IDLE" option, leave it ticked. Skip the Microsoft Store version of Python.
+2. **Download the pet.** At the top of this page, click the green **Code** button, then **Download ZIP**.
+3. **Unzip it** somewhere you'll keep it, such as your Documents folder: right-click the ZIP, choose **Extract All**, and pick the folder. Avoid `Program Files`, because the pet saves its settings in its own `data` folder and can't write there.
 4. **Start it.** Open the extracted folder and double-click **`Start pet.bat`**. The mascot appears on your taskbar.
-   - Windows may warn about a file from the internet the first time. Click **Run** (or **More info → Run anyway**) to go ahead.
-   - If Python is missing, a window says so and opens the Python download page. If your Python is too old or incomplete, a pop-up says what to fix.
-5. **Optional:** to start it every time you sign in to Windows, right-click the mascot, open **Settings → System** and turn on **Start with Windows**.
+   - The first time, Windows may warn about a file from the internet. Click **Run** (or **More info → Run anyway**) to go ahead.
+   - If Python is missing, a window says so and opens the download page. If your Python is too old or is missing a part, a pop-up says what to fix.
+5. **Optional:** to start it whenever you sign in to Windows, right-click the mascot, open **Settings → System**, and turn on **Start with Windows**.
 
-To stop it, right-click the mascot and choose **Quit**.
+To stop it, right-click the mascot and choose **Quit**. To update it, download the ZIP again and unzip it over the old folder; your settings in `data` are kept.
 
-From a terminal, `py claude_pet.py` runs it with a console window, which shows errors as they happen.
+If you use a terminal, `py claude_pet.py` runs it with a console window that shows errors as they happen.
 
 ## If something goes wrong
 
 - **The bubble says "no login" or "login expired":** open Claude Code and sign in again. Hover over the mascot for step-by-step help.
-- **Nothing appears:** look for `pet_errors.log` in the `data` folder, which says what went wrong. Also check it isn't hiding: press Ctrl + Alt + P.
+- **The bubble says "slow down":** the usage service asked the pet to wait. It tries again on its own; your last numbers stay on screen.
+- **Nothing appears:** check whether it's hidden by pressing Ctrl + Alt + P. Otherwise, `data/pet_errors.log` in the pet's folder says what went wrong.
 - **"Start with Windows" stopped working after a Python update:** turn it off and on again in Settings → System.
 
-The code lives in the `pet/` folder; `pet/__init__.py` explains what each file does.
+Still stuck? [Open an issue](https://github.com/have-you-tried-restarting/claude-usage-pet/issues/new/choose).
 
-## Privacy
+## Privacy and security
 
-- Your login token is read from `~/.claude/.credentials.json` on your own computer.
-- It's only ever sent to `https://api.anthropic.com`.
-- It's never printed, logged or saved anywhere else.
+- The pet reads your Claude Code login from `~/.claude/.credentials.json` on your computer. It sends it **only** to `https://api.anthropic.com`, to ask for your usage numbers. It never prints, logs or saves it anywhere else.
+- It reads Claude Code's logs (`~/.claude/projects`) for the stats, but only numbers, times, model names and project folder names. It never reads what you or Claude wrote. Nothing from the logs leaves your computer.
+- It never sends messages to Claude, so it doesn't use up your plan.
+- Everything it saves stays in its own `data` folder. Its error log replaces your user folder with `~`, so it's safe to paste into a bug report.
+
+See [SECURITY.md](SECURITY.md) for how to report a security problem privately.
 
 ## Good to know
 
-- The usage numbers come from an **undocumented** endpoint (`/api/oauth/usage`), so this can stop working at any time without notice.
+- The usage numbers come from an **undocumented** endpoint (`/api/oauth/usage`), so this could stop working at any time without notice.
 - This is an unofficial fan project. It isn't affiliated with or endorsed by Anthropic. "Claude" and the Claude Code mascot design belong to Anthropic.
 
-More detail, including how everything works, is in [PROJECT_NOTES.md](docs/PROJECT_NOTES.md).
+## Contributing
+
+Bug reports and ideas are very welcome: please [open an issue](https://github.com/have-you-tried-restarting/claude-usage-pet/issues/new/choose). This project doesn't take code changes from outside, but you're free to fork it under the licence. See [CONTRIBUTING.md](CONTRIBUTING.md).
+
+How everything works, in detail, is in [docs/PROJECT_NOTES.md](docs/PROJECT_NOTES.md), and what changed in each version is in [docs/CHANGELOG.md](docs/CHANGELOG.md).
 
 ## Licence
 

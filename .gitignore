@@ -1,11 +1,24 @@
 # this computer only
 docs/LOCAL_NOTES.md
+CLAUDE.local.md
+.claude/
 *.lnk
 
-# made by the pet while it runs
+# made by the pet while it runs (settings, memory, logs)
 data/
+*.log
+
+# never commit logins or secrets
+.credentials.json
+*.env
+.env
 
 # python
 __pycache__/
 *.pyc
-CLAUDE.local.md
+
+# editors and windows
+.vscode/
+.idea/
+Thumbs.db
+desktop.ini

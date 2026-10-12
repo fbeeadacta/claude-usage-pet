@@ -2,6 +2,13 @@
 
 Newest first. The spec and how everything works are in `PROJECT_NOTES.md`.
 
+- **2026-10-12 (version 7.33): ready to go public.**
+  - Security: the usage request no longer follows redirects. Python's urllib sends the `Authorization` header on to wherever a redirect points, so a redirect would have sent the login token to another site (checked with two local test servers: the old way leaked a fake token, the new one answers "api error 302" and sends nothing). `pet/usage.py` uses its own opener (`NoRedirects`).
+  - Privacy: the error log replaces your user folder (and so your Windows name) with `~`, in both the normal and the doubled-backslash form, so it's safe to paste into a bug report.
+  - The start-up check's "missing tkinter" pop-up says which Python it is and to install the newest one: the older Pythons from the Python install manager have no tkinter.
+  - New README with pictures (all made with made-up numbers and invented Claude Code projects); new `SECURITY.md`, `CONTRIBUTING.md` (issues yes, pull requests no) and issue forms; a stricter `.gitignore` (logs, `.env`, credentials, `.claude/`, editor files).
+  - Tested: the whole history for personal details and secrets (none; one author, the no-reply address); every file compiling with Python 3.10's own compiler; the start-up check on a real tkinter-less 3.10; a test pet on 3.14, 3.15 and pretending to be a 150% display (panels, settings, wizard jobs, idle activities, jokes, visitors and outfits; no errors, layouts scale cleanly); the error log scrub. Not tested: the windows on a real Python 3.10 to 3.13 with tkinter, a real scaled display, a taskbar on the side of the screen, Windows 10.
+
 - **2026-10-11 (version 7.32): the right version in settings.**
   - Settings > About & stats said "Claude usage pet 7.0": the version there was set once in `settings_window.py` and never bumped. It's `VERSION` in `pet/config.py` now (7.32), and CLAUDE.md says to bump it along with the version in `PROJECT_NOTES.md`.
   - Tested: settings opened on a test pet (scratch files, `PET_FAKE_USAGE=ok`) shows "Claude usage pet 7.32".
