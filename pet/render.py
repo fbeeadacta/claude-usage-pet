@@ -376,7 +376,7 @@ class RenderMixin:
             rows_, colours = look
             hx = px + 3 * bw + (12 * bw - len(rows_[0]) * pb) // 2
             self.glyph(rows_, hx, py + sink - (len(rows_) - 1) * pb, pb, colours,
-                       shadow=not outfit.startswith("bedtime"))   # (the nightcap has no dark edge, like the wizard hat)
+                       shadow=False)   # (no dark edge round them, like the wizard hat)
         if candle and not rot and not gone:
             # a candle for a night light, with little rays of light round the flame
             where, right, flick = candle
@@ -432,10 +432,11 @@ class RenderMixin:
             self.draw_trip(trip, "front", px, py, sink, bw, bh, pb, pet_w, pet_h)
         if dizzy is not None and not rot:
             # three little stars circling its head
-            cx, cy = px + 9 * bw, py + sink - 3 * pb
+            # (its own names: reusing cx, cy here moved the window's middle, and it sank into the floor)
+            star_x, star_y = px + 9 * bw, py + sink - 3 * pb
             for k in range(3):
                 a = dizzy / 12 * 2 * math.pi + k * 2 * math.pi / 3
-                self.glyph(SPARK, cx + math.cos(a) * 7 * bw - 1.5 * pb, cy + math.sin(a) * 2 * pb - 1.5 * pb,
+                self.glyph(SPARK, star_x + math.cos(a) * 7 * bw - 1.5 * pb, star_y + math.sin(a) * 2 * pb - 1.5 * pb,
                            pb, STAR_C)
 
         if hay and not rot:   # the front of the hay pile, in front of it (pet/hay.py)

@@ -2,6 +2,19 @@
 
 Newest first. The spec and how everything works are in `PROJECT_NOTES.md`.
 
+- **2026-10-12 (version 7.35): sound effects are off by default.**
+  - New installs start with "Sound effects" off (`sounds` in `pet/storage.py`). Existing settings files keep whatever was saved. The tip text in `pet/tips.py` says Off is the default. Not tested by running the pet.
+
+- **2026-10-12 (version 7.34): animation fixes, new outfits, and three jokes redone.**
+  - Dizzy: the stars round its head reused the drawing's `cx, cy` names, so the window's middle (and with it where its feet sit) moved while it was dizzy, and it sank half into the floor. They have their own names now.
+  - Coffee: the mug's handle points back at it, in its hand, instead of away.
+  - Stack overflow: thinner pancakes, so the full stack and its butter stay below the top of its head, clear of the usage bubble.
+  - Seasonal outfits redrawn in the wizard hat's style (lit side, shady side, highlights, no dark edge): a ribbed, glowing jack-o'-lantern; a Santa hat with a flopped tip and bobble; a glossy top hat with confetti for New Year (it shared the birthday hat before); a polka dot party hat for its birthday; shaded hearts on springs on a headband. The nightcap got a lit edge and a shady side. No outfit gets the dark edge any more.
+  - Redone from scratch with new pictures and new staging (in `pet/gags.py`, with the other jokes): digging up a 404 (an upright shovel, a growing hole and dirt pile, a clink, a treasure chest that rises and opens, a 404 page floating out), the bug hunt (a shiny beetle, a proper butterfly net with a round hoop and a mesh bag held at its middle, a dome of mesh slammed over the bug, the bug flying off on wings) and the lost semicolon (a brass detective's magnifying glass that shows the semicolon big when it passes over it; it was lying on the floor all along; a green tick when it's held up). The old sprites `BUG_A`, `BUG_B`, `BUG_C`, `SEMI` and the spade are gone.
+  - Sound effects are off by default now (Settings → Sound & talking turns them on); the tip says so.
+  - README pictures retaken for the jokes and the outfits.
+  - Tested on a test pet (scratch files, `PET_FAKE_USAGE=ok`, made-up Claude Code logs, left monitor, 2x, plain backdrop), with screenshots through each animation: dizzy standing on the floor; the mug in its hand while held and while sipping; the full pancake stack under the bubble; every outfit on its head; the dig from the first stroke to the chest sinking back; the bug hunt's misses, catch, lift and release; the glass passing over the semicolon and showing it big, and holding it up. No errors. Not tested: sizes other than 2x, the jokes starting on their own, the bug hunt on a window ledge.
+
 - **2026-10-12 (version 7.33): ready to go public.**
   - Security: the usage request no longer follows redirects. Python's urllib sends the `Authorization` header on to wherever a redirect points, so a redirect would have sent the login token to another site (checked with two local test servers: the old way leaked a fake token, the new one answers "api error 302" and sends nothing). `pet/usage.py` uses its own opener (`NoRedirects`).
   - Privacy: the error log replaces your user folder (and so your Windows name) with `~`, in both the normal and the doubled-backslash form, so it's safe to paste into a bug report.

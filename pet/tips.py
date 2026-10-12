@@ -75,8 +75,8 @@ TIPS = {
                "aside, and if it's cornered it drops down to the taskbar. On the taskbar, windows push it aside too."),
         ("Off", "It only ever stands on the taskbar.")]),
     "Sound effects": ("Turns all of the mascot's sounds on or off. Pick which ones below.", [
-        ("On", "Plays the sounds you've picked (quietly, through Windows' normal sound output). This is the default."),
-        ("Off", "Silent.")]),
+        ("On", "Plays the sounds you've picked (quietly, through Windows' normal sound output)."),
+        ("Off", "Silent. This is the default.")]),
     "Which sounds": ("Tap a sound to switch it on or off. Switching one on plays it.", []),
     "Desktop notifications": ("Windows notifications for the important moments.", [
         ("On", "A notification at 90% and 100% of a limit, when a nearly-used limit resets, and when your login "

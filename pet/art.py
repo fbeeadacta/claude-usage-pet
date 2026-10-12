@@ -67,70 +67,111 @@ NOTE = ["..##", "..#.", "..#.", "###.", "###."]   # a music note, for dancing
 CHUTE = ["".join(("r" if (i // 4) % 2 == 0 else "w") if abs(i - 17.5) < w / 2 else "." for i in range(36))
          for w in (12, 20, 26, 30, 34, 36)]
 
-# seasonal outfits, worn on the head like the wizard hat (all made of the same small blocks)
-PUMPKIN = [                # halloween: a jack-o'-lantern. o = pumpkin, # = glowing face, g = stem
-    "......gg......",
-    ".....gg.......",
-    "...oooooooo...",
-    ".oooooooooooo.",
-    "oo##oooooo##oo",
-    "ooo#oooooo#ooo",
-    "oooooo##oooooo",
-    "oo#oooooooo#oo",
-    ".oo########oo.",
-    "...oooooooo...",
+# seasonal outfits, worn on the head like the wizard hat, and drawn the same way: a lit left side, a shady
+# right side, highlights, and no dark edge round them
+PUMPKIN = [                # halloween: a ribbed jack-o'-lantern with a glowing face.
+                           # o / l / L / d = pumpkin, its lit side, shine, shady side. r = ribs.
+                           # # / y = the glow. g / G / v / V = stem and leaf
+    "...........gg.v.....",
+    "..........gG.vv.....",
+    ".........gG.vVv.....",
+    ".....lllllllldd.....",
+    "..llLLrooooooroodd..",
+    ".llLo#roooooor#oodd.",
+    "lloo#y#oooooo#y#oodd",
+    "llooooroo##ooroooodd",
+    "lloooorooooooroooodd",
+    "lloo###o####o###oodd",
+    ".llood##yyyy##doodd.",
+    "..lloorooooooroodd..",
+    ".....lddddddddd.....",
 ]
-SANTA = [                  # christmas. r = red, w = white fur
-    "...............ww.......",
-    "..............wwww......",
-    "..............rww.......",
-    "............rrr.........",
-    "...........rrrr.........",
-    "..........rrrrrr........",
-    ".........rrrrrrrr.......",
-    "........rrrrrrrrrr......",
-    ".......rrrrrrrrrrrr.....",
-    ".....wwwwwwwwwwwwwwwww..",
-    ".....wwwwwwwwwwwwwwwww..",
+PUMPKIN_C = {"o": "#f28c28", "l": "#ffa94a", "L": "#ffd08a", "d": "#c25e17", "r": "#d8701f", "#": "#ffbf3a",
+             "y": "#fff0a0", "g": "#6f9e36", "G": "#4a7024", "v": "#93c957", "V": "#6f9e36"}
+SANTA = [                  # christmas: the tip flops over to a fluffy bobble.
+                           # r / l / d = red, lit, shady. W / w / f = white fur, lit, shady
+    "..........lrrd..........",
+    ".........lrrrrdd........",
+    "........lrrrrrrrdd......",
+    "........lrrrrrrrrrdd.Ww.",
+    ".......lrrrrrrrrrrrdWWww",
+    ".......lrrrrrrrrrrrd.wwf",
+    "......lrrrrrrrrrrrrdd.f.",
+    ".....llrrrrrrrrrrrrrdd..",
+    "....llrrrrrrrrrrrrrrrdd.",
+    "..WWWWwwwwwwwwwwwwwwwwf.",
+    "..Wwwwwwwwwwwwwwwwwwwff.",
+    "..fffwwwwfwwwwfwwwwffff.",
 ]
-PARTY = [                  # new year and its birthday. p / c / y = pink, cyan, yellow stripes
-    "......yy......",
-    ".....yyyy.....",
-    "......yy......",
-    "......pp......",
-    ".....pppp.....",
-    ".....cccc.....",
-    "....cccccc....",
-    "....yyyyyy....",
-    "...yyyyyyyy...",
-    "...pppppppp...",
-    "..pppppppppp..",
-    "..cccccccccc..",
-    ".cccccccccccc.",
+SANTA_C = {"r": "#d8343a", "l": "#ef5b5f", "d": "#a8222a", "W": "#ffffff", "w": "#f2eee8", "f": "#cfc9c0"}
+TOPHAT = [                 # new year: a glossy top hat with a gold band, a sparkle and confetti.
+                           # k / L / K / d = black, its lit edge, sheen, shade.
+                           # y / Y / b = gold band, glint, shade. p / c = confetti
+    "..p.................c.",
+    "..........*...........",
+    ".......LKkkkkkkkd...y.",
+    ".c.....LKkkkkkkkd.....",
+    ".......LKkkkkkkkd.....",
+    ".......LKkkkkkkkd..p..",
+    "...y...LKkkkkkkkd.....",
+    ".......LKkkkkkkkd.....",
+    ".......yyyyyYyyyy.....",
+    ".......bbbbbbbbbb.....",
+    "...LLLLkkkkkkkkkkdd...",
+    "...dddddddddddddddd...",
 ]
-LOVE = [                   # valentine's day: two hearts on springs
-    ".##.##.......##.##.",
-    "#######.....#######",
-    ".#####.......#####.",
-    "..###.........###..",
-    "...s...........s...",
-    "...s...........s...",
-    "...s...........s...",
+TOPHAT_C = {"k": "#2e2e38", "L": "#56566a", "K": "#46465a", "d": "#1b1b22", "y": "#f2c14e", "Y": "#fff3b0",
+            "b": "#c9952e", "*": "#fff3b0", "p": "#ff6f8a", "c": "#5ad1e8"}
+PARTY = [                  # birthday: a polka dot party hat with a pompom.
+                           # c / l / d = cone, lit, shady. y = dots. P / p / q = pompom. F / f = the frill
+    ".......PP.......",
+    "......PPpq......",
+    ".......pq.......",
+    ".......lcd......",
+    "......lcyd......",
+    "......lccdd.....",
+    ".....lccccd.....",
+    ".....lycccyd....",
+    "....lcccccdd....",
+    "....lccyccccd...",
+    "...lyccccccydd..",
+    "...lcccccyccdd..",
+    "..lccyccccccccd.",
+    "..lccccccyccccd.",
+    ".FFfFFfFFfFFfFFf",
 ]
+PARTY_C = {"P": "#ffb3c6", "p": "#ff6f8a", "q": "#d94a6a", "c": "#5ad1e8", "l": "#9be6f4", "d": "#2fa8c4",
+           "y": "#ffe08a", "F": "#ff8fab", "f": "#d94a6a"}
+LOVE = [                   # valentine's day: two hearts on springs, on a headband.
+                           # L / H / d = shine, heart, shade. s = spring. b / B = headband
+    ".LH.HH.........LH.HH.",
+    "LHHHHHd.......LHHHHHd",
+    "HHHHHHd.......HHHHHHd",
+    ".HHHHd.........HHHHd.",
+    "..HHd...........HHd..",
+    "...s.............s...",
+    "..s...............s..",
+    "...s.............s...",
+    "..s...............s..",
+    "...s.............s...",
+    "bbbbbbbbbbbbbbbbbbbbB",
+]
+LOVE_C = {"L": "#ffd1dc", "H": "#ff5c7c", "d": "#d6375a", "s": "#c9c3bb", "b": "#e5466a", "B": "#b8304f"}
 # bedtime: an old-fashioned nightcap, flopped over to one side with a bobble on the end. about the wizard hat's size.
-# S = the striped part (turned into blue and white stripes below), W = the white cuff, p = the bobble
-NIGHTCAP = ["".join(("b" if (i + r) // 2 % 2 else "w") if ch == "S" else ch for i, ch in enumerate(line))
-            for r, line in enumerate([
-    "...........SSSS.........",
-    "..........SSSSSSS.......",
-    ".........SSSSSSSSSS.....",
-    "........SSSSSSSSSSSSS...",
-    ".......SSSSSSSSSS..SSS..",
-    "......SSSSSSSSSSS...SS..",
-    "......SSSSSSSSSSS..pppp.",
-    ".....WWWWWWWWWWWWW.pppp.",
-    ".....WWWWWWWWWWWWW..pp..",
-])]
+NIGHTCAP = [               # b / w = blue and white stripes, B / c = their lit edge, D / x = their shady side,
+                           # W / V / X = the cuff, its lit end and shade. p / P / q = the bobble, its shine and shade
+    "...........Bwwb.........",
+    "..........Bwwbbww.......",
+    ".........Bwwbbwwbbw.....",
+    "........Bwwbbwwbbwwbb...",
+    ".......Bwwbbwwbbw..bww..",
+    "......Bwwbbwwbbww...xD..",
+    "......cwbbwwbbwxD..Pppq.",
+    ".....VWWWWWWWWWWWW.pppq.",
+    ".....XXXXXXXXXXXXX..qq..",
+]
+NIGHTCAP_C = {"b": "#3f6fc6", "B": "#5f8ce0", "D": "#2c5096", "w": "#f2efe8", "c": "#ffffff", "x": "#cfcac0",
+              "W": "#f7f4ee", "V": "#ffffff", "X": "#d6d0c6", "p": "#f4f1ea", "P": "#ffffff", "q": "#c9c3b8"}
 # the candle it carries at bedtime, in a little holder with a ring handle (held at the h on the right).
 # f / o = the flame (two frames, so it flickers), k = wick, c = candle, d = wax drip, h = brass holder
 CANDLE = [[".f......", "fff.....", "fof.....", "fof....."],
@@ -147,12 +188,8 @@ CANDLE_BASE = [
 ]
 CANDLE_C = {"f": "#ffd166", "o": "#ff8c3a", "k": "#2b1a14", "c": "#f3ead2", "d": "#ffffff", "h": "#d9a441"}
 GLOW_C = "#ffe9a8"   # the candle's soft light
-OUTFITS = {"halloween": (PUMPKIN, {"o": "#f28c28", "#": "#ffcf4d", "g": "#4f7a28"}),
-           "christmas": (SANTA, {"r": "#d8343a", "w": "#f7f4ee"}),
-           "newyear": (PARTY, {"p": "#ff6f8a", "c": "#5ad1e8", "y": "#ffe08a"}),
-           "birthday": (PARTY, {"p": "#ff6f8a", "c": "#5ad1e8", "y": "#ffe08a"}),
-           "valentine": (LOVE, {"#": "#ff6f8a", "s": "#2b1a14"}),
-           "bedtime": (NIGHTCAP, {"b": "#3f6fc6", "w": "#f2efe8", "W": "#f7f4ee", "p": "#ffffff"})}
+OUTFITS = {"halloween": (PUMPKIN, PUMPKIN_C), "christmas": (SANTA, SANTA_C), "newyear": (TOPHAT, TOPHAT_C),
+           "birthday": (PARTY, PARTY_C), "valentine": (LOVE, LOVE_C), "bedtime": (NIGHTCAP, NIGHTCAP_C)}
 OUTFITS["bedtime_right"] = ([ln[::-1] for ln in NIGHTCAP], OUTFITS["bedtime"][1])   # heading right: bobble on the left
 # the spell tome (reading files): two open spreads, so turning pages shows it reading on.
 # c = leather cover, g = gold corners, p / P = page / page shadow, e / E = page edges, s = spine,
@@ -360,8 +397,87 @@ BULB = [".www.", "wwwww", "wwwww", "wwwww", ".www.", ".ggg.", ".ggg."]   # an id
 BULB_C = {"w": "#fff3b0", "g": "#a7a9b4"}
 MUG = ["mccm..", "mmmmhh", "ssss.h", "mmmmhh", "mmmm..", ".mm..."]   # c = coffee, s = a red stripe, h = handle
 MUG_C = {"m": "#f2efe8", "c": "#5a3a22", "s": "#e5534b", "h": "#f2efe8"}
-BUG_A, BUG_B = [".ggk", "gggg", "d.d."], [".ggk", "gggg", ".d.d"]   # a little beetle, two leg frames
-BUG_C = {"g": "#6fcf6a", "k": "#2b1a14", "d": "#2f6b24"}
+# ---- pet/finds.py: digging up a 404, the bug hunt, the lost semicolon ----
+SHOVEL = [                 # an upright shovel: g / G = the D-grip, l / w = the wooden shaft (lit, shady),
+    "..gGGg..",            # c / C = the steel socket, L / m / D = the blade (lit, steel, shady)
+    ".g....G.",
+    ".g....G.",
+    "..gGGg..",
+    "...lw...",
+    "...lw...",
+    "...lw...",
+    "...lw...",
+    "...lw...",
+    "...lw...",
+    "..cCCc..",
+    "..cCCc..",
+    ".LmmmmD.",
+    "LLmmmmmD",
+    "LmmmmmmD",
+    "LmmmmmmD",
+    "LmmmmmmD",
+    ".LmmmmD.",
+    "..LmmD..",
+    "...mD...",
+]
+SHOVEL_C = {"g": "#5a3a1e", "G": "#3f2814", "l": "#c9925a", "w": "#9a6535", "c": "#9aa1ab", "C": "#6d737d",
+            "L": "#e9eef4", "m": "#bcc4cf", "D": "#858e9b"}
+DIRT_C = ("#8b6239", "#6b4a2b", "#a8794a", "#5a3d22", "#3a2716", "#1f150c")   # soil, its shade, its lit side,
+                           # clods, the hole's sides, the hole's dark bottom
+CHEST = [                  # a treasure chest: L / w / D = wood (lit, middle, shady), b / B = iron bands,
+    "..LLLLLLLLLLLL..",    # y / Y = the brass lock and its shine, k = the keyhole
+    ".LwwwwwwwwwwwwD.",
+    "LwwwwwwwwwwwwwwD",
+    "bbbbbbbbbbbbbbbB",
+    "LwwwwwwyywwwwwwD",
+    "LwwwwwyYYywwwwwD",
+    "LwwwwwyykywwwwwD",
+    "LwwwwwwyywwwwwwD",
+    "bbbbbbbbbbbbbbbB",
+    "LwwwwwwwwwwwwwwD",
+    "LwwwwwwwwwwwwwwD",
+    "DDDDDDDDDDDDDDDD",
+]
+CHEST_OPEN = [             # the same chest with its lid thrown back (i = the lid's dark inside, G = the glow)
+    "..DDDDDDDDDDDD..",
+    ".DiiiiiiiiiiiiD.",
+    "DiiiiiiiiiiiiiiD",
+    "bGGGGGGGGGGGGGGB",
+] + CHEST[4:]
+CHEST_C = {"L": "#c98a4e", "w": "#a86b35", "D": "#73441d", "b": "#5b606a", "B": "#3c4047", "y": "#e8b84a",
+           "Y": "#fff0a0", "k": "#2b1a14", "i": "#3a2414", "G": "#ffe9a0"}
+PAGE_C = {"p": "#f7f4ee", "l": "#ffffff", "d": "#d6d0c6", "f": "#e3ddd2", "r": "#e5534b", "t": "#b9b3a8"}
+BEETLE = [                 # a shiny green beetle, heading right: L / s / D = its shell (lit, green, the seam),
+    "........a.",          # d = its underside, h = head, E = eye, a = feelers. the last row is its legs,
+    "..LLss.a..",          # in two frames
+    ".LLssssh..",
+    "LssssDshEh",
+    "sssDDsshhh",
+    ".dddddd...",
+    (".k.k.k....", "k.k.k....."),
+]
+BEETLE_WINGS = ("...WW.WW..", "..W..W....")   # its wings, flapping, when it flies off (a row above it)
+BEETLE_C = {"L": "#b8f5a8", "s": "#58c45c", "D": "#2f8a3a", "d": "#23692c", "h": "#2b2b33", "E": "#ffffff",
+            "a": "#2b2b33", "k": "#2b2b33", "W": "#e8f6ff"}
+NET_C = {"h": "#9a6535", "H": "#6e4426", "r": "#8e939c", "R": "#c9ced8", "w": "#f2efe8"}   # handle, hoop, mesh
+SEMI_SMALL = [".y", "..", ".y", "yd"]   # the lost semicolon, lying on the floor
+SEMI_BIG = [               # the semicolon up close (in the magnifying glass, and held up): y / Y / d = gold,
+    ".yyy..",              # its shine and its shade
+    "yYYyd.",
+    "yYyyd.",
+    ".ydd..",
+    "......",
+    "......",
+    ".yyy..",
+    "yYyyd.",
+    "yyyyd.",
+    ".yydd.",
+    "..yd..",
+    ".yd...",
+]
+SEMI_C = {"y": "#f2c14e", "Y": "#fff3b0", "d": "#b8862b", "W": "#ffffff"}
+CHECK = ["........gg", ".......ggd", "......ggd.", "gg...ggd..", "dgg.ggd...", ".dgggd....", "..dgd....."]   # it compiles
+CHECK_C = {"g": "#5fd16a", "d": "#2f8a3a"}
 SHEEP = [".wwwww..", "wwwwwwff", "wwwwwwff", "wwwwww..", ".l..l..."]   # f = face, l = legs
 SHEEP_C = {"w": "#f7f4ee", "f": "#3b3b40", "l": "#3b3b40"}
 FENCE = ["b.....b", "bbbbbbb", "b.....b", "bbbbbbb", "b.....b"]
@@ -369,7 +485,6 @@ FENCE_C = {"b": "#a87445"}
 FORTUNE = ["..oooo..", ".oooooo.", "oooddooo", "oo....oo"]   # a fortune cookie
 FORTUNE_C = {"o": "#e8b86b", "d": "#c9944a"}
 MERGE_IN, MERGE_OUT = [".k.k", "k.k.", ".k.k"], ["k.k.", ".k.k", "k.k."]   # << and >> on the sticky notes
-SEMI = [".k", "..", ".k", ".k", "k."]   # the lost semicolon
 DIGITS = {"4": ["k.k", "k.k", "kkk", "..k", "..k"], "0": ["kkk", "k.k", "k.k", "k.k", "kkk"]}
 UNDO = [".k..", "kkkk", ".k.k", "...k", ".kk."]   # ctrl+z
 GAG_C = {"note_in": "#ffd166", "note_out": "#8be9fd", "fold": "#e0b94c", "fold2": "#6cc8dc", "ink": "#2b1a14",
@@ -377,7 +492,9 @@ GAG_C = {"note_in": "#ffd166", "note_out": "#8be9fd", "fold": "#e0b94c", "fold2"
          "code": "#6ff0a0", "glass": "#bfe3ff", "frame": "#d4a64a", "plate": "#f2efe8", "plate2": "#c9c3b5",
          "cake": "#f2c27a", "cake2": "#c98a3e", "butter": "#ffe9a0", "syrup": "#8b4a1c", "paper": "#f7f4ee",
          "red": "#e5534b", "hole": "#1a120c", "soil": "#6b4a2b", "soil2": "#8b6239", "sign": "#c9944a",
-         "net": "#f2efe8", "semi": "#ffc23a"}
+         "net": "#f2efe8", "semi": "#ffc23a",
+         "brass": "#d9a441", "brass_lit": "#f4d27a", "brass_dark": "#a8741f", "lens": "#bfe3ff", "lens_edge": "#9fd2f2",
+         "lens_shine": "#e3f4ff", "grip": "#4a2c18", "grip2": "#6e4426"}   # the magnifying glass
 # rare visitors
 UFO = [                    # c = glass dome, w = shine, g = hull, l = blinking lights, d = feet
     "......cccccc......",
