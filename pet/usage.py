@@ -22,12 +22,24 @@ class NoRedirects(urllib.request.HTTPRedirectHandler):
 OPENER = urllib.request.build_opener(NoRedirects)
 
 
-def read_token():
+def read_login():
+    # (token, when it expires as unix seconds or None). claude code writes expiresAt in milliseconds
     try:
-        creds = json.loads(CREDENTIALS.read_text())
-        return creds["claudeAiOauth"]["accessToken"] or None
+        creds = json.loads(CREDENTIALS.read_text())["claudeAiOauth"]
+        token = creds["accessToken"] or None
     except (OSError, ValueError, KeyError, TypeError):
-        return None
+        return None, None
+    try:
+        expires = float(creds.get("expiresAt")) / 1000
+    except (TypeError, ValueError):
+        expires = None
+    return token, expires
+
+
+def login_expired():
+    # the saved login has run out (claude code renews it when it next runs). no network, no token kept
+    token, expires = read_login()
+    return bool(token) and expires is not None and time.time() >= expires
 
 
 LOGIN_HELP = ("To fix it, Claude Code needs to log you in again:\n"
@@ -38,6 +50,8 @@ LOGIN_HELP = ("To fix it, Claude Code needs to log you in again:\n"
               "4. When Claude Code shows its prompt, you're done. Close the window (type /exit or click X). "
               "The mascot notices the new login within a few seconds.\n"
               "If step 2 says 'claude' is not recognized, install Claude Code first from claude.com/claude-code.")
+LOGIN_EXPIRED = ("login expired. The mascot can't see your usage until Claude Code renews it. Using Claude Code "
+                 "in a terminal usually does that by itself; if not, log in again.\n\n" + LOGIN_HELP)
 CLOCK = {"24h": False, "mmdd": False}   # how times and dates are shown (settings: Clock, Dates)
 
 
@@ -79,9 +93,14 @@ def fetch_usage():
     if os.environ.get(FAKE_USAGE_ENV):
         return fake_usage()
     LAST.clear()
-    token = read_token()
+    token, expires = read_login()
     if not token:
         return None, "no login found. The mascot reads your login from Claude Code.\n\n" + LOGIN_HELP
+    if expires is not None and time.time() >= expires:
+        # the login ran out and claude code hasn't renewed it yet. asking anyway only earns 401s, and a few
+        # of those in a row get an hour-long "slow down", so don't touch the network until it's renewed
+        LAST.update(status="expired")
+        return None, LOGIN_EXPIRED
     req = urllib.request.Request(URL, headers={
         "Authorization": f"Bearer {token}",
         "Content-Type": "application/json",
@@ -96,7 +115,7 @@ def fetch_usage():
     except urllib.error.HTTPError as e:
         LAST.update(status=e.code, headers=interesting_headers(e.headers), took=round(time.time() - t0, 1))
         if e.code == 401:
-            return None, "login expired. The mascot can't see your usage until you log in again.\n\n" + LOGIN_HELP
+            return None, LOGIN_EXPIRED
         if e.code == 429:
             try:
                 LAST["body"] = e.read(300).decode("utf-8", "replace").replace("\n", " ")

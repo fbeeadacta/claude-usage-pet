@@ -2,6 +2,13 @@
 
 Newest first. The spec and how everything works are in `PROJECT_NOTES.md`.
 
+- **2026-10-13 (version 7.37): no more "slow down" after the login runs out.**
+  - Why it kept happening while idle: Claude Code's login (`expiresAt` in `~/.claude/.credentials.json`) runs out every few hours and is only renewed when Claude Code runs and needs it. The pet kept asking every 2 minutes with the old login, got 401 three times, and the fourth ask got a 429 with a 60-minute wait. An hour later the login was still old, so it happened again (seen in `pet_usage.log` on 2026-10-13 at 01:04, 10:00, 11:07 and 12:09, each starting within a minute of the login's expiry time).
+  - The pet now reads `expiresAt` and doesn't send anything while the login has run out (the log says "login expired, not asked", once). It still notices a renewed login within a second and checks straight away.
+  - After a real 401 (a login refused before its expiry time) it waits 30 minutes (`LOGIN_RETRY_SECONDS`) instead of 2, unless the login is renewed sooner.
+  - The "login expired" help says Claude Code usually renews it by itself when used in a terminal.
+  - Tested offline only (a fake credentials file in a scratch folder, and the network opener swapped for one that counts calls): an expired login made no request over three checks and logged once; an in-date login that got a 401 waited 1800 s. Not tested against the real service or in the running pet.
+
 - **2026-10-12 (version 7.36): an animated README, and the first release.**
   - Every README picture is an animated GIF now: the mascot waving as its panel fades in, the panel's tabs, the settings pages, and animated sheets of the wizard jobs, the things it does on its own, the coding jokes (two sheets) and the outfits. Recorded at 1x from a test pet (made-up numbers and projects), so they show crisp at their real size.
   - Badges under the README's title (latest release, Windows 10 / 11, Python 3.10+, no dependencies, MIT), and the download links point at the latest release.

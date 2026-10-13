@@ -8,8 +8,8 @@ import time
 
 from . import usage
 from .art import DIM, IDLE_C, RED
-from .config import (DEFAULT_KEYS, FAKE_USAGE_ENV, IDLE_AFTER_MIN, IDLE_POLL_SECONDS, MIN_FETCH_GAP, NICE, PACE_WARN,
-    RATE_LIMITED_MAX, RATE_LIMITED_SECONDS, SHORT, STALE_MIN)
+from .config import (DEFAULT_KEYS, FAKE_USAGE_ENV, IDLE_AFTER_MIN, IDLE_POLL_SECONDS, LOGIN_RETRY_SECONDS, MIN_FETCH_GAP,
+    NICE, PACE_WARN, RATE_LIMITED_MAX, RATE_LIMITED_SECONDS, SHORT, STALE_MIN)
 from .lines import MILESTONES, PACE_LINES, RESET_LINES
 from .storage import log_error, log_usage
 from .usage import (bar_color, fetch_usage, fmt_time, fmt_when, forecast, parse_rows, parse_time, same_window,
@@ -22,6 +22,15 @@ class DataMixin:
     def refresh(self, why="timer"):
         now = time.time()
         if self.busy or now < self.blocked_until:   # (the service asked us to wait: even on a restart)
+            return
+        if not os.environ.get(FAKE_USAGE_ENV) and usage.login_expired():
+            # the login ran out: don't ask at all (a few 401s in a row earn an hour-long "slow down").
+            # data_tick checks again as soon as claude code renews it
+            usage.LAST.clear()
+            usage.LAST.update(status="expired")
+            self.fetch_why, self.fetch_gap = why, now - self.last_fetch if self.last_fetch else None
+            self.busy = True
+            self.inbox.put((None, usage.LOGIN_EXPIRED))
             return
         if now - self.last_fetch < MIN_FETCH_GAP and not os.environ.get(FAKE_USAGE_ENV):
             return   # asked a moment ago (a restart, "check now", a renewed login): the tick tries again later
@@ -125,6 +134,14 @@ class DataMixin:
                 log_usage(self.usage_log_line(now, False, []) + f" retry_after={usage.RETRY_AFTER}s waits={wait:.0f}s "
                           f"in_a_row={self.limited}")
                 self.save()
+            elif err.startswith("login expired"):
+                # nothing to gain from asking again with the same login: a renewed one wakes it straight away
+                # (data_tick watches the file). a real 401 waits a long while, since 401s in a row earn a 429
+                local = usage.LAST.get("status") == "expired"
+                if not (local and (self.error or "").startswith("login expired")):
+                    log_usage(self.usage_log_line(now, False, []) + " (error: " + short_error(err)
+                              + (", not asked" if local else "") + ")")
+                self.next_at = now + (self.poll.get() if local else LOGIN_RETRY_SECONDS)
             else:
                 log_usage(self.usage_log_line(now, False, []) + " (error: " + short_error(err) + ")")
                 self.next_at = now + self.poll.get()
