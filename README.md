@@ -80,6 +80,7 @@ If you use a terminal, `py claude_pet.py` runs it with a console window that sho
 
 - **The bubble says "no login" or "login expired":** open Claude Code and sign in again. Hover over the mascot for step-by-step help.
 - **The bubble says "slow down":** the usage service asked the pet to wait. It tries again on its own; your last numbers stay on screen.
+- **The bubble says something else ("service down", "offline", "no answer"...):** hover over the mascot. The panel says what went wrong, what usually causes it, and when it'll try again.
 - **Nothing appears:** check whether it's hidden by pressing Ctrl + Alt + P. Otherwise, `data/pet_errors.log` in the pet's folder says what went wrong.
 - **"Start with Windows" stopped working after a Python update:** turn it off and on again in Settings → System.
 

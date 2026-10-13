@@ -3,7 +3,7 @@ import os
 from pathlib import Path
 
 
-VERSION = "7.37"          # shown in settings > about & stats. bump it with the version in docs/PROJECT_NOTES.md.
+VERSION = "7.39"          # shown in settings > about & stats. bump it with the version in docs/PROJECT_NOTES.md.
 
 # ---- settings ----
 DEFAULT_SCALE = 1.0        # starting size. after that the size you pick in the menu is remembered.
@@ -13,7 +13,8 @@ POLL_SECONDS = 120         # how often to ask the api
 ONLY_KNOWN_LIMITS = True   # show only the 5-hour and weekly limits. False shows everything the api lists.
 RATE_LIMITED_SECONDS = 900 # wait at least this long after the api says "slow down", doubling each time (reports say
 RATE_LIMITED_MAX = 3600    # quick retries keep the throttle alive; the service has asked for 50-60 minutes)
-LOGIN_RETRY_SECONDS = 1800 # after a 401 (login refused), wait this long unless claude code renews the login sooner
+REFUSED_RETRY_SECONDS = 1800 # after a refusal (401, 403...), wait this long unless claude code renews the login sooner
+ERROR_RETRY_MAX = 900     # other failures (server errors, timeouts) back off from the poll gap, doubling up to this
 MIN_FETCH_GAP = 60         # never ask the api twice within this many seconds, whatever the reason (restarts too)
 IDLE_POLL_SECONDS = 900    # when nothing has used tokens for IDLE_AFTER_MIN, check this often instead
 IDLE_AFTER_MIN = 10

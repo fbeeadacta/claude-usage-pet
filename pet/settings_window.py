@@ -38,6 +38,7 @@ class SettingsWindow:
     ON, KNOB, SEL, WELL = "#d97757", "#faf9f5", "#3d3c38", "#232321"
     CHIP_ON, CHIP_OFF = "#4a3128", "#3a3936"
     CAP, CAP_EDGE, WARN, GOOD, BAD = "#3d3c38", "#4d4c47", "#e8a33d", "#4caf7d", "#e5534b"
+    FIX = "#6aa9ff"                          # what to do about an error (blue, like the details panel)
     W, H = 820, 580                          # starting size (base units, before display scaling)
     MIN_W, MIN_H, MAX_W = 800, 420, 1100     # the tallest it can go is the screen's height. (800 wide so the
                                              # diary's longest row, "Jumps to windows   9,999 made · 9,999 missed",
@@ -648,10 +649,15 @@ class SettingsWindow:
         # is the pet logged in? and if not, exactly how to fix it
         p = self.pet
         err = p.error or ""
-        if err.startswith(("login expired", "no login")):
-            dot, head = self.BAD, "Not logged in" if err.startswith("no login") else "Login expired"
-        elif err:
-            dot, head = self.WARN, "Can't check right now"
+        if err.startswith(("login expired", "login refused", "access denied", "no login")):
+            head = next(h for start, h in (("no login", "Not logged in"), ("login expired", "Login expired"),
+                        ("login refused", "Login refused"), ("access denied", "Access denied")) if err.startswith(start))
+            dot = self.BAD
+        elif err.startswith("rate limited"):
+            dot, head = self.WARN, "Rate limited"
+        elif err:   # what went wrong, from the message's first sentence (the line under it says why)
+            first = err.partition("\n\n")[0].split(". ", 1)[0]
+            dot, head = self.WARN, first[0].upper() + first[1:]
         elif p.data:
             dot, head = self.GOOD, "Connected"
         else:
@@ -679,7 +685,7 @@ class SettingsWindow:
             why = head_.split(". ", 1)[1] if ". " in head_ else head_   # (the status line already says what's wrong)
             end = self.text(x0 + 16, end + 10, why[0].upper() + why[1:], self.DIM, 8, width=x1 - x0 - 32)
             if steps:
-                end = self.text(x0 + 16, end + 8, steps, self.FG, 8, width=x1 - x0 - 32)
+                end = self.text(x0 + 16, end + 8, steps, self.FIX, 8, width=x1 - x0 - 32)
         return end + 14
 
     def check_now(self):

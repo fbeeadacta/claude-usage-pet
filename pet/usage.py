@@ -2,6 +2,8 @@
 import datetime
 import json
 import os
+import socket
+import ssl
 import time
 import urllib.request
 import urllib.error
@@ -52,6 +54,56 @@ LOGIN_HELP = ("To fix it, Claude Code needs to log you in again:\n"
               "If step 2 says 'claude' is not recognized, install Claude Code first from claude.com/claude-code.")
 LOGIN_EXPIRED = ("login expired. The mascot can't see your usage until Claude Code renews it. Using Claude Code "
                  "in a terminal usually does that by itself; if not, log in again.\n\n" + LOGIN_HELP)
+
+# one message per way a check can fail, in two parts split by a blank line. first what went wrong and why (shown
+# in red; the bubble, tray and settings take their few words from its start), then what to do about it (shown in
+# blue). when there's nothing to do, the second part says so, so nobody's left wondering
+NOTHING_TO_DO = ("Nothing to do on your side: it should solve itself. The mascot keeps trying by itself, and your "
+                 "last numbers stay on screen.")
+NEEDS_UPDATE = ("Nothing to do on your side for now: your last numbers stay on screen. Look for a newer version of "
+                "the mascot, which may already handle this.")
+LOGIN_REFUSED = ("login refused (error 401). The usage service turned down Claude Code's saved login before it was "
+                 "due to run out. That usually means you logged out, logged in to another account, or Claude Code "
+                 "swapped in a new login it hasn't saved yet.\n\n" + LOGIN_HELP)
+ACCESS_DENIED = ("access denied (error 403). The usage service knows this login but won't show its usage. Usage "
+                 "numbers only exist for Claude plan logins (Pro, Max, Team), so Claude Code may be logged in "
+                 "with an API key or a Console account instead.\n\n" + LOGIN_HELP)
+NOT_FOUND = ("usage service not found (error {code}). The address the mascot asks isn't there anymore. It's an "
+             "unofficial address, so Anthropic can move or remove it without notice, and the mascot needs an "
+             "update to find the new one.\n\n" + NEEDS_UPDATE)
+REJECTED = ("request rejected (error {code}). The usage service didn't accept the way the mascot asks, probably "
+            "because the service changed. data/pet_usage.log (in its folder) has the details.\n\n" + NEEDS_UPDATE)
+REDIRECTED = ("redirected (error {code}). The usage service tried to send the mascot to another address. It never "
+              "follows those, so your login is only ever sent to api.anthropic.com. If it keeps happening, the "
+              "service has moved.\n\n" + NEEDS_UPDATE)
+SERVER_ERROR = ("usage service error (error {code}). Something went wrong on Anthropic's side, not on your "
+                "computer. It usually clears up by itself.\n\n" + NOTHING_TO_DO)
+SERVICE_DOWN = ("usage service down (error {code}). Anthropic's service is unavailable or not answering right "
+                "now. It usually comes back within minutes.\n\n" + NOTHING_TO_DO
+                + " status.anthropic.com lists known problems.")
+OVERLOADED = ("usage service overloaded (error 529). Anthropic's servers are too busy right now. It usually clears "
+              "up within minutes.\n\n" + NOTHING_TO_DO)
+NO_ANSWER = ("no answer. The usage service took longer than 10 seconds to reply. Your connection may be slow, or "
+             "the service is busy.\n\nIf other websites are slow too, check your internet connection. Otherwise "
+             "there's nothing to do: the mascot keeps trying by itself.")
+OFFLINE = ("offline. The mascot couldn't look up api.anthropic.com, which usually means this computer isn't "
+           "connected to the internet.\n\nCheck that Wi-Fi or the network cable is connected. The mascot checks "
+           "again by itself once you're back online.")
+INSECURE = ("secure connection failed. The connection to api.anthropic.com couldn't be verified, so the mascot "
+            "didn't send your login over it.\n\nCheck that this computer's date and time are right (Windows "
+            "Settings > Time & language > Date & time, Set time automatically). Antivirus that scans web traffic, "
+            "or a work or school network that inspects connections, can also cause it: try another network, or "
+            "ask whoever runs it.")
+BLOCKED = ("can't reach the usage service. The connection was refused or cut off ({name}).\n\nIf you use a "
+           "firewall, VPN or proxy, check that it lets Python reach api.anthropic.com. A dropped connection "
+           "fixes itself: the mascot keeps trying.")
+UNREADABLE = ("unreadable answer. The usage service sent back something that isn't usage numbers, like a web page. "
+              "A Wi-Fi sign-in page, a proxy or a change to the service can cause this.\n\nIf you're on public "
+              "Wi-Fi, open a browser and sign in to it. Otherwise there's nothing to do: the mascot keeps trying "
+              "by itself.")
+CHECK_FAILED = ("check failed ({name}). Something unexpected went wrong while asking for your usage.\n\n"
+                "Nothing to do right away: the mascot keeps trying by itself. If it keeps happening, "
+                "data/pet_usage.log (in its folder) has the details to report.")
 CLOCK = {"24h": False, "mmdd": False}   # how times and dates are shown (settings: Clock, Dates)
 
 
@@ -77,7 +129,7 @@ def fake_usage():
     LAST.clear()
     LAST.update(status="fake-" + mode)
     if mode == "offline":
-        return None, "no connection (offline test mode)."
+        return None, OFFLINE
     if mode == "429":
         global RETRY_AFTER
         RETRY_AFTER = 3600
@@ -115,7 +167,7 @@ def fetch_usage():
     except urllib.error.HTTPError as e:
         LAST.update(status=e.code, headers=interesting_headers(e.headers), took=round(time.time() - t0, 1))
         if e.code == 401:
-            return None, LOGIN_EXPIRED
+            return None, LOGIN_REFUSED
         if e.code == 429:
             try:
                 LAST["body"] = e.read(300).decode("utf-8", "replace").replace("\n", " ")
@@ -127,13 +179,45 @@ def fetch_usage():
             except (TypeError, ValueError):
                 RETRY_AFTER = 0
             return None, "rate limited."
-        return None, f"api error {e.code}."
+        return None, http_error(e.code)
     except Exception as e:
-        return None, f"no connection ({type(e).__name__})."
+        LAST.update(took=round(time.time() - t0, 1), failed=type(getattr(e, "reason", e)).__name__)
+        return None, connection_error(e)
     try:
         return json.loads(body), None
     except ValueError:
-        return None, SERVICE_CHANGED
+        return None, UNREADABLE
+
+
+def http_error(code):
+    # what an answer's error code means (401 and 429 are handled where they're answered)
+    if code == 403:
+        return ACCESS_DENIED
+    if code in (404, 410):
+        return NOT_FOUND.format(code=code)
+    if 300 <= code < 400:
+        return REDIRECTED.format(code=code)
+    if code == 529:
+        return OVERLOADED
+    if code in (502, 503, 504):
+        return SERVICE_DOWN.format(code=code)
+    if code >= 500:
+        return SERVER_ERROR.format(code=code)
+    return REJECTED.format(code=code)
+
+
+def connection_error(e):
+    # why there was no answer at all. urllib wraps the real cause in URLError.reason
+    reason = getattr(e, "reason", e)
+    if isinstance(reason, TimeoutError):
+        return NO_ANSWER
+    if isinstance(reason, socket.gaierror):
+        return OFFLINE
+    if isinstance(reason, ssl.SSLError):
+        return INSECURE
+    if isinstance(reason, OSError):
+        return BLOCKED.format(name=type(reason).__name__)
+    return CHECK_FAILED.format(name=type(reason).__name__)
 
 
 LAST = {}   # the last answer's status, header names and (for a 429) the short error body: never the token
@@ -150,8 +234,8 @@ def interesting_headers(headers):
 
 RETRY_AFTER = 0   # seconds the usage service asked us to wait, from its last "slow down"
 SERVICE_CHANGED = ("the usage service changed. Its answer doesn't look like it used to, so the mascot can't read "
-                   "your usage right now.\n\nThis usually needs an update to the mascot. data/pet_errors.log (in its "
-                   "folder) lists the names of what the service sent back, which helps fix it. It keeps trying.")
+                   "your usage right now. data/pet_errors.log (in its folder) lists the names of what the service "
+                   "sent back, which helps fix it.\n\n" + NEEDS_UPDATE)
 
 
 def looks_right(data):
@@ -162,8 +246,14 @@ def looks_right(data):
 def short_error(err):
     # a few words for the bubble. the details panel shows the whole message.
     for start, short in (("no login", "no login"), ("login expired", "login expired"),
-                         ("rate limited", "slow down"), ("no connection", "offline"),
-                         ("the usage service changed", "service changed")):
+                         ("login refused", "login refused"), ("access denied", "access denied"),
+                         ("rate limited", "slow down"), ("usage service not found", "service moved"),
+                         ("request rejected", "rejected"), ("redirected", "redirected"),
+                         ("usage service error", "server error"), ("usage service down", "service down"),
+                         ("usage service overloaded", "overloaded"), ("no answer", "no answer"),
+                         ("offline", "offline"), ("secure connection failed", "can't verify"),
+                         ("can't reach", "blocked"), ("unreadable answer", "odd answer"),
+                         ("the usage service changed", "service changed"), ("check failed", "check failed")):
         if err.startswith(start):
             return short
     return err.rstrip(".")

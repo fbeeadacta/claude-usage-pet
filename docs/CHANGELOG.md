@@ -2,10 +2,29 @@
 
 Newest first. The spec and how everything works are in `PROJECT_NOTES.md`.
 
+- **2026-10-13 (version 7.39): a message of its own for each way a usage check can fail.**
+  - Before, only "no login", "login expired", "rate limited" and "service changed" explained themselves. Every other answer showed "api error N" and every network problem "no connection (SomeError)".
+  - Now each has a message in `pet/usage.py` saying what went wrong, what usually causes it and, where you can do something, how to fix it: login refused (a 401 before the login was due to run out; this used to say "login expired"), access denied (403), service not found (404, 410), request rejected (other 4xx), redirected (3xx), server error (500), service down (502, 503, 504), overloaded (529), no answer (timeout), offline (the address couldn't be looked up), secure connection failed (certificate problems), can't reach the service (refused or cut off), unreadable answer (not JSON, like a Wi-Fi sign-in page) and check failed (anything else). Each has its own short word for the bubble and tray (table in `PROJECT_NOTES.md`, under "If something goes wrong").
+  - Messages for a failure that waits now end with when it'll try again.
+  - Every message has two parts: what went wrong (red, as before) and, under it, what to do about it in blue, in the details panel and in Settings → Usage. When there's nothing you can do, the blue part says so: "it should solve itself" for server problems, "nothing to do on your side for now" when the service changed and the mascot needs an update. The "slow down" message's blue part is only the reassurance (its "a slower refresh setting helps" tip is gone).
+  - The "slow down" message adds that nothing is broken and it solves itself: it's the usage service's own cooldown, it doesn't touch your plan or Claude Code, and the mascot carries on by itself after the wait. (Only there: the other failures have other causes, and each message names its own.)
+  - Settings → Usage heads the status with what went wrong (for example "Usage service down (error 503)") instead of "Can't check right now". Login refused and access denied get the red dot, like login expired.
+  - A redirect waits 30 minutes like a refusal (it was 2 minutes, doubling).
+  - `pet_usage.log` notes the kind of connection error (`failed=ConnectionRefusedError`).
+  - README: one line on what to do about the other bubble words.
+  - Tested offline only (the network opener swapped for a fake, nothing sent): all 18 cases gave the right message, bubble word, settings heading and wait. A throwaway test pet (scratch files, `PET_FAKE_USAGE` set to `429`, then `offline`) showed the details panel with the red part and the blue part as meant. The Settings → Usage page wasn't looked at on screen.
+
+- **2026-10-13 (version 7.38): every failed check backs off now, not just "slow down".**
+  - Before, only a 429 and (since 7.37) an expired login got a longer wait. Anything else (a 403, a server error, a timeout, no connection, an answer it couldn't read) was retried every 2 minutes for as long as it lasted, the same pattern that turned 401s into an hour-long 429.
+  - A refusal (any 4xx other than 429) waits 30 minutes (`REFUSED_RETRY_SECONDS`, was `LOGIN_RETRY_SECONDS`), unless the login file changes sooner.
+  - Server errors, timeouts, no connection and unreadable answers wait the poll gap, then double each time (2, 4, 8 minutes), up to 15 minutes (`ERROR_RETRY_MAX`). The next good check goes back to the normal pace. `pet_usage.log` shows the wait and how many in a row.
+  - Tested offline only (the network opener swapped for a fake, nothing sent): five 500s waited 120, 240, 480, 900, 900 s; a good answer reset it; timeouts did the same; a 403 and a 401 waited 1800 s. Not tested in the running pet.
+  - Still out of the pet's hands: other apps using the same login's usage allowance, a PC clock that's behind (falls back to the 30-minute wait), and the service tightening its limits (the 15/30/60-minute "slow down" waits still apply).
+
 - **2026-10-13 (version 7.37): no more "slow down" after the login runs out.**
   - Why it kept happening while idle: Claude Code's login (`expiresAt` in `~/.claude/.credentials.json`) runs out every few hours and is only renewed when Claude Code runs and needs it. The pet kept asking every 2 minutes with the old login, got 401 three times, and the fourth ask got a 429 with a 60-minute wait. An hour later the login was still old, so it happened again (seen in `pet_usage.log` on 2026-10-13 at 01:04, 10:00, 11:07 and 12:09, each starting within a minute of the login's expiry time).
   - The pet now reads `expiresAt` and doesn't send anything while the login has run out (the log says "login expired, not asked", once). It still notices a renewed login within a second and checks straight away.
-  - After a real 401 (a login refused before its expiry time) it waits 30 minutes (`LOGIN_RETRY_SECONDS`) instead of 2, unless the login is renewed sooner.
+  - After a real 401 (a login refused before its expiry time) it waits 30 minutes (`LOGIN_RETRY_SECONDS`, renamed `REFUSED_RETRY_SECONDS` in 7.38) instead of 2, unless the login is renewed sooner.
   - The "login expired" help says Claude Code usually renews it by itself when used in a terminal.
   - Tested offline only (a fake credentials file in a scratch folder, and the network opener swapped for one that counts calls): an expired login made no request over three checks and logged once; an in-date login that got a 401 waited 1800 s. Not tested against the real service or in the running pet.
 

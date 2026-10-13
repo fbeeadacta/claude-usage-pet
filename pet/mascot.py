@@ -140,6 +140,7 @@ class Pet(ScreensMixin, MouseMixin, TalkMixin, DataMixin, MovementMixin, RenderM
         self.hotkey_tid, self.bind_ok = None, {}
         threading.Thread(target=hotkey_thread, args=(self.keys, self.wanted_keys), daemon=True).start()
         self.limited = 0                # "slow down" answers in a row
+        self.failed = 0                 # other failed checks in a row (server errors, timeouts, refusals)
 
         # claude code's logs, read in the background
         self.cc = ClaudeCodeLog()

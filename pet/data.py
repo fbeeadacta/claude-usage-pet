@@ -8,8 +8,8 @@ import time
 
 from . import usage
 from .art import DIM, IDLE_C, RED
-from .config import (DEFAULT_KEYS, FAKE_USAGE_ENV, IDLE_AFTER_MIN, IDLE_POLL_SECONDS, LOGIN_RETRY_SECONDS, MIN_FETCH_GAP,
-    NICE, PACE_WARN, RATE_LIMITED_MAX, RATE_LIMITED_SECONDS, SHORT, STALE_MIN)
+from .config import (DEFAULT_KEYS, FAKE_USAGE_ENV, IDLE_AFTER_MIN, IDLE_POLL_SECONDS, ERROR_RETRY_MAX, MIN_FETCH_GAP,
+    NICE, PACE_WARN, RATE_LIMITED_MAX, RATE_LIMITED_SECONDS, REFUSED_RETRY_SECONDS, SHORT, STALE_MIN)
 from .lines import MILESTONES, PACE_LINES, RESET_LINES
 from .storage import log_error, log_usage
 from .usage import (bar_color, fetch_usage, fmt_time, fmt_when, forecast, parse_rows, parse_time, same_window,
@@ -43,7 +43,19 @@ class DataMixin:
     def rate_message(self):
         at = datetime.datetime.fromtimestamp(self.blocked_until)
         return (f"rate limited: the usage service asked us to slow down, so it'll try again at {fmt_time(at)}. "
-                "your last numbers are still shown. a slower 'refresh every' setting helps.")
+                "Your last numbers are still shown.\n\n"
+                "Nothing is broken, and this solves itself: it's the usage service's own cooldown, which it puts "
+                "on logins that check often. It only affects the mascot's checks, not your Claude plan or Claude "
+                "Code, and the mascot picks up again by itself once the wait is over.")
+
+    def retry_note(self, err, note):
+        # adds when it'll try again to the first part of an error (before any how-to-fix steps)
+        head, sep, steps = err.partition("\n\n")
+        return f"{head} {note}{sep}{steps}"
+
+    @staticmethod
+    def at(t):
+        return datetime.datetime.fromtimestamp(t)
 
     def idle(self, now=None):
         # nothing has used tokens for a while, so checks slow down
@@ -74,6 +86,8 @@ class DataMixin:
                 parts.append("headers=" + ",".join(last["headers"]))
             if last.get("body"):
                 parts.append(f'body="{last["body"][:200]}"')
+            if last.get("failed"):
+                parts.append(f"failed={last['failed']}")   # (the kind of connection error, when there was no answer)
         return " ".join(parts)
 
     def take_result(self):
@@ -113,7 +127,7 @@ class DataMixin:
                 self.check_milestone(r)
                 self.check_pace(r)
             self.first_result = False
-            self.limited = 0
+            self.limited = self.failed = 0
             self.last_ok = now
             self.blocked_until = 0.0
             self.next_at = now + self.poll_gap(now)
@@ -121,9 +135,10 @@ class DataMixin:
             log_usage(self.usage_log_line(now, True, ok_rows))
             self.save()
         else:
-            if err.startswith("login expired") and not (self.error or "").startswith("login expired"):
+            login = ("login expired", "login refused", "access denied")
+            if err.startswith(login) and not (self.error or "").startswith(login):
                 self.say("I can't see your usage anymore. hover me for how to log back in!", force=True)
-                self.toast("Claude pet: login expired", "Hover the mascot for step-by-step help logging back in.")
+                self.toast("Claude pet: " + short_error(err), "Hover the mascot for step-by-step help logging back in.")
             if err.startswith("rate limited"):
                 # asked to slow down: wait 15, 30, 60 minutes, or longer if the service says so. quick retries
                 # keep the throttle alive (others saw it ask for 50-60 minutes)
@@ -134,17 +149,31 @@ class DataMixin:
                 log_usage(self.usage_log_line(now, False, []) + f" retry_after={usage.RETRY_AFTER}s waits={wait:.0f}s "
                           f"in_a_row={self.limited}")
                 self.save()
-            elif err.startswith("login expired"):
+            elif err.startswith(("login expired", "login refused")):
                 # nothing to gain from asking again with the same login: a renewed one wakes it straight away
                 # (data_tick watches the file). a real 401 waits a long while, since 401s in a row earn a 429
                 local = usage.LAST.get("status") == "expired"
                 if not (local and (self.error or "").startswith("login expired")):
                     log_usage(self.usage_log_line(now, False, []) + " (error: " + short_error(err)
                               + (", not asked" if local else "") + ")")
-                self.next_at = now + (self.poll.get() if local else LOGIN_RETRY_SECONDS)
+                self.next_at = now + (self.poll.get() if local else REFUSED_RETRY_SECONDS)
+                if not local:
+                    err = self.retry_note(err, f"It'll try again at {fmt_time(self.at(self.next_at))}, or as soon "
+                                               "as Claude Code renews the login.")
             else:
-                log_usage(self.usage_log_line(now, False, []) + " (error: " + short_error(err) + ")")
-                self.next_at = now + self.poll.get()
+                # anything else. a refusal (403 and such) or a redirect won't fix itself in minutes, so it waits
+                # like a 401. a server error, a timeout or an odd answer backs off (2, 4, 8, then every 15
+                # minutes), so an outage doesn't turn into a steady stream of requests that ends in a "slow down"
+                self.failed += 1
+                status = usage.LAST.get("status")
+                if isinstance(status, int) and 300 <= status < 500:
+                    wait = REFUSED_RETRY_SECONDS
+                else:
+                    wait = min(ERROR_RETRY_MAX, self.poll.get() * 2 ** (self.failed - 1))
+                self.next_at = now + wait
+                err = self.retry_note(err, f"It'll try again at {fmt_time(self.at(self.next_at))}.")
+                log_usage(self.usage_log_line(now, False, []) + " (error: " + short_error(err) + ")"
+                          + f" waits={wait:.0f}s in_a_row={self.failed}")
             self.error = err
             self.checks_failed += 1
 

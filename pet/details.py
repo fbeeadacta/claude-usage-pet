@@ -27,6 +27,7 @@ class Details:
     BG, CARD, LINE, WELL, SEL = "#262624", "#30302e", "#3d3d3a", "#1f1e1d", "#46453f"
     FG, DIM, FAINT, ON = "#faf9f5", "#a6a39a", "#6b6a65", "#d97757"
     FASTC, SLOWC = "#e8a33d", "#6aa9ff"
+    FIXC = "#6aa9ff"   # what to do about an error
 
     def __init__(self, pet):
         self.pet = pet
@@ -268,11 +269,11 @@ class Details:
                 y = self.text(26, y, msg[0].upper() + msg[1:], self.FASTC if kind == "fast" else self.SLOWC, 7.5,
                               True, width=W - 52) + 2
             y += 14
-        if p.error:   # the problem in red; any how-to-fix steps after it in plain text, easier to read
+        if p.error:   # the problem in red, then what to do about it (or that it sorts itself out) in blue
             head, _, steps = p.error.partition(chr(10) * 2)
             y = self.text(26, y, head[0].upper() + head[1:], RED, 8, True, width=W - 52) + 6
             if steps:
-                y = self.text(26, y, steps, self.FG, 7.5, width=W - 52) + 8
+                y = self.text(26, y, steps, self.FIXC, 7.5, width=W - 52) + 8
         elif not rows:
             y = self.text(26, y, "Loading…", self.DIM, 8) + 12
         self.card(top, y)

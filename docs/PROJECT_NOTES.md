@@ -2,7 +2,7 @@
 
 A small Claude mascot that walks along the top of the Windows taskbar. A bubble above its head shows Claude plan usage. If any file here gets lost or corrupted, this note has enough detail to rebuild it. You can give this file to Claude and ask it to rebuild the project.
 
-Last updated: 2026-10-13 (version 7.37)
+Last updated: 2026-10-13 (version 7.39)
 
 The change log is in `CHANGELOG.md`, next to this file.
 
@@ -218,6 +218,25 @@ Only one pet runs at a time. Starting it again while it's already running calls 
 - **It's silent and doesn't talk:** check the Plan tab for "Quiet mode", the menu for "Talk again", and Settings → Sound & talking → Quiet.
 - **"Rate limited" / the bubble says "slow down":** the usage service answered "too many requests". This used to happen with the old 30-second and 1-minute refresh settings, and can still happen after restarting the pet several times in a row (each start checks straight away). Your last numbers stay on screen. It waits 3 minutes, then 6, 12 and so on (up to 30, or longer if the service asks), and goes back to normal after the next successful check. The wait is saved (`blocked_until` in the state file), so restarting the pet doesn't skip it, and "Check now" does nothing until it's over.
 - **The bubble says "login expired":** open Claude Code once so it refreshes your login. The pet notices the renewed login file and checks again straight away.
+- **Other words in the bubble:** each way a check can fail has its own message in `pet/usage.py` (the bubble and tray show a short word, the details panel and Settings → Usage the whole thing, with when it'll try again). Every message has two parts split by a blank line: what went wrong and why, shown in red, then what to do about it, shown in blue (`FIXC` in `details.py`, `FIX` in `settings_window.py`). When there's nothing to do (the cooldown, a server problem, the service changing), the blue part says so and that it should sort itself out. Refusals and redirects wait 30 minutes; the rest back off from 2 to 15 minutes.
+
+  | Bubble | Cause | Message in `usage.py` |
+  | --- | --- | --- |
+  | login refused | 401 with a login that hadn't run out yet | `LOGIN_REFUSED` |
+  | access denied | 403: probably not a Claude plan login | `ACCESS_DENIED` |
+  | service moved | 404 or 410: the address is gone | `NOT_FOUND` |
+  | rejected | another 4xx: the service changed what it accepts | `REJECTED` |
+  | redirected | 3xx: never followed, so the token can't go elsewhere | `REDIRECTED` |
+  | server error | 500 and other 5xx | `SERVER_ERROR` |
+  | service down | 502, 503, 504 | `SERVICE_DOWN` |
+  | overloaded | 529 | `OVERLOADED` |
+  | no answer | no reply in 10 seconds | `NO_ANSWER` |
+  | offline | api.anthropic.com couldn't be looked up | `OFFLINE` |
+  | can't verify | the secure connection couldn't be checked (clock, antivirus, work network) | `INSECURE` |
+  | blocked | connection refused or cut off | `BLOCKED` |
+  | odd answer | a reply that isn't JSON (a Wi-Fi sign-in page, a proxy) | `UNREADABLE` |
+  | service changed | JSON without the 5-hour or weekly limits | `SERVICE_CHANGED` |
+  | check failed | anything else | `CHECK_FAILED` |
 - **"Slow down" keeps coming back:** open `data/pet_usage.log` (see below). Look at `since_last`, `req10m` and `req1h` on the lines just before the first 429, and at `why`. A run of `why=start` lines means restarts, `why=manual` means the Check now button. It can't tell you the service's own reason (it doesn't give one), only what we'd been doing.
 - **Something seems broken:** look in `data/pet_errors.log`, or send it to Claude. It never contains your login token.
 - **A keyboard shortcut does nothing:** another app may already use Ctrl + Alt + P or D. `pet_errors.log` will say so. Settings → Shortcuts shows "Another app already uses these keys" under it; click it and pick different keys.
@@ -239,7 +258,7 @@ Only one pet runs at a time. Starting it again while it's already running calls 
 - **Response:** `five_hour`, `seven_day`, `seven_day_sonnet` and so on, each shaped like `{utilization, resets_at}`. Unknown extra fields also appear (for example `iguana_necktie`). They're hidden unless they're a 5-hour or 7-day window (setting: `ONLY_KNOWN_LIMITS`).
 - **What the numbers cover:** they're for the whole plan, so they include claude.ai chat, the desktop app and Claude Code together.
 - **Testing rule (read this before running anything): never poll the real usage service in tests.** The service throttles hard and answers with a wait of up to an hour that nothing can shorten (see "Rate limits" below), and it's the same login Claude Code uses. Unless the task is working on the usage code itself, set the environment variable `PET_FAKE_USAGE` before starting or importing anything from `pet/`: `ok` (made-up numbers: 40% on 5-hour, 20% weekly), `offline` (no connection), or `429` (a slow-down with a one hour wait). In that mode `fetch_usage()` never reads the login or touches the network, the 60-second minimum gap between checks is skipped, and `pet_usage.log` isn't written. When a test does have to use the real service (usage code work only), make as few requests as possible, never loop, and say so in the change log. In PowerShell: `$env:PET_FAKE_USAGE = "ok"`.
-- **Polling:** every 2 minutes by default (Settings → Usage → Refresh every, 2 to 5 min). After a 429 ("slow down") it waits 3 minutes, doubling each time it repeats (up to 30 minutes), or the service's `Retry-After` if that's longer (now 15, 30, then 60 minutes; see below). The wait is saved in the state file (`blocked_until`), so a restart or "Check now" can't skip it. When nothing has used tokens for 10 minutes (`IDLE_AFTER_MIN`, judged from `last_usage`), it checks every 15 minutes (`IDLE_POLL_SECONDS`) instead, and goes back to the normal pace as soon as tokens move again. Chat on claude.ai that doesn't show in Claude Code's logs can take up to 15 minutes to appear while idle. **Expired login:** the token's `expiresAt` (milliseconds) is checked first, and while it has passed no request is sent at all (Claude Code renews it only when it runs; asking with an old token gets 401s, and three or so of those in a row get a 429 with a 60-minute wait). A change to the credentials file triggers a check straight away. After a real 401 it waits `LOGIN_RETRY_SECONDS` (30 min) unless the file changes sooner.
+- **Polling:** every 2 minutes by default (Settings → Usage → Refresh every, 2 to 5 min). After a 429 ("slow down") it waits 3 minutes, doubling each time it repeats (up to 30 minutes), or the service's `Retry-After` if that's longer (now 15, 30, then 60 minutes; see below). The wait is saved in the state file (`blocked_until`), so a restart or "Check now" can't skip it. When nothing has used tokens for 10 minutes (`IDLE_AFTER_MIN`, judged from `last_usage`), it checks every 15 minutes (`IDLE_POLL_SECONDS`) instead, and goes back to the normal pace as soon as tokens move again. Chat on claude.ai that doesn't show in Claude Code's logs can take up to 15 minutes to appear while idle. **Expired login:** the token's `expiresAt` (milliseconds) is checked first, and while it has passed no request is sent at all (Claude Code renews it only when it runs; asking with an old token gets 401s, and three or so of those in a row get a 429 with a 60-minute wait). A change to the credentials file triggers a check straight away. After a real 401 it waits `REFUSED_RETRY_SECONDS` (30 min) unless the file changes sooner. **Other failures:** any other refusal (a 4xx such as 403) waits `REFUSED_RETRY_SECONDS` too (a changed credentials file still wakes it). Server errors (5xx), timeouts, no connection and answers it can't read back off: the poll gap, then double, up to `ERROR_RETRY_MAX` (15 min), back to normal after the next good check. Before 7.38 these were retried at the full pace forever, which is how a run of 401s turned into a 429.
 
 **Rate limits (what's known, from other people's reports as of 2026-10; none of it is documented by Anthropic):**
 - `/api/oauth/usage` is throttled much harder than the model itself, and the throttle seems to be per login token. People polling every 30-60 seconds hit 429 after about 5 requests. Some got 429 even at 10-minute gaps. `Retry-After` is sometimes missing or `0`, and sometimes 3037 to 3600 seconds (we've seen about 3538).
