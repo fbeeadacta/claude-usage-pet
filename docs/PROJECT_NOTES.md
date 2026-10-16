@@ -2,7 +2,7 @@
 
 A small Claude mascot that walks along the top of the Windows taskbar. A bubble above its head shows Claude plan usage. If any file here gets lost or corrupted, this note has enough detail to rebuild it. You can give this file to Claude and ask it to rebuild the project.
 
-Last updated: 2026-10-16 (version 7.40)
+Last updated: 2026-10-16 (version 7.41)
 
 The change log is in `CHANGELOG.md`, next to this file.
 
@@ -75,7 +75,7 @@ One thing to know: `usage.RETRY_AFTER` changes while the pet runs, so other file
    - It waves, and after a moment the details panel fades in above it.
    - The panel looks like the Claude desktop app: warm greys, a Plan / Claude Code switch at the top, sections as small headings over rounded cards. It has two tabs:
      - **Plan:** pace bars, reset times (as countdowns and clock times), tips, a chart of your usage across the current window with the pace line (switch between 5-hour and Week), a forecast ("at this pace you'll run out around 23:40" or "you'll use about 60% by the reset"), and Claude Code tokens used today.
-     - **Claude Code:** stats read from your Claude Code logs. "Overview" shows sessions, messages, total tokens, active days, peak hour, favourite model, a 26-week activity grid and a book comparison. "Models" shows tokens per model plus the input/output/cache split. "Projects" shows the top 5 folders. "Sessions" is a recap of your latest 5 Claude Code sessions: project folder, when it started, how long it ran, messages, tokens, main model and the API-price estimate; one still going has an orange "Active" pill. The first three views can show 7 days, 30 days or all time.
+     - **Claude Code:** stats read from your Claude Code logs. "Overview" shows sessions, messages, total tokens, active days, peak hour, favourite model, a 26-week activity grid and a book comparison. "Models" shows tokens per model plus the input/output/cache split. "Projects" shows the top 5 projects with bars and the rest as one line each (up to 10 more). "Sessions" is a recap of your latest 5 Claude Code sessions: project folder, when it started, how long it ran, messages, tokens, main model and the API-price estimate; one still going has an orange "Active" pill. The first three views can show 7 days, 30 days or all time.
    - Move the mouse onto the panel and it stays open, so you can click the tabs. Move away and it fades out.
    - The panel is the same height on every tab, so the tabs never move when you switch.
 4. **Click** the mascot to poke it. It squishes, hops, makes a happy face and pops a heart.
@@ -277,11 +277,16 @@ Only one pet runs at a time. Starting it again while it's already running calls 
 - "Messages" counts every user and assistant line: each `uuid` once in the real count, every copy in the app count.
 - **Peak hour, app way** (from Claude Code GitHub issues #65775 and #83678, not official docs): one count per log file, at the local hour of its *first* user or assistant line in file order (not the earliest time in it), and always all-time, whatever range is picked. On a tie the pet keeps the hour that got to the top first (that matched the app on 2026-10-11, with 12 PM, 5 PM and 10 PM tied). The app reads this from its own cache, which can lag behind, so it may still differ for a while after new sessions.
 - "Total tokens" is input + output + cache write + cache read.
-- Only numbers are kept from the logs (times, session ids, model names, token counts, the project folder's name and each session's name in the Claude app), never message text. Live, it also notes which tool Claude just used, by name only (`message.content[].name` of a `tool_use`), never what the tool was given.
+- Only numbers are kept from the logs (times, session ids, model names, token counts, the project folder's path and each session's name in the Claude app), never message text. Live, it also notes which tool Claude just used, by name only (`message.content[].name` of a `tool_use`), never what the tool was given.
 - **The cache:** after the first full read, everything kept above is saved to `pet_cc_cache.json.gz` with how far into each log it got, and saved again every 5 minutes when something changed. On start the pet loads it and only reads what's new. If any log it knew got shorter or disappeared, the cache is thrown away and every log is read again, so deleted logs drop out of the stats as before. Logs are read 4 MB at a time, and a single line bigger than that is skipped.
 - Claude.ai chat has no local token log, so there are no token numbers for chat. Only the plan % covers it.
 - **Cost estimate:** what the same tokens would cost on the pay-as-you-go API (your plan covers them, so it's only for comparison). Always counted once per answer, whichever counting mode is on. Prices are in `PRICES` near the top of `pet/cclog.py` (dollars per million: input, output, cache read). Cache writes cost 1.25× input for the 5-minute cache and 2× for the 1-hour cache, using the 1-hour amount the logs record. Models with no price are left out, and the panel says so.
-- **Projects:** each answer's `cwd` (the folder Claude Code was working in). The Projects view shows the top 5 by tokens, with session counts. Sessions started in the Claude desktop app without a folder run in a made-up `scratch-YYYY-MM-DD-xxxxxx` folder; for those the session's name is shown instead (the log's last `custom-title` line, `customTitle`). A real folder is never renamed.
+- **Projects:** each answer's `cwd` (the folder Claude Code was working in), kept as the whole path (Git Bash's `/c/Users/...` spelling becomes `C:\Users\...`). Names are worked out each time the stats are built (`named` in `pet/cclog.py`):
+  - A folder inside a git repo counts as the repo's top folder. A folder that no longer exists counts as the nearest folder above it that sessions also worked in (so an old `Token Tracker\pet` joins `Token Tracker`).
+  - **Renamed or moved folders:** when a log's lines go from one folder to another (not into or out of a subfolder), that's saved as a move. A resumed or forked session starts its log with copies of the old lines, so continuing a session after renaming its folder records old → new. A folder that no longer exists follows its moves to where work carried on. Moves are kept in the log cache. Known limit: a session that `cd`'d into another project, in a folder that was later deleted, also counts as a move.
+  - **The name:** the Claude desktop app's name for that folder if it has one (`%APPDATA%\Claude\ccd-session-presets.json`, read fresh each time, so renaming a project in the app shows up), else the folder's name.
+  - **Folderless app chats:** the app runs these in a made-up `scratch-YYYY-MM-DD-xxxxxx` folder. One that moved into a real folder counts there; otherwise it shows the chat's name (the log's last `custom-title` line, `customTitle`), or "Untitled chat".
+  - The Projects view shows the top 5 by tokens with bars and session counts, then up to 10 more as one line each in a second card.
 - **Tool errors:** user lines whose `message.content` has a `tool_result` with `is_error: true`.
 
 ## How it's built (to rebuild from scratch)

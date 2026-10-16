@@ -8,7 +8,7 @@ import time
 from collections import Counter
 from pathlib import Path
 
-from .config import CC_CACHE, CC_LOGS, CC_SCAN_SECONDS
+from .config import APP_PROJECTS, CC_CACHE, CC_LOGS, CC_SCAN_SECONDS
 from .storage import log_error
 from .usage import parse_time
 
@@ -32,28 +32,65 @@ def answer_cost(a):
     return (a[3] * pin + a[4] * pout + (a[5] - cw1h) * 1.25 * pin + cw1h * 2 * pin + a[6] * pread) / 1e6
 
 
-_project_names = {}
+def norm_path(p):
+    # one spelling per folder: git bash logs /c/Users/..., everything else C:\Users\...
+    p = str(p or "")
+    if re.match(r"/[a-zA-Z](/|$)", p):
+        p = p[1].upper() + ":/" + p[3:]
+    return os.path.normpath(p) if p else "?"
 
 
-def project_name(cwd):
-    # the folder claude code worked in, or the top of its git repo if it's inside one (so a session
-    # that cd'd into a subfolder still counts as the same project)
-    cwd = str(cwd or "?")
-    if cwd not in _project_names:
+def is_scratch(path):
+    # the claude app's folderless chats run in a made-up folder like scratch-2026-10-16-2777e4
+    return re.fullmatch(r"scratch-\d{4}-\d\d-\d\d-[0-9a-f]+", Path(path).name) is not None
+
+
+def app_names():
+    # {folder (lowercase): name} for the projects named in the claude app, read fresh so a rename there shows
+    try:
+        d = json.loads(APP_PROJECTS.read_text(encoding="utf-8"))
+        return {os.path.normpath(t["target"]["cwd"]).lower(): str(t["name"])
+                for acc in d["byAccount"].values() for t in acc.get("presets", [])
+                if isinstance(t.get("target"), dict) and t["target"].get("cwd") and t.get("name")}
+    except (OSError, ValueError, KeyError, TypeError, AttributeError):
+        return {}
+
+
+def exists(p):
+    try:
+        return Path(p).exists()
+    except OSError:
+        return False
+
+
+def project_folder(cwd, known, moves):
+    # the project a folder belongs to: the top of its git repo if it's in one, else (for a folder that's
+    # gone) the nearest other folder sessions worked in above it. a gone folder that a session carried on
+    # from somewhere else (renamed, moved, or a chat moved into a folder) follows it there.
+    seen = set()
+    while True:
         p = Path(cwd)
-        root = p
-        try:
-            root = next((q for q in (p, *p.parents) if (q / ".git").exists()), p)
-        except OSError:
-            pass
-        _project_names[cwd] = root.name or "?"
-    return _project_names[cwd]
+        if exists(cwd):
+            cwd = str(next((q for q in (p, *p.parents) if exists(q / ".git")), p))
+        else:
+            up = [k for k in known if cwd.lower().startswith(k.lower().rstrip("\\") + "\\")]
+            cwd = max(up, key=len) if up else cwd
+        nxt = moves.get(cwd.lower())
+        if nxt is None or cwd.lower() in seen or (exists(cwd) and not is_scratch(cwd)):
+            return cwd
+        seen.add(cwd.lower())
+        cwd = nxt
 
 
-def titled(rows, titles):
-    # the claude app's folderless chats run in a made-up scratch-2026-10-16-2777e4 folder: show the chat's name instead
-    return [a[:8] + (titles[a[1]],) if a[1] in titles and re.fullmatch(r"scratch-\d{4}-\d\d-\d\d-[0-9a-f]+", a[8])
-            else a for a in rows]
+def named(rows, titles, moves):
+    # rows with the folder swapped for the name to show: the claude app's name for the project if it has one,
+    # else the folder's name. a folderless chat shows its own name.
+    names, known = app_names(), {a[8] for a in rows}
+    label = {}   # folder -> name, or None for a chat (named per session)
+    for c in known:
+        f = project_folder(c, known, moves)
+        label[c] = None if is_scratch(f) else names.get(f.lower()) or Path(f).name or "?"
+    return [a[:8] + (label[a[8]] or titles.get(a[1]) or "Untitled chat",) for a in rows]
 
 
 def fmt_money(d):
@@ -199,8 +236,8 @@ def job_for(name):
     name = str(name)
     return "mcp" if name.startswith("mcp__") else JOBS.get(name)
 CHUNK = 4 * 2 ** 20   # logs are read this much at a time, so a huge log never sits in memory all at once
-CACHE_VERSION = 5   # 2: project names are the repo root, not the subfolder. 3: lines copied into other logs.
-                    # 4: session starts are each log's first line. 5: chat names
+CACHE_VERSION = 6   # 2: project names are the repo root, not the subfolder. 3: lines copied into other logs.
+                    # 4: session starts are each log's first line. 5: chat names. 6: whole folder paths, folder moves
 
 
 class ClaudeCodeLog:
@@ -217,6 +254,8 @@ class ClaudeCodeLog:
         self.starts = {}          # log -> the time on its first user or assistant line (how the claude app does it)
         self.lines = []           # (local time, session) for every user and assistant line
         self.titles = {}          # session -> its name in the claude app (the one bit of text kept)
+        self.log_cwd = {}         # log -> the folder its last line was in
+        self.moves = {}           # folder (lowercase) -> the folder a log carried on in after it
         self.last_error = 0.0     # when a tool call last failed (for the worried face)
         self.stats = None         # summary for the panel
         self.last_growth = 0.0    # when new output tokens last appeared
@@ -282,7 +321,7 @@ class ClaudeCodeLog:
         if new_output and self.ready:
             self.last_growth = time.time()
         if self.stats is None or (changed and time.time() - self.built_at > 10):
-            answers, copies = titled(self.answers, self.titles), titled(self.copies, self.titles)
+            answers, copies = named(self.answers, self.titles, self.moves), named(self.copies, self.titles, self.moves)
             self.stats = {"real": build_stats(answers, self.lines),
                           "app": build_stats(answers + copies, self.lines + self.line_copies, self.starts, answers)}
             self.built_at = time.time()
@@ -318,7 +357,8 @@ class ClaudeCodeLog:
                 "seen_answers": [list(k) for k in self.seen_answers], "seen_lines": self.seen_lines_by_log(), "copied": {k: list(v) for k, v in self.copied.items()},
                 "answers": [row(a) for a in self.answers], "copies": [row(a) for a in self.copies],
                 "starts": {k: t(v) for k, v in self.starts.items()}, "lines": [[t(w), s] for w, s in self.lines],
-                "line_copies": [[t(w), s] for w, s in self.line_copies], "titles": self.titles}
+                "line_copies": [[t(w), s] for w, s in self.line_copies], "titles": self.titles,
+                "log_cwd": self.log_cwd, "moves": self.moves}
         tmp = CC_CACHE.with_name(CC_CACHE.name + ".tmp")
         try:
             with gzip.open(tmp, "wt", encoding="utf-8") as fh:
@@ -355,6 +395,8 @@ class ClaudeCodeLog:
         self.copied = {log: set(uids) for log, uids in data["copied"].items()}
         self.line_copies = [(when(w), str(s)) for w, s in data["line_copies"]]
         self.titles = {str(k): str(v) for k, v in data["titles"].items()}
+        self.log_cwd = {str(k): str(v) for k, v in data["log_cwd"].items()}
+        self.moves = {str(k): str(v) for k, v in data["moves"].items()}
         self.answers, self.copies, self.lines, self.offsets = answers, copies, lines, offsets
         self.saved_at = time.time()
 
@@ -393,6 +435,14 @@ class ClaudeCodeLog:
             return None
         when = when.astimezone()   # your local time
         session = d.get("sessionId") or "?"
+        cwd, prev = norm_path(d.get("cwd")), self.log_cwd.get(log)
+        if cwd != "?":   # (copied lines too: a session carried on in another folder starts with its old lines)
+            a, b = (prev or "").lower() + "\\", cwd.lower() + "\\"
+            if prev and not (a.startswith(b) or b.startswith(a)):   # (into or out of a subfolder isn't a move)
+                # shortcut: a session that cd'd into another project and the first folder later went away
+                # counts the same as a rename. good enough until someone hits it.
+                self.moves[prev.lower()] = cwd
+            self.log_cwd[log] = cwd
         if uid in self.seen_lines:
             # a resumed or forked session starts its log with a copy of the old one. counted once for the
             # real count, but the claude app counts every copy. (the same log read again isn't a copy)
@@ -434,10 +484,10 @@ class ClaudeCodeLog:
         return 0
 
     def answer_row(self, d, m, when, session):
-        # (local time, session, model, input, output, cache write, cache read, 1h cache write, project)
+        # (local time, session, model, input, output, cache write, cache read, 1h cache write, folder)
         u = m["usage"]
         n = [int(u.get(k) or 0) for k in ("input_tokens", "output_tokens",
                                           "cache_creation_input_tokens", "cache_read_input_tokens")]
         cc = u.get("cache_creation") if isinstance(u.get("cache_creation"), dict) else {}
         cw1h = int(cc.get("ephemeral_1h_input_tokens") or 0)
-        return (when, session, str(m.get("model") or "unknown"), *n, cw1h, project_name(d.get("cwd")))
+        return (when, session, str(m.get("model") or "unknown"), *n, cw1h, norm_path(d.get("cwd")))

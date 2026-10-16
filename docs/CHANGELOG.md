@@ -2,6 +2,14 @@
 
 Newest first. The spec and how everything works are in `PROJECT_NOTES.md`.
 
+- **2026-10-16 (version 7.41): Projects shows the names you use in the Claude app.**
+  - Projects past the top 5 are listed one line each in a second card (up to 10), instead of only "and 3 more".
+  - Uses the Claude desktop app's own project names (`ccd-session-presets.json`), read fresh, so renaming a project in the app renames it here.
+  - Renamed or moved folders: a session continued after its folder was renamed has the old and new folder in one log. The pet saves that as a move, and a folder that no longer exists counts under where work carried on. So the old "Token Tracker" sessions now count as "Claude Token Tracker".
+  - A subfolder of a folder that no longer exists joins its parent (the stray "pet" entry).
+  - A folderless app chat that later moved into a real folder counts there (the stray "Claude token usage desktop pet" entry).
+  - Rows keep the whole folder path now. `CACHE_VERSION` 6, so the logs are re-read once.
+
 - **2026-10-16 (version 7.40): folderless Claude app chats show their name in Projects.**
   - A session started in the Claude desktop app without a folder works in a made-up folder like `scratch-2026-10-16-2777e4`, so Projects and the sessions list showed that. Now they show the session's name from its log (`custom-title` line).
   - Only those scratch folders get renamed. Real project folders keep their folder name.

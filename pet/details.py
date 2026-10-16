@@ -399,8 +399,19 @@ class Details:
             y = self.draw_list(y, [(name if len(name) <= 30 else name[:29] + "…", tok,
                                     f"{n} session{'s' if n != 1 else ''}") for name, tok, n in r["projects"][:5]],
                                r["tokens"], "#6aa9ff")
-            if len(r["projects"]) > 5:
-                y = self.text(14, y - 4, f"and {len(r['projects']) - 5} more", self.FAINT, 7.5) + 10
+            rest = r["projects"][5:]
+            if rest:   # the smaller ones, one line each in a card of their own
+                top = y
+                y += 10
+                for name, tok, n in rest[:10]:
+                    name = name if len(name) <= 30 else name[:29] + "…"
+                    self.text(26, y, name, self.DIM, 8)
+                    y = self.text(W - 26, y, f"{fmt_tokens(tok)} · {100 * tok / (r['tokens'] or 1):.0f}%",
+                                  self.DIM, 8, False, "ne") + 4
+                if len(rest) > 10:
+                    y = self.text(26, y, f"and {len(rest) - 10} more", self.FAINT, 7.5) + 4
+                self.card(top, y + 6)
+                y += 18
         else:
             y = self.draw_list(y, [(pretty_model(m), t, None) for m, t in r["models"][:4]], r["tokens"], self.ON)
             i_, o_, w_, r_ = r["parts"]

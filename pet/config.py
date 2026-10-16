@@ -3,7 +3,7 @@ import os
 from pathlib import Path
 
 
-VERSION = "7.40"          # shown in settings > about & stats. bump it with the version in docs/PROJECT_NOTES.md.
+VERSION = "7.41"          # shown in settings > about & stats. bump it with the version in docs/PROJECT_NOTES.md.
 
 # ---- settings ----
 DEFAULT_SCALE = 1.0        # starting size. after that the size you pick in the menu is remembered.
@@ -157,6 +157,7 @@ URL = "https://api.anthropic.com/api/oauth/usage"
 CONFIG_DIR = Path(os.environ.get("CLAUDE_CONFIG_DIR") or (Path.home() / ".claude"))
 CREDENTIALS = CONFIG_DIR / ".credentials.json"
 CC_LOGS = CONFIG_DIR / "projects"
+APP_PROJECTS = Path(os.environ.get("APPDATA", "")) / "Claude" / "ccd-session-presets.json"   # the claude app's named projects
 HERE = Path(__file__).resolve().parent.parent   # the project folder (this file is in pet/)
 DATA_DIR = HERE / "data"                  # everything the pet writes while it runs lives here (git ignores it)
 SETTINGS_FILE = DATA_DIR / "pet_settings.json"
