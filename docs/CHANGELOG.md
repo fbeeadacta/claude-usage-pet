@@ -2,6 +2,23 @@
 
 Newest first. The spec and how everything works are in `PROJECT_NOTES.md`.
 
+- **2026-10-16 (version 7.44): a gentle ask for a star.**
+  - The README says "If the pet makes you smile, a ⭐ on GitHub helps other people find it." under its first picture and at the end, and so do the release notes.
+  - Settings > About's link to the repo is labelled "Star it on GitHub" instead of "View the project on GitHub".
+  - `PROJECT_NOTES.md`'s GitHub section says the repo is public now and how releases are made.
+
+- **2026-10-16 (version 7.43): the error log points at the cause.**
+  - Each entry's first line ends with the pet's version and Python version, so old line numbers can be matched to the code they came from. Errors inside the pet also say what it was doing (`doing: walk`).
+  - A `where:` line names the last line in the pet's own code the error went through (for example `settings_window.py:816 in draw_diary`), and `values there:` lists the values at that spot: numbers as they are, anything else only as type and size (`i=5, items=list of 2`). Text never goes in, so the login token and chat lines can't.
+  - The same error again in one run is written as a single "again (N times so far)" line on the 2nd, 4th, 8th... time instead of a full traceback each time (the old log had one error nine times in 16 seconds).
+  - Tested with a scratch log only (a made-up error logged 9 times, with a fake token in its values): the entry, the sizes-only values and the repeat lines came out right, and the fake token wasn't in the file. Not tried in the running pet.
+
+- **2026-10-16 (version 7.42): fewer random "slow down" answers.**
+  - Why they happened: Claude Code asks the same usage service with the same login, so the pet's 30 checks an hour share the throttle with it. A pace that worked for hours got a 429 when Claude Code asked too (two today, both at the normal 2-minute pace, `retry-after=0`).
+  - Now, for 3 hours after a 429 (`SLOW_AFTER_LIMIT`), it checks half as often (every 4 minutes on the 2-minute setting; idle checks stay at 15 minutes). When it was is saved (`limited_at` in the state file), so a restart keeps the slower pace.
+  - Waking up from idle and changing "Refresh every" use that slower pace too.
+  - Tested offline only (no requests sent): the state file loads `limited_at`, and the gap is 240 s within 3 hours of a 429, 120 s after, 900 s when idle. Not tried in the running pet, and whether 4 minutes is slow enough is unknown until it has run for a while.
+
 - **2026-10-16 (version 7.41): Projects shows the names you use in the Claude app.**
   - Projects past the top 5 are listed one line each in a second card (up to 10), instead of only "and 3 more".
   - Uses the Claude desktop app's own project names (`ccd-session-presets.json`), read fresh, so renaming a project in the app renames it here.

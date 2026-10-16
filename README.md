@@ -14,6 +14,8 @@ The bubble over its head shows how much of your **5-hour** and **weekly** limits
 
 <p align="center"><img src="screenshots/hero.gif" alt="The mascot waves on the taskbar with its usage bubble, then the details panel fades in above it showing the 5-hour and weekly limits, reset times and a pace chart" width="400"></p>
 
+<p align="center">If the pet makes you smile, a ⭐ on GitHub helps other people find it.</p>
+
 ## Quick start
 
 1. Install **Python** from [python.org](https://www.python.org/downloads/windows/).
@@ -109,3 +111,5 @@ How everything works, in detail, is in [docs/PROJECT_NOTES.md](docs/PROJECT_NOTE
 ## Licence
 
 The code is under the [MIT licence](LICENSE). That covers this project's code only: the Claude name and the Claude Code mascot design belong to Anthropic.
+
+If the pet makes you smile, a ⭐ on GitHub helps other people find it.

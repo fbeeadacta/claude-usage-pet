@@ -3,7 +3,7 @@ import os
 from pathlib import Path
 
 
-VERSION = "7.41"          # shown in settings > about & stats. bump it with the version in docs/PROJECT_NOTES.md.
+VERSION = "7.44"          # shown in settings > about & stats. bump it with the version in docs/PROJECT_NOTES.md.
 
 # ---- settings ----
 DEFAULT_SCALE = 1.0        # starting size. after that the size you pick in the menu is remembered.
@@ -18,6 +18,8 @@ ERROR_RETRY_MAX = 900     # other failures (server errors, timeouts) back off fr
 MIN_FETCH_GAP = 60         # never ask the api twice within this many seconds, whatever the reason (restarts too)
 IDLE_POLL_SECONDS = 900    # when nothing has used tokens for IDLE_AFTER_MIN, check this often instead
 IDLE_AFTER_MIN = 10
+SLOW_AFTER_LIMIT = 3 * 3600 # after a "slow down", check half as often for this long (claude code uses the same
+                           # usage service and login, so the pet only gets part of the throttle's budget)
 USAGE_LOG_KB = 300         # data/pet_usage.log is trimmed to stay about this small
 FAKE_USAGE_ENV = "PET_FAKE_USAGE"   # set for tests: no network. "ok" = fake numbers, "offline", or "429"
 USER_AGENT = "usage-widget/0.1"

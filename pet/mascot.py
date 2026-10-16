@@ -106,6 +106,7 @@ class Pet(ScreensMixin, MouseMixin, TalkMixin, DataMixin, MovementMixin, RenderM
         self.busy = False
         self.next_at = 0.0          # unix time of the next check. 0 = check right away.
         self.blocked_until = mem["blocked_until"]   # the service said wait until then (kept over restarts)
+        self.limited_at = mem["limited_at"]         # when the service last said "slow down" (checks slow down for a while)
         self.last_fetch = mem["last_fetch"]         # when we last asked the service (so a quick restart doesn't ask again)
         self.req_times, self.fetch_why, self.fetch_gap = [], "start", None
         self.why_next = "start"
@@ -242,7 +243,7 @@ class Pet(ScreensMixin, MouseMixin, TalkMixin, DataMixin, MovementMixin, RenderM
         c.bind("<Button-3>", self.show_menu)
         self.root.bind_all("<Control-MouseWheel>", self.wheel)
 
-        self.root.report_callback_exception = lambda *exc: log_error("inside the pet", exc)
+        self.root.report_callback_exception = lambda *exc: log_error(f"inside the pet (doing: {getattr(self, 'state', '?')})", exc)
         self.redraw()
         self.data_tick()
         self.ui_tick()
@@ -286,7 +287,8 @@ class Pet(ScreensMixin, MouseMixin, TalkMixin, DataMixin, MovementMixin, RenderM
                                 "log": {k: round(v, 1) if isinstance(v, float) else v for k, v in self.log.items()},
                                 "log_since": self.log_since, "hush_until": self.hush_until,
                                 "toured": self.toured, "season_said": self.season_said,
-                                "blocked_until": self.blocked_until, "last_fetch": self.last_fetch})
+                                "blocked_until": self.blocked_until, "last_fetch": self.last_fetch,
+                                "limited_at": self.limited_at})
         self.saved_at = time.time()
 
     def changed(self):
@@ -331,7 +333,7 @@ class Pet(ScreensMixin, MouseMixin, TalkMixin, DataMixin, MovementMixin, RenderM
         self.save()
 
     def poll_changed(self):
-        self.next_at = max(self.blocked_until, min(self.next_at, time.time() + self.poll.get()))
+        self.next_at = max(self.blocked_until, min(self.next_at, time.time() + self.expected_gap()))
         self.changed()
 
     def clock_changed(self, save=True):

@@ -769,7 +769,7 @@ class SettingsWindow:
         y = self.text(x0 + 16, y + 14, f"Claude usage pet {VERSION}", self.FG, 9, True)
         y = self.text(x0 + 16, y + 4, "A little desktop mascot that keeps an eye on your Claude plan usage. "
                       "Unofficial: not made by or affiliated with Anthropic.", self.DIM, 8, width=x1 - x0 - 32)
-        label = "View the project on GitHub  ↗"
+        label = "Star it on GitHub  ↗"
         w = self.font(8, True).measure(label) / self.s
         end = self.text(x0 + 16, y + 10, label, self.ON, 8, True)
         self.hit(("link",), x0 + 12, y + 6, x0 + 20 + w, end + 4, (("link",), lambda: webbrowser.open(PROJECT_URL)))

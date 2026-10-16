@@ -9,7 +9,7 @@ import time
 from . import usage
 from .art import DIM, IDLE_C, RED
 from .config import (DEFAULT_KEYS, FAKE_USAGE_ENV, IDLE_AFTER_MIN, IDLE_POLL_SECONDS, ERROR_RETRY_MAX, MIN_FETCH_GAP,
-    NICE, PACE_WARN, RATE_LIMITED_MAX, RATE_LIMITED_SECONDS, REFUSED_RETRY_SECONDS, SHORT, STALE_MIN)
+    NICE, PACE_WARN, RATE_LIMITED_MAX, RATE_LIMITED_SECONDS, REFUSED_RETRY_SECONDS, SHORT, SLOW_AFTER_LIMIT, STALE_MIN)
 from .lines import MILESTONES, PACE_LINES, RESET_LINES
 from .storage import log_error, log_usage
 from .usage import (bar_color, fetch_usage, fmt_time, fmt_when, forecast, parse_rows, parse_time, same_window,
@@ -62,8 +62,9 @@ class DataMixin:
         return (now or time.time()) - self.last_usage > IDLE_AFTER_MIN * 60
 
     def expected_gap(self, now=None):
-        # seconds between checks right now: the setting, or slower when idle
-        gap = self.poll.get()
+        # seconds between checks right now: the setting, or slower when idle or after a recent "slow down"
+        now = now or time.time()
+        gap = self.poll.get() * (2 if now - self.limited_at < SLOW_AFTER_LIMIT else 1)
         return max(gap, IDLE_POLL_SECONDS) if self.idle(now) else gap
 
     def poll_gap(self, now):
@@ -145,6 +146,7 @@ class DataMixin:
                 self.limited += 1
                 wait = max(usage.RETRY_AFTER, min(RATE_LIMITED_MAX, RATE_LIMITED_SECONDS * 2 ** (self.limited - 1)))
                 self.next_at = self.blocked_until = now + wait
+                self.limited_at = now
                 err = self.rate_message()
                 log_usage(self.usage_log_line(now, False, []) + f" retry_after={usage.RETRY_AFTER}s waits={wait:.0f}s "
                           f"in_a_row={self.limited}")
@@ -247,9 +249,9 @@ class DataMixin:
             if self.error and not self.error.startswith("rate limited"):
                 self.next_at = now
                 self.why_next = "login renewed"
-        if self.last_ok and not self.error and self.next_at > self.last_ok + self.poll.get() \
+        if self.last_ok and not self.error and self.next_at > self.last_ok + self.expected_gap(now) \
                 and now - self.last_usage <= IDLE_AFTER_MIN * 60:
-            self.next_at = self.last_ok + self.poll.get()   # woke up from idle: back to the normal pace
+            self.next_at = self.last_ok + self.expected_gap(now)   # woke up from idle: back to the normal pace
         if not self.busy and now >= self.next_at:
             self.refresh(self.why_next)
             self.why_next = "timer"
