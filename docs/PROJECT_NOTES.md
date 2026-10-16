@@ -2,7 +2,7 @@
 
 A small Claude mascot that walks along the top of the Windows taskbar. A bubble above its head shows Claude plan usage. If any file here gets lost or corrupted, this note has enough detail to rebuild it. You can give this file to Claude and ask it to rebuild the project.
 
-Last updated: 2026-10-16 (version 7.44)
+Last updated: 2026-10-17 (version 7.45)
 
 The change log is in `CHANGELOG.md`, next to this file.
 
@@ -447,6 +447,7 @@ There's also 30 px of side space for z's and sparks.
 - New output tokens mean it keeps working for 20 more seconds.
 - A rise in the 5-hour % (after the first check of each run) means it keeps working for 130 more seconds, which covers the next 2-minute check.
 - No napping while working. If it was asleep, it wakes up for work.
+- The "starting work" line (`WORK_START`) is only said when no other line is up, so it never cuts off a milestone, the pace warning or the reset line that came with the same usage check.
 
 **Milestones:** announced once per limit window, with the window identified by `resets_at` (±10 minutes). On the very first run, levels already passed are recorded quietly instead of announced.
 

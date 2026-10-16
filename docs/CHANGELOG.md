@@ -2,6 +2,11 @@
 
 Newest first. The spec and how everything works are in `PROJECT_NOTES.md`.
 
+- **2026-10-17 (version 7.45): warnings aren't cut off by "abra-code-abra!".**
+  - A usage check where the 5-hour % went up starts the wizard, and about a second later its "starting work" line (`WORK_START`) replaced whatever the same check had just said: a milestone ("75% of the 5-hour limit used"), the pace warning or the reset line.
+  - Now the starting-work line is only said when no other line is up; otherwise it's skipped (the hat still goes on).
+  - Tested with a scratch test pet (`PET_FAKE_USAGE=ok`, scratch files, a made-up 40% then 82% result): the pace warning stayed up while the wizard started. With the old code the same test cut it off with "the wizard is in.". Not tried in the running pet.
+
 - **2026-10-16 (version 7.44): a gentle ask for a star.**
   - The README says "If the pet makes you smile, a ⭐ on GitHub helps other people find it." under its first picture and at the end, and so do the release notes.
   - Settings > About's link to the repo is labelled "Star it on GitHub" instead of "View the project on GitHub".

@@ -111,7 +111,7 @@ class TalkMixin:
             self.work_started = now
             if self.state == "sleep":
                 self.wake()
-            self.say(self.pick(WORK_START), force=True)
+            self.say(self.pick(WORK_START), force=not self.speech)   # never cuts off a line already up (a milestone, the reset)
             self.next_work_line = now + random.uniform(90, 180) / rate
         elif working and now >= self.next_work_line:
             self.say(self.pick(WORKING))
