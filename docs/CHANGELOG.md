@@ -2,6 +2,12 @@
 
 Newest first. The spec and how everything works are in `PROJECT_NOTES.md`.
 
+- **2026-10-16 (version 7.40): folderless Claude app chats show their name in Projects.**
+  - A session started in the Claude desktop app without a folder works in a made-up folder like `scratch-2026-10-16-2777e4`, so Projects and the sessions list showed that. Now they show the session's name from its log (`custom-title` line).
+  - Only those scratch folders get renamed. Real project folders keep their folder name.
+  - The names are kept in the log cache. `CACHE_VERSION` 5, so the logs are re-read once.
+  - A chat whose log was deleted has no name to find, and drops out after the re-read.
+
 - **2026-10-13 (version 7.39): a message of its own for each way a usage check can fail.**
   - Before, only "no login", "login expired", "rate limited" and "service changed" explained themselves. Every other answer showed "api error N" and every network problem "no connection (SomeError)".
   - Now each has a message in `pet/usage.py` saying what went wrong, what usually causes it and, where you can do something, how to fix it: login refused (a 401 before the login was due to run out; this used to say "login expired"), access denied (403), service not found (404, 410), request rejected (other 4xx), redirected (3xx), server error (500), service down (502, 503, 504), overloaded (529), no answer (timeout), offline (the address couldn't be looked up), secure connection failed (certificate problems), can't reach the service (refused or cut off), unreadable answer (not JSON, like a Wi-Fi sign-in page) and check failed (anything else). Each has its own short word for the bubble and tray (table in `PROJECT_NOTES.md`, under "If something goes wrong").

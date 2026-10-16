@@ -1,8 +1,9 @@
-# reading claude code's local logs for token counts, costs and stats (only numbers, never text).
+# reading claude code's local logs for token counts, costs and stats (only numbers and chat names, never message text).
 import datetime
 import gzip
 import json
 import os
+import re
 import time
 from collections import Counter
 from pathlib import Path
@@ -47,6 +48,12 @@ def project_name(cwd):
             pass
         _project_names[cwd] = root.name or "?"
     return _project_names[cwd]
+
+
+def titled(rows, titles):
+    # the claude app's folderless chats run in a made-up scratch-2026-10-16-2777e4 folder: show the chat's name instead
+    return [a[:8] + (titles[a[1]],) if a[1] in titles and re.fullmatch(r"scratch-\d{4}-\d\d-\d\d-[0-9a-f]+", a[8])
+            else a for a in rows]
 
 
 def fmt_money(d):
@@ -192,8 +199,8 @@ def job_for(name):
     name = str(name)
     return "mcp" if name.startswith("mcp__") else JOBS.get(name)
 CHUNK = 4 * 2 ** 20   # logs are read this much at a time, so a huge log never sits in memory all at once
-CACHE_VERSION = 4   # 2: project names are the repo root, not the subfolder. 3: lines copied into other logs.
-                    # 4: session starts are each log's first line
+CACHE_VERSION = 5   # 2: project names are the repo root, not the subfolder. 3: lines copied into other logs.
+                    # 4: session starts are each log's first line. 5: chat names
 
 
 class ClaudeCodeLog:
@@ -209,6 +216,7 @@ class ClaudeCodeLog:
         self.copies = []          # the extra logged copies of those answers (the claude app counts them too)
         self.starts = {}          # log -> the time on its first user or assistant line (how the claude app does it)
         self.lines = []           # (local time, session) for every user and assistant line
+        self.titles = {}          # session -> its name in the claude app (the one bit of text kept)
         self.last_error = 0.0     # when a tool call last failed (for the worried face)
         self.stats = None         # summary for the panel
         self.last_growth = 0.0    # when new output tokens last appeared
@@ -274,9 +282,9 @@ class ClaudeCodeLog:
         if new_output and self.ready:
             self.last_growth = time.time()
         if self.stats is None or (changed and time.time() - self.built_at > 10):
-            self.stats = {"real": build_stats(self.answers, self.lines),
-                          "app": build_stats(self.answers + self.copies, self.lines + self.line_copies, self.starts,
-                                                 self.answers)}
+            answers, copies = titled(self.answers, self.titles), titled(self.copies, self.titles)
+            self.stats = {"real": build_stats(answers, self.lines),
+                          "app": build_stats(answers + copies, self.lines + self.line_copies, self.starts, answers)}
             self.built_at = time.time()
         if not self.ready:
             self.save_cache()   # the first full read is the slow one: save it straight away
@@ -310,7 +318,7 @@ class ClaudeCodeLog:
                 "seen_answers": [list(k) for k in self.seen_answers], "seen_lines": self.seen_lines_by_log(), "copied": {k: list(v) for k, v in self.copied.items()},
                 "answers": [row(a) for a in self.answers], "copies": [row(a) for a in self.copies],
                 "starts": {k: t(v) for k, v in self.starts.items()}, "lines": [[t(w), s] for w, s in self.lines],
-                "line_copies": [[t(w), s] for w, s in self.line_copies]}
+                "line_copies": [[t(w), s] for w, s in self.line_copies], "titles": self.titles}
         tmp = CC_CACHE.with_name(CC_CACHE.name + ".tmp")
         try:
             with gzip.open(tmp, "wt", encoding="utf-8") as fh:
@@ -346,6 +354,7 @@ class ClaudeCodeLog:
         self.seen_lines = {uid: log for log, uids in data["seen_lines"].items() for uid in uids}
         self.copied = {log: set(uids) for log, uids in data["copied"].items()}
         self.line_copies = [(when(w), str(s)) for w, s in data["line_copies"]]
+        self.titles = {str(k): str(v) for k, v in data["titles"].items()}
         self.answers, self.copies, self.lines, self.offsets = answers, copies, lines, offsets
         self.saved_at = time.time()
 
@@ -371,6 +380,11 @@ class ClaudeCodeLog:
             return None
         if self.ready and (d.get("subtype") == "compact_boundary" or d.get("isCompactSummary")):
             self.job = (time.time(), "compact")   # the conversation is being shortened
+        if d.get("type") == "custom-title" and isinstance(d.get("customTitle"), str) and d.get("sessionId"):
+            if self.titles.get(d["sessionId"]) == d["customTitle"]:
+                return None   # (logged again and again)
+            self.titles[d["sessionId"]] = d["customTitle"]
+            return 0
         if d.get("type") not in ("user", "assistant"):
             return None
         uid = d.get("uuid")
